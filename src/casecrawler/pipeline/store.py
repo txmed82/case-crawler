@@ -33,11 +33,15 @@ class Store:
             metadatas=metadatas,
         )
 
-    def search(self, query: str, n_results: int = 10) -> list[dict]:
-        results = self._collection.query(
-            query_texts=[query],
-            n_results=min(n_results, self._collection.count()),
-        )
+    def search(self, query: str, n_results: int = 10, source: str | None = None) -> list[dict]:
+        where = {"source": source} if source else None
+        query_kwargs: dict = {
+            "query_texts": [query],
+            "n_results": min(n_results, max(self._collection.count(), 1)),
+        }
+        if where:
+            query_kwargs["where"] = where
+        results = self._collection.query(**query_kwargs)
         output = []
         for i, chunk_id in enumerate(results["ids"][0]):
             distance = results["distances"][0][i]
