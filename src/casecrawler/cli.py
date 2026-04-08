@@ -6,8 +6,13 @@ import time
 import click
 
 from casecrawler.config import get_config, load_config
+from casecrawler.generation.pipeline import GenerationPipeline
+from casecrawler.generation.retriever import Retriever
+from casecrawler.llm.factory import get_provider
 from casecrawler.pipeline.orchestrator import PipelineOrchestrator
+from casecrawler.pipeline.store import Store
 from casecrawler.sources.registry import SourceRegistry
+from casecrawler.storage.case_store import CaseStore
 
 # Import all source modules so BaseSource.__subclasses__() discovers them
 import casecrawler.sources.pubmed  # noqa: F401
@@ -159,3 +164,134 @@ def serve() -> None:
         port=config.api.port,
         reload=True,
     )
+
+
+@cli.command()
+@click.argument("topic")
+@click.option("--difficulty", default=None, help="medical_student, resident, or attending")
+@click.option("--count", default=1, type=int, help="Number of cases to generate")
+@click.option("--ingest", "ingest_first", is_flag=True, help="Ingest topic first")
+@click.option("--output", default=None, help="Output JSONL file path")
+def generate(topic: str, difficulty: str | None, count: int, ingest_first: bool, output: str | None) -> None:
+    """Generate clinical cases for a medical topic."""
+    config = get_config()
+    difficulty = difficulty or config.generation.default_difficulty
+
+    if ingest_first:
+        click.echo(f"Ingesting '{topic}' first...")
+        registry = SourceRegistry()
+        registry.discover()
+        active_sources = registry.get_sources()
+        if active_sources:
+            all_docs = asyncio.run(_search_all(active_sources, topic, config.ingestion.default_limit_per_source))
+            pipeline_orch = PipelineOrchestrator()
+            for source_name, docs in all_docs.items():
+                if docs:
+                    pipeline_orch.process(docs)
+
+    # Check ChromaDB has content
+    store = Store(chroma_dir=config.storage.chroma_persist_dir)
+    if store.count == 0:
+        click.echo(f"No content found for '{topic}'. Run 'casecrawler ingest \"{topic}\"' first.")
+        return
+
+    try:
+        provider = get_provider(config.llm.provider, config.llm.model, base_url=config.llm.ollama_base_url)
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+        return
+
+    retriever = Retriever(store=store)
+    gen_pipeline = GenerationPipeline(
+        provider=provider,
+        retriever=retriever,
+        max_retries=config.generation.max_retries,
+        review_threshold=config.generation.review_threshold,
+    )
+
+    click.echo(f"Generating {count} case(s) for '{topic}' at {difficulty} difficulty...")
+    start = time.time()
+
+    result = asyncio.run(gen_pipeline.generate_batch(topic=topic, count=count, difficulty=difficulty))
+    elapsed = time.time() - start
+
+    # Save to SQLite
+    case_store = CaseStore()
+    for case in result["cases"]:
+        case_store.save(case)
+
+    click.echo("\n--- Generation Summary ---")
+    click.echo(f"  Generated: {result['generated']}")
+    click.echo(f"  Failed: {result['failed']}")
+    click.echo(f"  Tokens: {result['total_input_tokens']} in / {result['total_output_tokens']} out")
+    click.echo(f"  Time: {elapsed:.1f}s")
+
+    if output and result["cases"]:
+        with open(output, "w") as f:
+            for case in result["cases"]:
+                f.write(case.model_dump_json() + "\n")
+        click.echo(f"  Exported to: {output}")
+
+
+@cli.group(invoke_without_command=True)
+@click.option("--topic", default=None, help="Filter by topic")
+@click.option("--difficulty", default=None, help="Filter by difficulty")
+@click.option("--limit", default=20, type=int, help="Max results")
+@click.pass_context
+def cases(ctx: click.Context, topic: str | None, difficulty: str | None, limit: int) -> None:
+    """Manage generated cases. With no subcommand, lists cases."""
+    if ctx.invoked_subcommand is None:
+        case_store = CaseStore()
+        results = case_store.list_cases(topic=topic, difficulty=difficulty, limit=limit)
+        if not results:
+            click.echo("No cases found.")
+            return
+        click.echo(f"Found {len(results)} case(s):\n")
+        for case in results:
+            acc = case.review.accuracy_score if case.review else 0
+            click.echo(f"  [{case.case_id[:8]}] {case.topic} ({case.difficulty.value}) — accuracy: {acc:.2f}")
+
+
+@cases.command("list")
+@click.option("--topic", default=None, help="Filter by topic")
+@click.option("--difficulty", default=None, help="Filter by difficulty")
+@click.option("--limit", default=20, type=int, help="Max results")
+def cases_list(topic: str | None, difficulty: str | None, limit: int) -> None:
+    """List generated cases."""
+    case_store = CaseStore()
+    results = case_store.list_cases(topic=topic, difficulty=difficulty, limit=limit)
+
+    if not results:
+        click.echo("No cases found.")
+        return
+
+    click.echo(f"Found {len(results)} case(s):\n")
+    for case in results:
+        acc = case.review.accuracy_score if case.review else 0
+        click.echo(f"  [{case.case_id[:8]}] {case.topic} ({case.difficulty.value}) — accuracy: {acc:.2f}")
+
+
+@cases.command("show")
+@click.argument("case_id")
+def cases_show(case_id: str) -> None:
+    """Show a single case."""
+    case_store = CaseStore()
+    case = case_store.get(case_id)
+    if case is None:
+        click.echo(f"Case {case_id} not found.")
+        return
+    click.echo(case.model_dump_json(indent=2))
+
+
+@cases.command("export")
+@click.option("--output", required=True, help="Output JSONL file path")
+@click.option("--topic", default=None, help="Filter by topic")
+@click.option("--difficulty", default=None, help="Filter by difficulty")
+def cases_export(output: str, topic: str | None, difficulty: str | None) -> None:
+    """Export cases to JSONL."""
+    case_store = CaseStore()
+    lines = case_store.export_jsonl(topic=topic, difficulty=difficulty)
+    with open(output, "w") as f:
+        for line in lines:
+            f.write(line + "\n")
+    click.echo(f"Exported {len(lines)} case(s) to {output}")
