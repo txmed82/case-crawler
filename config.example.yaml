@@ -1,0 +1,28 @@
+ingestion:
+  default_limit_per_source: 20
+  sources:
+    priority:
+      - pubmed
+      - glass
+      - openfda
+      - annas_archive
+      - dailymed
+      - rxnorm
+      - medrxiv
+      - clinicaltrials
+      - firecrawl
+    disabled: []
+
+chunking:
+  default_chunk_size: 500
+  overlap: 50
+
+embedding:
+  model: "all-MiniLM-L6-v2"
+
+storage:
+  chroma_persist_dir: "./data/chroma"
+
+api:
+  host: "0.0.0.0"
+  port: 8000
