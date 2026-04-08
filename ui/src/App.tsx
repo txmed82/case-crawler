@@ -3,6 +3,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import IngestPage from './pages/IngestPage';
 import SearchPage from './pages/SearchPage';
 import SourcesPage from './pages/SourcesPage';
+import GeneratePage from './pages/GeneratePage';
+import CasesPage from './pages/CasesPage';
+import PlayCasePage from './pages/PlayCasePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,15 +35,11 @@ export default function App() {
                   <span className="mr-4 text-base font-bold text-gray-900 tracking-tight">
                     CaseCrawler
                   </span>
-                  <NavLink to="/" end className={navLinkClass}>
-                    Ingest
-                  </NavLink>
-                  <NavLink to="/search" className={navLinkClass}>
-                    Search
-                  </NavLink>
-                  <NavLink to="/sources" className={navLinkClass}>
-                    Sources
-                  </NavLink>
+                  <NavLink to="/" end className={navLinkClass}>Ingest</NavLink>
+                  <NavLink to="/search" className={navLinkClass}>Search</NavLink>
+                  <NavLink to="/sources" className={navLinkClass}>Sources</NavLink>
+                  <NavLink to="/generate" className={navLinkClass}>Generate</NavLink>
+                  <NavLink to="/cases" className={navLinkClass}>Cases</NavLink>
                 </div>
               </div>
             </div>
@@ -51,6 +50,9 @@ export default function App() {
               <Route path="/" element={<IngestPage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/sources" element={<SourcesPage />} />
+              <Route path="/generate" element={<GeneratePage />} />
+              <Route path="/cases" element={<CasesPage />} />
+              <Route path="/play/:caseId" element={<PlayCasePage />} />
             </Routes>
           </main>
         </div>
