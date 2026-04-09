@@ -23,13 +23,14 @@ class GenerateRequest(BaseModel):
     difficulty: str | None = None
     count: int = 1
     ingest_first: bool = False
+    multi_step: bool = False
 
 
 @router.post("/generate", status_code=202)
 async def start_generation(req: GenerateRequest, background_tasks: BackgroundTasks):
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {"status": "running"}
-    background_tasks.add_task(run_generation, job_id, req.topic, req.difficulty, req.count)
+    background_tasks.add_task(run_generation, job_id, req.topic, req.difficulty, req.count, req.multi_step)
     return {"job_id": job_id, "status": "running"}
 
 
@@ -40,7 +41,7 @@ async def get_generation_status(job_id: str):
     return {"job_id": job_id, **_jobs[job_id]}
 
 
-async def run_generation(job_id: str, topic: str, difficulty: str | None, count: int) -> None:
+async def run_generation(job_id: str, topic: str, difficulty: str | None, count: int, multi_step: bool = False) -> None:
     config = get_config()
     difficulty = difficulty or config.generation.default_difficulty
     start = time.time()
@@ -49,11 +50,19 @@ async def run_generation(job_id: str, topic: str, difficulty: str | None, count:
         provider = get_provider(config.llm.provider, config.llm.model, base_url=config.llm.ollama_base_url)
         store = Store(chroma_dir=config.storage.chroma_persist_dir)
         retriever = Retriever(store=store)
-        pipeline = GenerationPipeline(
-            provider=provider, retriever=retriever,
-            max_retries=config.generation.max_retries,
-            review_threshold=config.generation.review_threshold,
-        )
+        if multi_step:
+            from casecrawler.generation.multi_step_pipeline import MultiStepPipeline
+            pipeline = MultiStepPipeline(
+                provider=provider, retriever=retriever,
+                max_retries=config.generation.max_retries,
+                review_threshold=config.generation.review_threshold,
+            )
+        else:
+            pipeline = GenerationPipeline(
+                provider=provider, retriever=retriever,
+                max_retries=config.generation.max_retries,
+                review_threshold=config.generation.review_threshold,
+            )
 
         result = await pipeline.generate_batch(topic=topic, count=count, difficulty=difficulty)
 

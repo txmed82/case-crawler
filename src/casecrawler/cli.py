@@ -172,7 +172,8 @@ def serve() -> None:
 @click.option("--count", default=1, type=int, help="Number of cases to generate")
 @click.option("--ingest", "ingest_first", is_flag=True, help="Ingest topic first")
 @click.option("--output", default=None, help="Output JSONL file path")
-def generate(topic: str, difficulty: str | None, count: int, ingest_first: bool, output: str | None) -> None:
+@click.option("--multi-step", "multi_step", is_flag=True, help="Generate multi-step cases with structured diagnostics")
+def generate(topic: str, difficulty: str | None, count: int, ingest_first: bool, output: str | None, multi_step: bool) -> None:
     """Generate clinical cases for a medical topic."""
     config = get_config()
     difficulty = difficulty or config.generation.default_difficulty
@@ -202,12 +203,21 @@ def generate(topic: str, difficulty: str | None, count: int, ingest_first: bool,
         return
 
     retriever = Retriever(store=store)
-    gen_pipeline = GenerationPipeline(
-        provider=provider,
-        retriever=retriever,
-        max_retries=config.generation.max_retries,
-        review_threshold=config.generation.review_threshold,
-    )
+    if multi_step:
+        from casecrawler.generation.multi_step_pipeline import MultiStepPipeline
+        gen_pipeline = MultiStepPipeline(
+            provider=provider,
+            retriever=retriever,
+            max_retries=config.generation.max_retries,
+            review_threshold=config.generation.review_threshold,
+        )
+    else:
+        gen_pipeline = GenerationPipeline(
+            provider=provider,
+            retriever=retriever,
+            max_retries=config.generation.max_retries,
+            review_threshold=config.generation.review_threshold,
+        )
 
     click.echo(f"Generating {count} case(s) for '{topic}' at {difficulty} difficulty...")
     start = time.time()
@@ -295,3 +305,51 @@ def cases_export(output: str, topic: str | None, difficulty: str | None) -> None
         for line in lines:
             f.write(line + "\n")
     click.echo(f"Exported {len(lines)} case(s) to {output}")
+
+
+@cli.command()
+@click.argument("output_path")
+@click.option("--format", "export_format", type=click.Choice(["rl", "sft", "both"]), default="both")
+@click.option("--difficulty", default=None, help="Filter by difficulty")
+@click.option("--topic", default=None, help="Filter by topic")
+@click.option("--min-accuracy", default=None, type=float, help="Minimum accuracy score")
+@click.option("--include-wrong-paths", is_flag=True, help="Include wrong-path SFT variants")
+def export(
+    output_path: str,
+    export_format: str,
+    difficulty: str | None,
+    topic: str | None,
+    min_accuracy: float | None,
+    include_wrong_paths: bool,
+) -> None:
+    """Export multi-step cases to training data formats."""
+    import json
+
+    from casecrawler.export.rl_exporter import export_rl_episode
+    from casecrawler.export.sft_exporter import export_sft_conversation
+
+    case_store = CaseStore()
+    cases = case_store.list_cases(topic=topic, difficulty=difficulty, min_accuracy=min_accuracy, limit=10000)
+    multi_step_cases = [c for c in cases if c.is_multi_step()]
+
+    if not multi_step_cases:
+        click.echo("No multi-step cases found matching filters.")
+        return
+
+    exported = 0
+    with open(output_path, "w") as f:
+        for case in multi_step_cases:
+            if export_format in ("rl", "both"):
+                episode = export_rl_episode(case)
+                f.write(json.dumps({"type": "rl_episode", **episode.model_dump()}) + "\n")
+                exported += 1
+            if export_format in ("sft", "both"):
+                conv = export_sft_conversation(case)
+                f.write(json.dumps({"type": "sft_conversation", **conv.model_dump()}) + "\n")
+                exported += 1
+                if include_wrong_paths:
+                    wrong = export_sft_conversation(case, include_wrong_path=True)
+                    f.write(json.dumps({"type": "sft_wrong_path", **wrong.model_dump()}) + "\n")
+                    exported += 1
+
+    click.echo(f"Exported {exported} records from {len(multi_step_cases)} cases to {output_path}")
