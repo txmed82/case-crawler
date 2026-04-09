@@ -75,7 +75,12 @@ class CasePhase(BaseModel):
     imaging_results: list[ImagingResult]
     clinical_update: str | None    # new symptoms, nurse pages, etc.
     decisions: list[PhaseDecision]
-    phase_outcome: dict            # what happens based on chosen action
+    phase_outcome: PhaseOutcome
+
+class PhaseOutcome(BaseModel):
+    optimal_next_phase: int | None     # default next phase on optimal path
+    patient_status: str                # "stable", "deteriorating", "improving", "critical"
+    narrative_transition: str          # what happens between this phase and the next
 ```
 
 ### 1.3 Structured Diagnostics
@@ -289,7 +294,7 @@ Less rigid than labs — modalities vary too much for strict templates. Instead,
 class ImagingTemplate(BaseModel):
     modality: str
     valid_body_regions: list[str]
-    terminology: dict              # modality-appropriate descriptors
+    terminology: dict[str, list[str]]  # category → valid terms, e.g. {"density": ["hyperdense", "hypodense", "isodense"]}
     report_format: str             # "findings → impression"
 ```
 
