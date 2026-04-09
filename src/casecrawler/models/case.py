@@ -4,6 +4,9 @@ from enum import Enum
 
 from pydantic import BaseModel
 
+from casecrawler.models.blueprint import CaseBlueprint
+from casecrawler.models.phase import CasePhase
+
 
 class DifficultyLevel(str, Enum):
     MEDICAL_STUDENT = "medical_student"
@@ -60,6 +63,11 @@ class GeneratedCase(BaseModel):
     ground_truth: GroundTruth
     decision_tree: list[DecisionChoice]
     complications: list[Complication]
+    blueprint: CaseBlueprint | None = None
+    phases: list[CasePhase] = []
     review: ReviewResult | None = None
     sources: list[dict]
     metadata: dict
+
+    def is_multi_step(self) -> bool:
+        return len(self.phases) > 1
