@@ -29,6 +29,8 @@ def _build_system_turn(phase: CasePhase) -> str:
     return "".join(parts)
 
 def _build_assistant_turn(phase: CasePhase, use_optimal: bool = True) -> str:
+    if not phase.decisions:
+        return "No clinical decision options available for this phase."
     if use_optimal:
         decision = next((d for d in phase.decisions if d.is_optimal), phase.decisions[0])
     else:

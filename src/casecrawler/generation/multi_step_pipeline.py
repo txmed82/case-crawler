@@ -68,6 +68,9 @@ class MultiStepPipeline:
                 continue
 
             blueprint_data = plan_data.blueprint
+            if not blueprint_data.phases:
+                retry_notes = ["Blueprint has no phases"]
+                continue
             blueprint_json = blueprint_data.model_dump_json()
 
             # Stage 3: Render phases in parallel
@@ -87,6 +90,8 @@ class MultiStepPipeline:
                 self._track_tokens(r)
 
             phases = [r.data.phase for r in render_results]
+            # Map phase_number → list index for safe re-render lookups
+            phase_index = {bp.phase_number: i for i, bp in enumerate(blueprint_data.phases)}
 
             # Stage 4: Consistency check
             phases_json = json.dumps([p.model_dump() for p in phases])
@@ -108,7 +113,7 @@ class MultiStepPipeline:
                             lab_panel_context=lab_panel_context,
                         )
                         self._track_tokens(re_result)
-                        idx = phase_bp.phase_number - 1
+                        idx = phase_index[phase_bp.phase_number]
                         phases[idx] = re_result.data.phase
                 phases_json = json.dumps([p.model_dump() for p in phases])
                 consistency_result = await self._consistency_checker.check(phases_json)
