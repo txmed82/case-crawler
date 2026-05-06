@@ -13,7 +13,7 @@ from casecrawler.generation.lab_panels import LAB_PANELS
 from casecrawler.generation.phase_renderer import PhaseRendererAgent
 from casecrawler.generation.retriever import Retriever
 from casecrawler.llm.base import BaseLLMProvider
-from casecrawler.models.case import DifficultyLevel, GeneratedCase, GroundTruth, Patient
+from casecrawler.models.case import DifficultyLevel, GeneratedCase, GroundTruth
 
 
 class MultiStepPipeline:

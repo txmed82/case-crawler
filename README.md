@@ -1,139 +1,114 @@
 # CaseCrawler
 
-CaseCrawler ingests medical knowledge from across the internet and generates **realistic, decision-based clinical cases** — the kind where you have to make a call with incomplete information, just like real medicine.
+CaseCrawler generates validated synthetic healthcare datasets for AI training and evaluation.
 
-Most medical AI tools summarize. CaseCrawler forces decisions under uncertainty.
+It combines grounded medical knowledge retrieval, structured clinical data generation, messy clinical text synthesis, labs, vitals, time-series scaffolding, optional medical imaging hooks, validation, and fine-tuning exports.
 
-## Why
-
-Clinical reasoning is hard to teach and harder to evaluate. Textbook questions are too clean. Real patients are messy, incomplete, and full of distractors. CaseCrawler generates cases that feel like real encounters — with decision trees that branch into correct paths, common mistakes, and catastrophic errors.
-
-Two use cases:
-
-1. **AI training data** — Generate structured JSONL datasets for fine-tuning medical models, building eval benchmarks, and training clinical reasoning systems
-2. **Medical education** — Interactive case player where students, residents, and nurses walk through clinical decisions and learn from realistic outcomes
+The goal is not to simulate a classroom case. The goal is to produce multimodal synthetic records that are ready to inspect, validate, and export as JSONL, FHIR NDJSON, parquet, or model-specific fine-tuning formats.
 
 ## Quick Start
 
 ```bash
-# Clone and install
 git clone https://github.com/txmed82/case-crawler.git
 cd case-crawler
 pip install -e ".[dev]"
 
-# See what data sources are available (works immediately, no keys needed)
+# See available knowledge sources
 casecrawler sources
 
-# Ingest medical knowledge about a topic
-casecrawler ingest "subarachnoid hemorrhage"
+# Ingest medical knowledge for grounding
+casecrawler ingest "sepsis"
 
-# Search what you've ingested
-casecrawler search "thunderclap headache"
+# Generate synthetic healthcare records without an LLM key
+casecrawler generate-dataset "sepsis" --count 10
 
-# Generate a clinical case (requires an LLM API key — see Configuration)
-casecrawler generate "subarachnoid hemorrhage" --difficulty resident
-
-# Browse generated cases
-casecrawler cases
+# Search the grounded knowledge base
+casecrawler search "sepsis lactate fluid resuscitation"
 ```
 
 ### With Docker
 
 ```bash
-cp .env.example .env    # add your API keys
-docker compose up       # API on :8000, UI on :3000
+cp .env.example .env
+docker compose up
 ```
+
+## What It Generates
+
+The synthetic dataset path produces `SyntheticRecord` objects with:
+
+- Structured patient demographics and encounters
+- Diagnoses and procedure/code slots
+- Labs with units, reference ranges, flags, and timestamps
+- Vitals with timestamps
+- Clean clinical notes and messy note variants
+- Time-series channels for longitudinal vitals, labs, or waveform-like data
+- Imaging asset metadata and optional image-generation backend hooks
+- Provenance metadata
+- Validation reports with schema, clinical consistency, privacy, utility, and modality-alignment scores
+
+The legacy case-generation path still exists for backward compatibility, but new work should use `generate-dataset` and the dataset APIs.
 
 ## Data Sources
 
-CaseCrawler works with **zero API keys** using free public sources. Each paid key you add unlocks richer data.
+CaseCrawler works with zero API keys using free public sources. Paid keys unlock richer data.
 
 | Source | Key Required | What You Get |
 |--------|-------------|--------------|
-| PubMed | None | 35M+ biomedical citations, guidelines |
-| OpenFDA | None | Drug adverse events, labeling |
+| PubMed | None | Biomedical citations and abstracts |
+| OpenFDA | None | Drug adverse events and labeling |
 | DailyMed | None | Structured drug labels |
-| RxNorm | None | Drug names, classes |
+| RxNorm | None | Drug names and classes |
 | medRxiv | None | Medical preprints |
 | ClinicalTrials.gov | None | Trial protocols, eligibility, outcomes |
 | Glass Health | `GLASS_API_KEY` | Curated clinical reasoning content |
-| Anna's Archive | `ANNAS_ARCHIVE_API_KEY` | Full-text papers + medical textbooks |
+| Anna's Archive | `ANNAS_ARCHIVE_API_KEY` | Full-text papers and medical textbooks |
 | Firecrawl | `FIRECRAWL_API_KEY` | Web scraping for guidelines and unstructured content |
 
-Run `casecrawler sources` to see what's available with your current keys.
+Run `casecrawler sources` to see what is available with your current keys.
 
-## Case Generation
+## Synthetic Generation Pipeline
 
-CaseCrawler uses a 4-stage LLM pipeline to generate cases:
+The dataset-first path starts with a no-key deterministic slice and is designed for pluggable model backends:
 
-```
-Topic + Difficulty
+```text
+Topic + GenerationRequest
       |
-[1. Retriever]          — pulls relevant knowledge from ChromaDB
+[1. Structured Generator]  -> patient, encounter, labs, vitals
       |
-[2. Case Generator]     — creates vignette, patient, ground truth
+[2. Text Generator]        -> clean and messy clinical notes
       |
-[3. Decision Tree]      — builds correct + wrong paths with consequences
+[3. Validators]            -> schema, clinical rules, privacy, utility
       |
-[4. Clinical Reviewer]  — scores accuracy, pedagogy, and bias
+[4. DatasetStore]          -> SQLite synthetic_records
       |
-  rejected? --> retry with reviewer feedback (up to 3x)
-      |
-  approved --> saved to SQLite
+[5. Exporters]             -> SFT/chat/multimodal/RL/FHIR/parquet profiles
 ```
 
-The clinical reviewer checks three dimensions:
-- **Accuracy** — Is the medicine correct?
-- **Pedagogy** — Is this case actually teaching something?
-- **Bias** — Does it avoid demographic stereotyping?
+Optional backends are intentionally lazy:
 
-### Difficulty Levels
-
-| Level | What Changes |
-|-------|-------------|
-| `medical_student` | Classic presentations, 2-3 choices, simple consequences |
-| `resident` | Atypical presentations, 3-4 choices, multi-step cascades |
-| `attending` | Rare variants, 4-5 subtle choices, system-level failures |
-
-### LLM Providers
-
-Use whichever LLM provider you already pay for:
-
-| Provider | Key | Config |
-|----------|-----|--------|
-| Anthropic | `ANTHROPIC_API_KEY` | `provider: anthropic` |
-| OpenAI | `OPENAI_API_KEY` | `provider: openai` |
-| OpenRouter | `OPENROUTER_API_KEY` | `provider: openrouter` |
-| Ollama (local) | None | `provider: ollama` |
+- `casecrawler[hf]` for Hugging Face helpers
+- `casecrawler[imaging]` for diffusers/image validation backends
+- `casecrawler[parquet]` for parquet exports
+- Existing OpenAI, Anthropic, OpenRouter, and Ollama providers remain available for model-backed generation
 
 ## CLI Reference
 
 ```bash
-# Ingestion
-casecrawler ingest "sepsis"                          # ingest from all free sources
-casecrawler ingest "ACDF" --sources pubmed,glass     # specific sources
-casecrawler ingest "PE" --limit 50                   # more results per source
+# Knowledge ingestion and search
+casecrawler ingest "sepsis"
+casecrawler ingest "pulmonary embolism" --sources pubmed,openfda
+casecrawler search "elevated lactate septic shock"
+casecrawler sources
+casecrawler config
 
-# Case generation
-casecrawler generate "sepsis"                        # 1 case, default difficulty
-casecrawler generate "MI" --difficulty attending --count 10
-casecrawler generate "SAH" --count 50 --output training.jsonl
-casecrawler generate "PE" --ingest                   # ingest first, then generate
+# Synthetic healthcare dataset generation
+casecrawler generate-dataset "sepsis" --count 25
+casecrawler generate-dataset "heart failure exacerbation" --count 100 --complexity complex
 
-# Case management
-casecrawler cases                                    # list all cases
-casecrawler cases --topic sepsis --difficulty resident
-casecrawler cases show <case_id>                     # full case JSON
-casecrawler cases export --output dataset.jsonl      # JSONL export
-
-# Search & info
-casecrawler search "thunderclap headache"
-casecrawler search "LP contraindications" --source openfda
-casecrawler sources                                  # available/unavailable sources
-casecrawler config                                   # current settings
-
-# Server
-casecrawler serve                                    # start API on :8000
+# Legacy case generation remains available
+casecrawler generate "subarachnoid hemorrhage" --difficulty resident
+casecrawler cases export --output legacy_cases.jsonl
 ```
 
 ## REST API
@@ -142,48 +117,36 @@ Start the server with `casecrawler serve` or `docker compose up`.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/ingest` | POST | Ingest content for a topic (async) |
+| `/api/ingest` | POST | Ingest content for a topic |
 | `/api/ingest/{job_id}` | GET | Poll ingestion status |
 | `/api/search?q=...` | GET | Search the knowledge base |
 | `/api/sources` | GET | List available sources |
-| `/api/generate` | POST | Generate cases (async) |
-| `/api/generate/{job_id}` | GET | Poll generation status |
-| `/api/cases` | GET | List/filter cases |
-| `/api/cases/{case_id}` | GET | Get a single case |
-| `/api/cases/export` | GET | JSONL stream |
-
-## Web UI
-
-The React frontend runs on port 3000 and gives you:
-
-- **Ingest** — pick a topic, select sources, watch ingestion progress
-- **Search** — query the knowledge base, filter by source and credibility
-- **Sources** — see what's available and what keys you're missing
-- **Generate** — set topic + difficulty + count, generate cases
-- **Cases** — browse and filter generated cases
-- **Play** — interactive case player: read the vignette, make a decision, see the outcome, review the full debrief
+| `/api/datasets/generate` | POST | Generate synthetic healthcare records |
+| `/api/generate` | POST | Legacy clinical case generation |
+| `/api/cases` | GET | Legacy case list/filter |
+| `/api/cases/export` | GET | Legacy case JSONL stream |
 
 ## Configuration
 
-### `.env` — API keys (secrets, never committed)
+### `.env`
 
 ```bash
-# LLM provider (at least one needed for case generation)
+# Optional LLM providers
 ANTHROPIC_API_KEY=sk-ant-...
 # OPENAI_API_KEY=sk-...
 # OPENROUTER_API_KEY=sk-or-...
 
-# Paid data sources (all optional)
+# Optional paid data sources
 # GLASS_API_KEY=
 # ANNAS_ARCHIVE_API_KEY=
 # FIRECRAWL_API_KEY=
 
-# Free sources (optional, increases rate limits)
+# Optional free-source rate-limit keys
 # NCBI_API_KEY=
 # OPENFDA_API_KEY=
 ```
 
-### `config.yaml` — preferences (safe to commit)
+### `config.yaml`
 
 ```yaml
 ingestion:
@@ -217,69 +180,23 @@ api:
   port: 8000
 ```
 
-## Case Output Format
-
-Generated cases are structured JSON:
-
-```json
-{
-  "case_id": "uuid",
-  "topic": "subarachnoid hemorrhage",
-  "difficulty": "resident",
-  "specialty": ["neurosurgery", "emergency_medicine"],
-  "patient": { "age": 42, "sex": "female", "demographics": "..." },
-  "vignette": "A 42-year-old woman presents to the ED with...",
-  "decision_prompt": "What would you do next?",
-  "ground_truth": {
-    "diagnosis": "aneurysmal subarachnoid hemorrhage",
-    "optimal_next_step": "Non-contrast CT head",
-    "rationale": "...",
-    "key_findings": ["thunderclap headache", "neck stiffness"]
-  },
-  "decision_tree": [
-    { "choice": "CT head", "is_correct": true, "outcome": "..." },
-    { "choice": "MRI brain", "is_correct": false, "error_type": "common_mistake", "consequence": "..." },
-    { "choice": "Discharge", "is_correct": false, "error_type": "catastrophic", "consequence": "..." }
-  ],
-  "complications": [...],
-  "review": { "accuracy_score": 0.95, "pedagogy_score": 0.88, "bias_score": 0.92 },
-  "sources": [{ "type": "pubmed", "reference": "PMID:12345678" }]
-}
-```
-
-Export as JSONL for AI training: `casecrawler cases export --output training_data.jsonl`
-
 ## Development
 
 ```bash
-# Install with dev dependencies
 pip install -e ".[dev]"
-
-# Run tests
 pytest tests/ -v
-
-# Frontend
-cd ui && npm install && npm run dev
-
-# Lint
-ruff check src/ tests/
+ruff check src tests
 ```
 
-## Architecture
+## Project Structure
 
-```
+```text
 src/casecrawler/
-  sources/        # 9 source plugins (BaseSource interface)
-  pipeline/       # chunker, tagger, embedder, ChromaDB store
-  generation/     # retriever, case generator, decision tree, clinical reviewer
-  llm/            # Anthropic, OpenAI, OpenRouter, Ollama providers
-  storage/        # SQLite case store
-  api/            # FastAPI REST API
-  cli.py          # Click CLI
-
-ui/               # React + Vite + Tailwind
+  sources/       # Public and paid medical source adapters
+  pipeline/      # Chunking, tagging, embedding, Chroma storage
+  generation/    # Legacy cases plus synthetic dataset generators
+  validation/    # Synthetic record validation
+  storage/       # SQLite stores
+  export/        # Fine-tuning and legacy exporters
+  api/           # FastAPI routes
 ```
-
-## License
-
-Apache 2.0

@@ -10,9 +10,7 @@ from casecrawler.generation.phase_renderer import PhaseRendererOutput
 from casecrawler.llm.base import StructuredGenerationResult
 from casecrawler.models.blueprint import CaseBlueprint, PhaseBlueprint
 from casecrawler.models.case import (
-    DifficultyLevel,
     GeneratedCase,
-    GroundTruth,
     Patient,
     ReviewResult,
 )

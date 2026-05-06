@@ -196,3 +196,27 @@ export async function fetchCase(caseId: string): Promise<GeneratedCase> {
   const resp = await fetch(`${BASE}/cases/${caseId}`);
   return resp.json();
 }
+
+export interface DatasetGenerateRequest {
+  topic: string;
+  count?: number;
+  complexity?: "simple" | "moderate" | "complex" | "rare";
+}
+
+export interface DatasetGenerateResponse {
+  dataset_id: string;
+  generated: number;
+  approved: number;
+  records: Record<string, unknown>[];
+}
+
+export async function startDatasetGenerate(
+  req: DatasetGenerateRequest
+): Promise<DatasetGenerateResponse> {
+  const resp = await fetch(`${BASE}/datasets/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  return resp.json();
+}

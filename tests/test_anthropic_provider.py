@@ -1,5 +1,3 @@
-import json
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -30,7 +28,6 @@ async def test_generate(provider):
 
 @pytest.mark.asyncio
 async def test_generate_structured(provider):
-    patient_json = json.dumps({"age": 42, "sex": "female", "demographics": "Healthy"})
     mock_response = MagicMock()
     mock_response.content = [
         MagicMock(type="tool_use", input={"age": 42, "sex": "female", "demographics": "Healthy"}),

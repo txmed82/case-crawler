@@ -1,6 +1,5 @@
 import tempfile
 
-import pytest
 
 from casecrawler.models.case import (
     Complication,

@@ -1,4 +1,3 @@
-import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -10,7 +9,6 @@ from casecrawler.llm.base import StructuredGenerationResult
 from casecrawler.models.case import (
     Complication,
     DecisionChoice,
-    DifficultyLevel,
     GroundTruth,
     Patient,
     ReviewResult,

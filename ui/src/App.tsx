@@ -35,11 +35,11 @@ export default function App() {
                   <span className="mr-4 text-base font-bold text-gray-900 tracking-tight">
                     CaseCrawler
                   </span>
-                  <NavLink to="/" end className={navLinkClass}>Ingest</NavLink>
+                  <NavLink to="/" end className={navLinkClass}>Knowledge</NavLink>
                   <NavLink to="/search" className={navLinkClass}>Search</NavLink>
                   <NavLink to="/sources" className={navLinkClass}>Sources</NavLink>
-                  <NavLink to="/generate" className={navLinkClass}>Generate</NavLink>
-                  <NavLink to="/cases" className={navLinkClass}>Cases</NavLink>
+                  <NavLink to="/generate" className={navLinkClass}>Generate Dataset</NavLink>
+                  <NavLink to="/cases" className={navLinkClass}>Datasets</NavLink>
                 </div>
               </div>
             </div>

@@ -43,7 +43,7 @@ def _fake_case() -> GeneratedCase:
 
 def test_generate_command():
     runner = CliRunner()
-    with patch("casecrawler.cli.get_provider") as mock_get_provider, \
+    with patch("casecrawler.cli.get_provider"), \
          patch("casecrawler.cli.GenerationPipeline") as MockPipeline, \
          patch("casecrawler.cli.Retriever"), \
          patch("casecrawler.cli.Store"), \

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import tempfile
 
-import pytest
 from casecrawler.models.document import Document, DocumentMetadata, CredibilityLevel
 from casecrawler.pipeline.orchestrator import PipelineOrchestrator
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from casecrawler.models.document import Document, DocumentMetadata, CredibilityLevel
 from casecrawler.pipeline.chunker import Chunker
 

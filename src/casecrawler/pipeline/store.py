@@ -4,6 +4,7 @@ import chromadb
 from chromadb.config import Settings
 
 from casecrawler.models.document import Chunk
+from casecrawler.pipeline.embedder import deterministic_embedding
 
 
 class Store:
@@ -36,7 +37,7 @@ class Store:
     def search(self, query: str, n_results: int = 10, source: str | None = None) -> list[dict]:
         where = {"source": source} if source else None
         query_kwargs: dict = {
-            "query_texts": [query],
+            "query_embeddings": [deterministic_embedding(query)],
             "n_results": min(n_results, max(self._collection.count(), 1)),
         }
         if where:

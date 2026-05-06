@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import tempfile
 
-import pytest
 from casecrawler.models.document import Chunk, DocumentMetadata, CredibilityLevel
 from casecrawler.pipeline.tagger import Tagger
 from casecrawler.pipeline.embedder import Embedder

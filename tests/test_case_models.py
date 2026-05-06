@@ -1,4 +1,4 @@
-from casecrawler.models.blueprint import BranchPoint, CaseBlueprint, PhaseBlueprint
+from casecrawler.models.blueprint import CaseBlueprint, PhaseBlueprint
 from casecrawler.models.case import (
     Complication,
     DecisionChoice,
@@ -8,7 +8,7 @@ from casecrawler.models.case import (
     Patient,
     ReviewResult,
 )
-from casecrawler.models.diagnostics import LabResult, LabValue, VitalSigns
+from casecrawler.models.diagnostics import VitalSigns
 from casecrawler.models.phase import CasePhase, PhaseDecision, PhaseOutcome
 
 
