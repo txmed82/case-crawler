@@ -16,9 +16,13 @@ class SyntheticValidator:
             *validate_privacy(record),
         ]
 
-        error_count = sum(1 for issue in issues if issue.severity == "error")
+        clinical_error_count = sum(
+            1
+            for issue in issues
+            if issue.severity == "error" and issue.field != "privacy"
+        )
         schema_score = 1.0
-        clinical_score = max(0.0, 1.0 - 0.25 * error_count)
+        clinical_score = max(0.0, 1.0 - 0.25 * clinical_error_count)
         privacy_score = 0.0 if any(issue.field == "privacy" for issue in issues) else 1.0
         utility_score = (
             1.0

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid5
 
 from casecrawler.models.synthetic import ClinicalDocument, SyntheticRecord
 
 
 class TextGenerator:
     def add_documents(self, record: SyntheticRecord) -> SyntheticRecord:
-        timestamp = datetime.now().isoformat()
+        timestamp = record.provenance.created_at
         labs = ", ".join(f"{lab.name} {lab.value} {lab.unit}" for lab in record.labs)
         vitals = ", ".join(
             f"{vital.name} {vital.value}{vital.unit}" for vital in record.vitals
@@ -24,7 +23,7 @@ class TextGenerator:
             "Init",
         )
         document = ClinicalDocument(
-            document_id=f"doc-{uuid4()}",
+            document_id=f"doc-{uuid5(NAMESPACE_URL, f'{record.record_id}:ed_note')}",
             note_type="ed_note",
             author_role="physician",
             timestamp=timestamp,
@@ -32,4 +31,3 @@ class TextGenerator:
             messy_text=messy,
         )
         return record.model_copy(update={"documents": [*record.documents, document]})
-

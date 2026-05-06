@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SourcesConfig(BaseModel):
@@ -47,6 +47,21 @@ class GenerationConfig(BaseModel):
     retriever_chunk_count: int = 25
 
 
+class SyntheticConfig(BaseModel):
+    default_complexity: str = "moderate"
+    default_modalities: list[str] = [
+        "structured_ehr",
+        "clinical_text",
+        "labs",
+        "vitals",
+    ]
+    validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    imaging_backend: str = "placeholder"
+    export_formats: list[str] = ["sft_jsonl"]
+    max_api_generation_count: int = Field(default=100, ge=1)
+    max_api_returned_records: int = Field(default=25, ge=0)
+
+
 class AppConfig(BaseModel):
     ingestion: IngestionConfig = IngestionConfig()
     chunking: ChunkingConfig = ChunkingConfig()
@@ -55,3 +70,4 @@ class AppConfig(BaseModel):
     api: ApiConfig = ApiConfig()
     llm: LlmConfig = LlmConfig()
     generation: GenerationConfig = GenerationConfig()
+    synthetic: SyntheticConfig = SyntheticConfig()

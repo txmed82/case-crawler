@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid5
 
 from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import (
@@ -22,14 +21,15 @@ class StructuredGenerator:
         req: GenerationRequest,
         index: int,
     ) -> SyntheticRecord:
-        now = datetime.now().isoformat()
+        now = str(req.cohort_constraints.get("base_time", "2026-01-01T00:00:00"))
+        stable_prefix = f"{dataset_id}:{req.topic}:{index}"
         patient = SyntheticPatient(
-            patient_id=f"pat-{uuid4()}",
+            patient_id=f"pat-{uuid5(NAMESPACE_URL, f'{stable_prefix}:patient')}",
             age=45 + (index % 35),
             sex="female" if index % 2 else "male",
         )
         encounter = Encounter(
-            encounter_id=f"enc-{uuid4()}",
+            encounter_id=f"enc-{uuid5(NAMESPACE_URL, f'{stable_prefix}:encounter')}",
             start=now,
             setting="emergency_department",
             reason=req.topic,
@@ -42,7 +42,7 @@ class StructuredGenerator:
             ],
         )
         return SyntheticRecord(
-            record_id=f"rec-{uuid4()}",
+            record_id=f"rec-{uuid5(NAMESPACE_URL, f'{stable_prefix}:record')}",
             dataset_id=dataset_id,
             topic=req.topic,
             complexity=req.complexity,
@@ -76,4 +76,3 @@ class StructuredGenerator:
             ],
             provenance=Provenance(generator="structured-generator", created_at=now),
         )
-

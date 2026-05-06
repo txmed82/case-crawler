@@ -26,7 +26,10 @@ class PipelineOrchestrator:
         self._chunker = Chunker(chunk_size=resolved_chunk_size, overlap=resolved_overlap)
         self._tagger = Tagger()
         self._embedder = Embedder(model_name=resolved_model)
-        self.store = Store(chroma_dir=resolved_chroma_dir)
+        self.store = Store(
+            chroma_dir=resolved_chroma_dir,
+            query_embedder=self._embedder.embed_text,
+        )
 
     def process(self, documents: list[Document]) -> dict[str, int]:
         all_chunks = []

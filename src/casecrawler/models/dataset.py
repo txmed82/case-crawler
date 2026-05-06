@@ -34,7 +34,7 @@ class GenerationRequest(BaseModel):
         default_factory=lambda: [ExportFormat.SFT_JSONL]
     )
     ingest_first: bool = False
-    validation_threshold: float = 0.8
+    validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
 
 
 class DatasetManifest(BaseModel):

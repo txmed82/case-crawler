@@ -11,7 +11,7 @@ export default function GeneratePage() {
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
-    if (!topic.trim()) return;
+    if (!topic.trim() || isGenerating) return;
     setResult(null);
     setError(null);
     setIsGenerating(true);
@@ -31,6 +31,8 @@ export default function GeneratePage() {
 
       <div className="space-y-4">
         <input
+          id="dataset-topic"
+          aria-label="Dataset topic"
           type="text"
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
@@ -40,6 +42,8 @@ export default function GeneratePage() {
         />
         <div className="flex flex-wrap gap-4">
           <select
+            id="dataset-complexity"
+            aria-label="Complexity"
             value={complexity}
             onChange={(e) => setComplexity(e.target.value as typeof complexity)}
             className="rounded-lg border border-gray-300 px-3 py-2"
@@ -50,6 +54,8 @@ export default function GeneratePage() {
             <option value="rare">Rare</option>
           </select>
           <input
+            id="dataset-count"
+            aria-label="Record count"
             type="number"
             value={count}
             onChange={(e) => setCount(Number(e.target.value))}
@@ -74,6 +80,9 @@ export default function GeneratePage() {
           <p className="font-medium text-green-800">Dataset generated</p>
           <p className="text-sm text-green-700">
             {result.generated} generated, {result.approved} approved
+          </p>
+          <p className="text-sm text-green-700">
+            Showing {result.records.length} of {result.total_records} records
           </p>
           <p className="text-xs text-green-700">{result.dataset_id}</p>
         </div>
