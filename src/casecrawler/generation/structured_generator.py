@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import NAMESPACE_URL, uuid5
 
 from casecrawler.models.dataset import GenerationRequest
@@ -21,7 +22,7 @@ class StructuredGenerator:
         req: GenerationRequest,
         index: int,
     ) -> SyntheticRecord:
-        now = str(req.cohort_constraints.get("base_time", "2026-01-01T00:00:00"))
+        now = _normalize_base_time(req.cohort_constraints.get("base_time"))
         stable_prefix = f"{dataset_id}:{req.topic}:{index}"
         patient = SyntheticPatient(
             patient_id=f"pat-{uuid5(NAMESPACE_URL, f'{stable_prefix}:patient')}",
@@ -76,3 +77,14 @@ class StructuredGenerator:
             ],
             provenance=Provenance(generator="structured-generator", created_at=now),
         )
+
+
+def _normalize_base_time(value) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).isoformat()
+        except ValueError:
+            pass
+    return "2026-01-01T00:00:00"

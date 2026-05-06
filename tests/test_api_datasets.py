@@ -1,7 +1,8 @@
 from fastapi.testclient import TestClient
 
+from casecrawler.api.routes import datasets as datasets_routes
 from casecrawler.api.app import app
-from casecrawler.config import load_config
+from casecrawler.models.config import AppConfig, SyntheticConfig
 
 
 def test_generate_dataset_api_smoke(tmp_path, monkeypatch):
@@ -19,9 +20,8 @@ def test_generate_dataset_api_smoke(tmp_path, monkeypatch):
 
 def test_generate_dataset_api_rejects_unbounded_counts(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    config_file = tmp_path / "config.yaml"
-    config_file.write_text("synthetic:\n  max_api_generation_count: 1\n")
-    load_config(str(config_file))
+    config = AppConfig(synthetic=SyntheticConfig(max_api_generation_count=1))
+    monkeypatch.setattr(datasets_routes, "get_config", lambda: config)
     client = TestClient(app)
 
     response = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 2})

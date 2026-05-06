@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from casecrawler.models.dataset import ExportFormat
+from casecrawler.models.synthetic import ComplexityProfile, Modality
+
 
 class SourcesConfig(BaseModel):
     priority: list[str] = [
@@ -48,16 +51,16 @@ class GenerationConfig(BaseModel):
 
 
 class SyntheticConfig(BaseModel):
-    default_complexity: str = "moderate"
-    default_modalities: list[str] = [
-        "structured_ehr",
-        "clinical_text",
-        "labs",
-        "vitals",
+    default_complexity: ComplexityProfile = ComplexityProfile.MODERATE
+    default_modalities: list[Modality] = [
+        Modality.STRUCTURED_EHR,
+        Modality.CLINICAL_TEXT,
+        Modality.LABS,
+        Modality.VITALS,
     ]
     validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
     imaging_backend: str = "placeholder"
-    export_formats: list[str] = ["sft_jsonl"]
+    export_formats: list[ExportFormat] = [ExportFormat.SFT_JSONL]
     max_api_generation_count: int = Field(default=100, ge=1)
     max_api_returned_records: int = Field(default=25, ge=0)
 
