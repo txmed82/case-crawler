@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 
 import click
@@ -191,6 +192,97 @@ def generate_dataset(topic: str, count: int, complexity: str) -> None:
     click.echo(f"Dataset: {result['dataset_id']}")
     click.echo(f"Generated: {result['generated']}")
     click.echo(f"Approved: {result['approved']}")
+
+
+@cli.group("datasets", invoke_without_command=True)
+@click.pass_context
+def datasets_group(ctx: click.Context) -> None:
+    """Manage synthetic healthcare datasets."""
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(datasets_list)
+
+
+@datasets_group.command("list")
+@click.option("--limit", default=100, type=int, help="Max datasets")
+def datasets_list(limit: int) -> None:
+    """List synthetic datasets."""
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    manifests = DatasetStore().list_manifests(limit=limit)
+    if not manifests:
+        click.echo("No datasets found.")
+        return
+    for manifest in manifests:
+        click.echo(
+            f"{manifest.dataset_id} {manifest.topic} "
+            f"generated={manifest.generated_count} approved={manifest.approved_count}"
+        )
+
+
+@datasets_group.command("show")
+@click.argument("dataset_id")
+def datasets_show(dataset_id: str) -> None:
+    """Show a synthetic dataset manifest."""
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    store = DatasetStore()
+    try:
+        manifest = store.get_manifest(dataset_id)
+    except KeyError:
+        click.echo(f"Dataset {dataset_id} not found.")
+        return
+    click.echo(manifest.model_dump_json(indent=2))
+
+
+@cli.command("validate")
+@click.option("--dataset-id", default=None, help="Dataset id prefix or exact id")
+def validate_dataset(dataset_id: str | None) -> None:
+    """Re-run validation for stored synthetic records."""
+    from casecrawler.storage.dataset_store import DatasetStore
+    from casecrawler.validation.synthetic_validator import SyntheticValidator
+
+    store = DatasetStore()
+    records = store.list_records(limit=10000)
+    if dataset_id:
+        records = [record for record in records if record.dataset_id.startswith(dataset_id)]
+    validator = SyntheticValidator()
+    approved = 0
+    for record in records:
+        validation = validator.validate(record)
+        if validation.approved:
+            approved += 1
+        store.save_record(record.model_copy(update={"validation": validation}))
+    click.echo(f"Validated: {len(records)}")
+    click.echo(f"Approved: {approved}")
+
+
+@cli.command("export-dataset")
+@click.option("--output", required=True, help="Output JSONL file path")
+@click.option(
+    "--format",
+    "export_format",
+    type=click.Choice(["raw_jsonl", "sft_jsonl", "chat_jsonl", "multimodal_jsonl"]),
+    default="sft_jsonl",
+)
+@click.option("--dataset-id", default=None, help="Dataset id filter")
+def export_dataset(output: str, export_format: str, dataset_id: str | None) -> None:
+    """Export synthetic datasets to fine-tuning JSONL."""
+    from casecrawler.export.fine_tuning import export_record
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    store = DatasetStore()
+    records = store.list_records(dataset_id=dataset_id, limit=10000)
+    with open(output, "w") as f:
+        for record in records:
+            f.write(json.dumps(export_record(record, export_format), sort_keys=True) + "\n")
+    if dataset_id:
+        store.save_export_manifest(
+            dataset_id=dataset_id,
+            export_format=export_format,
+            file_path=output,
+            record_count=len(records),
+        )
+    click.echo(f"Exported {len(records)} record(s) to {output}")
 
 
 @cli.command()

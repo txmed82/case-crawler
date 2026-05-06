@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
+from casecrawler.models.dataset import DatasetManifest, ExportFormat, ExportManifest
 from casecrawler.models.synthetic import SyntheticRecord
 
 
@@ -34,6 +36,19 @@ class DatasetStore:
         )
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_synth_topic ON synthetic_records(topic)"
+        )
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS export_manifests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                dataset_id TEXT NOT NULL,
+                export_format TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                record_count INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                metadata_json TEXT NOT NULL
+            )
+            """
         )
         self._conn.commit()
 
@@ -85,3 +100,73 @@ class DatasetStore:
         params.append(limit)
         rows = self._conn.execute(query, params).fetchall()
         return [SyntheticRecord.model_validate_json(row["record_json"]) for row in rows]
+
+    def list_dataset_ids(self, limit: int = 1000) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT DISTINCT dataset_id FROM synthetic_records ORDER BY dataset_id LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [row["dataset_id"] for row in rows]
+
+    def get_manifest(self, dataset_id: str) -> DatasetManifest:
+        records = self.list_records(dataset_id=dataset_id)
+        if not records:
+            raise KeyError(f"Dataset {dataset_id} not found.")
+        modalities = []
+        for record in records:
+            for modality in record.modalities:
+                if modality not in modalities:
+                    modalities.append(modality)
+        approved_count = sum(
+            1 for record in records if record.validation and record.validation.approved
+        )
+        first = records[0]
+        return DatasetManifest(
+            dataset_id=dataset_id,
+            name=f"{first.topic}-synthetic",
+            topic=first.topic,
+            requested_count=len(records),
+            generated_count=len(records),
+            approved_count=approved_count,
+            modalities=modalities,
+            export_formats=[ExportFormat.SFT_JSONL],
+            created_at=first.provenance.created_at,
+            metadata={"record_ids": [record.record_id for record in records]},
+        )
+
+    def list_manifests(self, limit: int = 1000) -> list[DatasetManifest]:
+        return [self.get_manifest(dataset_id) for dataset_id in self.list_dataset_ids(limit)]
+
+    def save_export_manifest(
+        self,
+        dataset_id: str,
+        export_format: str | ExportFormat,
+        file_path: str,
+        record_count: int,
+        metadata: dict | None = None,
+    ) -> ExportManifest:
+        resolved_format = ExportFormat(export_format)
+        created_at = datetime.now().isoformat()
+        export_manifest = ExportManifest(
+            dataset_id=dataset_id,
+            export_format=resolved_format,
+            file_path=file_path,
+            record_count=record_count,
+            created_at=created_at,
+            metadata=metadata or {},
+        )
+        self._conn.execute(
+            """INSERT INTO export_manifests
+            (dataset_id, export_format, file_path, record_count, created_at, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                dataset_id,
+                resolved_format.value,
+                file_path,
+                record_count,
+                created_at,
+                export_manifest.model_dump_json(),
+            ),
+        )
+        self._conn.commit()
+        return export_manifest

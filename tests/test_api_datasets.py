@@ -28,3 +28,18 @@ def test_generate_dataset_api_rejects_unbounded_counts(tmp_path, monkeypatch):
 
     assert response.status_code == 422
     assert "less than or equal to 1" in response.json()["detail"]
+
+
+def test_dataset_api_lists_and_exports_records(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    dataset_id = generated.json()["dataset_id"]
+
+    listed = client.get("/api/datasets")
+    exported = client.get(f"/api/datasets/{dataset_id}/export", params={"format": "sft_jsonl"})
+
+    assert listed.status_code == 200
+    assert listed.json()["datasets"][0]["dataset_id"] == dataset_id
+    assert exported.status_code == 200
+    assert exported.json()["records"][0]["dataset_id"] == dataset_id

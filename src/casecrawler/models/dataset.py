@@ -48,3 +48,12 @@ class DatasetManifest(BaseModel):
     export_formats: list[ExportFormat]
     created_at: str
     metadata: dict = Field(default_factory=dict)
+
+
+class ExportManifest(BaseModel):
+    dataset_id: str
+    export_format: ExportFormat
+    file_path: str
+    record_count: int
+    created_at: str
+    metadata: dict = Field(default_factory=dict)

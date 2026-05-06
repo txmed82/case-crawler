@@ -9,6 +9,7 @@ def test_load_default_config():
     assert config.chunking.default_chunk_size == 500
     assert config.embedding.model == "all-MiniLM-L6-v2"
     assert config.synthetic.validation_threshold == 0.8
+    assert config.synthetic.image_output_dir == "./data/images"
 
 
 def test_load_config_from_yaml(tmp_path):
@@ -29,6 +30,8 @@ def test_load_synthetic_config_from_yaml(tmp_path):
         "synthetic:\n"
         "  default_complexity: rare\n"
         "  validation_threshold: 0.9\n"
+        "  synthea_executable: /opt/synthea/run_synthea\n"
+        "  image_output_dir: /tmp/images\n"
         "  max_api_generation_count: 10\n"
         "  max_api_returned_records: 3\n"
     )
@@ -36,5 +39,7 @@ def test_load_synthetic_config_from_yaml(tmp_path):
 
     assert config.synthetic.default_complexity == "rare"
     assert config.synthetic.validation_threshold == 0.9
+    assert config.synthetic.synthea_executable == "/opt/synthea/run_synthea"
+    assert config.synthetic.image_output_dir == "/tmp/images"
     assert config.synthetic.max_api_generation_count == 10
     assert config.synthetic.max_api_returned_records == 3

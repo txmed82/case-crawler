@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from casecrawler.generation.imaging_generator import ImagingGenerator
+from casecrawler.generation.modality_plan import ModalityPlanner
 from casecrawler.generation.structured_generator import StructuredGenerator
 from casecrawler.generation.text_generator import TextGenerator
+from casecrawler.generation.timeseries_generator import TimeSeriesGenerator
 from casecrawler.models.dataset import GenerationRequest
+from casecrawler.models.synthetic import Modality
 from casecrawler.validation.synthetic_validator import SyntheticValidator
 
 
@@ -13,14 +17,21 @@ class SyntheticPipeline:
         self,
         structured_generator: StructuredGenerator | None = None,
         text_generator: TextGenerator | None = None,
+        time_series_generator: TimeSeriesGenerator | None = None,
+        imaging_generator: ImagingGenerator | None = None,
+        modality_planner: ModalityPlanner | None = None,
         validator: SyntheticValidator | None = None,
     ) -> None:
         self._structured_generator = structured_generator or StructuredGenerator()
         self._text_generator = text_generator or TextGenerator()
+        self._time_series_generator = time_series_generator or TimeSeriesGenerator()
+        self._imaging_generator = imaging_generator or ImagingGenerator()
+        self._modality_planner = modality_planner or ModalityPlanner()
         self._validator = validator or SyntheticValidator()
 
     async def generate(self, req: GenerationRequest) -> dict:
         dataset_id = f"ds-{uuid4()}"
+        plan = self._modality_planner.build(req)
         records = []
         approved = 0
         for index in range(req.count):
@@ -29,7 +40,16 @@ class SyntheticPipeline:
                 req=req,
                 index=index,
             )
-            record = self._text_generator.add_documents(record)
+            if Modality.CLINICAL_TEXT in req.modalities:
+                record = self._text_generator.add_documents(record)
+            if Modality.TIME_SERIES in req.modalities:
+                record = self._time_series_generator.add_time_series(record)
+            if Modality.IMAGING in req.modalities:
+                image = self._imaging_generator.generate_placeholder(
+                    output_dir="./data/images",
+                    prompt=f"{req.topic} {plan.imaging_views[0] if plan.imaging_views else 'medical image'}",
+                )
+                record = record.model_copy(update={"imaging": [*record.imaging, image]})
             validation = self._validator.validate(record)
             record = record.model_copy(update={"validation": validation})
             records.append(record)
@@ -39,5 +59,6 @@ class SyntheticPipeline:
             "dataset_id": dataset_id,
             "generated": len(records),
             "approved": approved,
+            "plan": plan,
             "records": records,
         }
