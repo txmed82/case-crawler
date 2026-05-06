@@ -166,7 +166,43 @@ class DatasetStore:
         )
 
     def list_manifests(self, limit: int = 1000) -> list[DatasetManifest]:
-        return [self.get_manifest(dataset_id) for dataset_id in self.list_dataset_ids(limit)]
+        dataset_ids = set(self.list_dataset_ids(limit))
+        grouped: dict[str, list[SyntheticRecord]] = {dataset_id: [] for dataset_id in dataset_ids}
+        for record in self.iter_records():
+            if record.dataset_id in grouped:
+                grouped[record.dataset_id].append(record)
+        return [
+            self._manifest_from_records(dataset_id, records)
+            for dataset_id, records in grouped.items()
+            if records
+        ]
+
+    def _manifest_from_records(
+        self,
+        dataset_id: str,
+        records: list[SyntheticRecord],
+    ) -> DatasetManifest:
+        modalities = []
+        for record in records:
+            for modality in record.modalities:
+                if modality not in modalities:
+                    modalities.append(modality)
+        approved_count = sum(
+            1 for record in records if record.validation and record.validation.approved
+        )
+        first = records[0]
+        return DatasetManifest(
+            dataset_id=dataset_id,
+            name=f"{first.topic}-synthetic",
+            topic=first.topic,
+            requested_count=len(records),
+            generated_count=len(records),
+            approved_count=approved_count,
+            modalities=modalities,
+            export_formats=[ExportFormat.SFT_JSONL],
+            created_at=first.provenance.created_at,
+            metadata={"record_ids": [record.record_id for record in records]},
+        )
 
     def save_export_manifest(
         self,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from casecrawler.config import get_config
 from casecrawler.generation.imaging_generator import ImagingGenerator
 from casecrawler.generation.modality_plan import ModalityPlanner
 from casecrawler.generation.structured_generator import StructuredGenerator
@@ -21,13 +22,16 @@ class SyntheticPipeline:
         imaging_generator: ImagingGenerator | None = None,
         modality_planner: ModalityPlanner | None = None,
         validator: SyntheticValidator | None = None,
+        image_output_dir: str | None = None,
     ) -> None:
+        config = get_config()
         self._structured_generator = structured_generator or StructuredGenerator()
         self._text_generator = text_generator or TextGenerator()
         self._time_series_generator = time_series_generator or TimeSeriesGenerator()
         self._imaging_generator = imaging_generator or ImagingGenerator()
         self._modality_planner = modality_planner or ModalityPlanner()
         self._validator = validator or SyntheticValidator()
+        self._image_output_dir = image_output_dir or config.synthetic.image_output_dir
 
     async def generate(self, req: GenerationRequest) -> dict:
         dataset_id = f"ds-{uuid4()}"
@@ -50,7 +54,7 @@ class SyntheticPipeline:
             if Modality.IMAGING in plan.modalities:
                 images = [
                     self._imaging_generator.generate_placeholder(
-                        output_dir="./data/images",
+                        output_dir=self._image_output_dir,
                         prompt=f"{req.topic} {view}",
                     )
                     for view in (plan.imaging_views or ["medical_image"])

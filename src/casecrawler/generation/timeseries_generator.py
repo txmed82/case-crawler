@@ -33,8 +33,8 @@ class TimeSeriesGenerator:
             "lactate": "mmol/L",
         }
 
-        channels = []
-        selected_channels = channels or list(base_values)
+        generated_channels = []
+        selected_channels = channels if channels else list(base_values)
         for name in selected_channels:
             if name not in base_values:
                 continue
@@ -49,7 +49,7 @@ class TimeSeriesGenerator:
                         values={"value": round(max(base + drift, 0.0), 3)},
                     )
                 )
-            channels.append(
+            generated_channels.append(
                 TimeSeriesChannel(
                     name=name,
                     unit=units[name],
@@ -58,7 +58,9 @@ class TimeSeriesGenerator:
                 )
             )
 
-        return record.model_copy(update={"time_series": [*record.time_series, *channels]})
+        return record.model_copy(
+            update={"time_series": [*record.time_series, *generated_channels]}
+        )
 
 
 def _first_vital(record: SyntheticRecord, name: str, fallback: float) -> float:

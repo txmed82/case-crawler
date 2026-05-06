@@ -107,7 +107,7 @@ def _stable_record_seed(req: GenerationRequest, index: int) -> str:
             canonical_constraints["base_time"]
         )
     constraints = json.dumps(canonical_constraints, sort_keys=True, default=str)
-    modalities = ",".join(modality.value for modality in req.modalities)
+    modalities = ",".join(sorted(modality.value for modality in req.modalities))
     return f"{req.topic}:{req.complexity.value}:{modalities}:{constraints}:{index}"
 
 

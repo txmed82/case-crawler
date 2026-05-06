@@ -50,8 +50,8 @@ async def get_dataset(dataset_id: str, limit: int = 100):
     store = DatasetStore()
     try:
         manifest = store.get_manifest(dataset_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="dataset not found")
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail="dataset not found") from err
     records = store.list_records(dataset_id=dataset_id, limit=limit)
     return {
         "manifest": manifest.model_dump(),

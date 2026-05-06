@@ -117,10 +117,12 @@ def _partial_fhir_date(value: str) -> date:
 def _observation_to_lab(resource: dict, created_at: str) -> LabObservation:
     quantity = resource.get("valueQuantity", {})
     code = resource.get("code", {})
+    quantity_value = quantity.get("value")
+    value = quantity_value if quantity_value is not None else resource.get("valueString", "")
     return LabObservation(
         name=code.get("text") or code.get("coding", [{}])[0].get("display", "Observation"),
         loinc=code.get("coding", [{}])[0].get("code"),
-        value=quantity.get("value", resource.get("valueString", "")),
+        value=value,
         unit=quantity.get("unit", ""),
         effective_time=resource.get("effectiveDateTime", created_at),
     )

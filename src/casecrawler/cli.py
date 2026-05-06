@@ -274,18 +274,19 @@ def export_dataset(output: str, export_format: str, dataset_id: str | None) -> N
     store = DatasetStore()
     if dataset_id and not store.dataset_exists(dataset_id):
         raise click.ClickException(f"Dataset {dataset_id} not found.")
-    records = list(store.iter_records(dataset_id=dataset_id))
+    record_count = 0
     with open(output, "w") as f:
-        for record in records:
+        for record in store.iter_records(dataset_id=dataset_id):
             f.write(json.dumps(export_record(record, export_format), sort_keys=True) + "\n")
+            record_count += 1
     if dataset_id:
         store.save_export_manifest(
             dataset_id=dataset_id,
             export_format=export_format,
             file_path=output,
-            record_count=len(records),
+            record_count=record_count,
         )
-    click.echo(f"Exported {len(records)} record(s) to {output}")
+    click.echo(f"Exported {record_count} record(s) to {output}")
 
 
 @cli.command()
