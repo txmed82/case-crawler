@@ -83,3 +83,19 @@ def test_validator_rejects_phi_like_text():
     assert report.approved is False
     assert any(issue.field == "privacy" for issue in report.issues)
 
+
+def test_validator_scans_nested_record_fields_for_phi():
+    bad = _record(
+        patient=SyntheticPatient(
+            patient_id="pat-1",
+            age=64,
+            sex="male",
+            demographics={"contact": {"email": "patient@example.com"}},
+        )
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert report.clinical_consistency_score == 1.0
+    assert any(issue.field == "privacy" for issue in report.issues)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ComplexityProfile(str, Enum):
@@ -21,13 +21,17 @@ class Modality(str, Enum):
     IMAGING = "imaging"
 
 
-class Code(BaseModel):
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class Code(StrictModel):
     system: str
     code: str
     display: str
 
 
-class Provenance(BaseModel):
+class Provenance(StrictModel):
     generator: str
     model: str | None = None
     source_refs: list[dict] = Field(default_factory=list)
@@ -35,7 +39,7 @@ class Provenance(BaseModel):
     created_at: str
 
 
-class SyntheticPatient(BaseModel):
+class SyntheticPatient(StrictModel):
     patient_id: str
     age: int
     sex: str
@@ -43,7 +47,7 @@ class SyntheticPatient(BaseModel):
     social_history: dict = Field(default_factory=dict)
 
 
-class Encounter(BaseModel):
+class Encounter(StrictModel):
     encounter_id: str
     start: str
     end: str | None = None
@@ -53,7 +57,7 @@ class Encounter(BaseModel):
     procedures: list[Code] = Field(default_factory=list)
 
 
-class LabObservation(BaseModel):
+class LabObservation(StrictModel):
     name: str
     loinc: str | None = None
     value: float | str
@@ -65,26 +69,26 @@ class LabObservation(BaseModel):
     specimen: str | None = None
 
 
-class VitalObservation(BaseModel):
+class VitalObservation(StrictModel):
     name: str
     value: float
     unit: str
     effective_time: str
 
 
-class TimeSeriesPoint(BaseModel):
+class TimeSeriesPoint(StrictModel):
     timestamp: str
     values: dict[str, float]
 
 
-class TimeSeriesChannel(BaseModel):
+class TimeSeriesChannel(StrictModel):
     name: str
     unit: str
     sampling_rate_hz: float | None = None
     points: list[TimeSeriesPoint]
 
 
-class ClinicalDocument(BaseModel):
+class ClinicalDocument(StrictModel):
     document_id: str
     note_type: str
     author_role: str
@@ -94,7 +98,7 @@ class ClinicalDocument(BaseModel):
     extracted_facts: dict = Field(default_factory=dict)
 
 
-class ImagingAsset(BaseModel):
+class ImagingAsset(StrictModel):
     image_id: str
     modality: str
     body_region: str
@@ -105,14 +109,14 @@ class ImagingAsset(BaseModel):
     generation_backend: str
 
 
-class ValidationIssue(BaseModel):
+class ValidationIssue(StrictModel):
     severity: str
     modality: Modality
     field: str
     message: str
 
 
-class ValidationReport(BaseModel):
+class ValidationReport(StrictModel):
     schema_score: float
     clinical_consistency_score: float
     privacy_score: float
@@ -122,7 +126,7 @@ class ValidationReport(BaseModel):
     issues: list[ValidationIssue] = Field(default_factory=list)
 
 
-class SyntheticRecord(BaseModel):
+class SyntheticRecord(StrictModel):
     record_id: str
     dataset_id: str
     topic: str
@@ -138,4 +142,3 @@ class SyntheticRecord(BaseModel):
     provenance: Provenance
     validation: ValidationReport | None = None
     metadata: dict = Field(default_factory=dict)
-

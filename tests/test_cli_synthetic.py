@@ -13,3 +13,11 @@ def test_generate_dataset_command_smoke(tmp_path, monkeypatch):
     assert "Generated: 1" in result.output
     assert "Approved: 1" in result.output
 
+
+def test_generate_dataset_invalid_complexity_fails():
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["generate-dataset", "sepsis", "--complexity", "bogus"])
+
+    assert result.exit_code != 0
+    assert "Invalid value for '--complexity'" in result.output

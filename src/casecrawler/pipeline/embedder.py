@@ -36,6 +36,12 @@ class Embedder:
         except Exception:
             self.model = None
 
+    def embed_text(self, text: str) -> list[float]:
+        if self.model is None:
+            return deterministic_embedding(text)
+        vector = self.model.encode([text], show_progress_bar=False)[0]
+        return vector.tolist()
+
     def embed(self, chunks: list[Chunk]) -> list[tuple[Chunk, list[float]]]:
         texts = [c.text for c in chunks]
         if self.model is None:

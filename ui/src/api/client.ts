@@ -207,7 +207,25 @@ export interface DatasetGenerateResponse {
   dataset_id: string;
   generated: number;
   approved: number;
+  total_records: number;
   records: Record<string, unknown>[];
+}
+
+async function readApiError(resp: Response): Promise<string> {
+  try {
+    const body = await resp.json();
+    if (typeof body.detail === "string") return body.detail;
+    if (Array.isArray(body.detail)) {
+      return body.detail
+        .map((item: { msg?: string } | string) =>
+          typeof item === "string" ? item : item.msg ?? String(item)
+        )
+        .join(", ");
+    }
+  } catch {
+    // Fall through to status text below.
+  }
+  return resp.statusText || `HTTP ${resp.status}`;
 }
 
 export async function startDatasetGenerate(
@@ -218,5 +236,6 @@ export async function startDatasetGenerate(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
   });
+  if (!resp.ok) throw new Error(`Failed to generate dataset: ${await readApiError(resp)}`);
   return resp.json();
 }

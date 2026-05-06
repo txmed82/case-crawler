@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import chromadb
 from chromadb.config import Settings
 
 from casecrawler.models.document import Chunk
 from casecrawler.pipeline.embedder import deterministic_embedding
 
+QueryEmbedder = Callable[[str], list[float]]
+
 
 class Store:
-    def __init__(self, chroma_dir: str = "./data/chroma") -> None:
+    def __init__(
+        self,
+        chroma_dir: str = "./data/chroma",
+        query_embedder: QueryEmbedder | None = None,
+    ) -> None:
+        self._query_embedder = query_embedder or deterministic_embedding
         self._client = chromadb.PersistentClient(
             path=chroma_dir,
             settings=Settings(anonymized_telemetry=False),
@@ -37,7 +46,7 @@ class Store:
     def search(self, query: str, n_results: int = 10, source: str | None = None) -> list[dict]:
         where = {"source": source} if source else None
         query_kwargs: dict = {
-            "query_embeddings": [deterministic_embedding(query)],
+            "query_embeddings": [self._query_embedder(query)],
             "n_results": min(n_results, max(self._collection.count(), 1)),
         }
         if where:

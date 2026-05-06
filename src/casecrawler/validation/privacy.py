@@ -9,12 +9,25 @@ SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
 
+def _extract_strings(value) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        strings: list[str] = []
+        for key, nested in value.items():
+            strings.extend(_extract_strings(key))
+            strings.extend(_extract_strings(nested))
+        return strings
+    if isinstance(value, (list, tuple, set)):
+        strings = []
+        for nested in value:
+            strings.extend(_extract_strings(nested))
+        return strings
+    return []
+
+
 def _text_blobs(record: SyntheticRecord) -> list[str]:
-    blobs = [str(record.metadata)]
-    for document in record.documents:
-        blobs.append(document.clean_text)
-        if document.messy_text:
-            blobs.append(document.messy_text)
+    blobs = _extract_strings(record.model_dump(mode="python"))
     return blobs
 
 
@@ -36,4 +49,3 @@ def validate_privacy(record: SyntheticRecord) -> list[ValidationIssue]:
                 )
             )
     return issues
-

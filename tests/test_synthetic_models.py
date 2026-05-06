@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from casecrawler.models.synthetic import (
     ClinicalDocument,
     Code,
@@ -89,3 +92,12 @@ def test_synthetic_record_with_text_labs_and_vitals():
     assert record.labs[0].flag == "H"
     assert record.validation.approved is True
 
+
+def test_synthetic_models_reject_unknown_fields():
+    with pytest.raises(ValidationError):
+        SyntheticPatient(
+            patient_id="pat-1",
+            age=72,
+            sex="female",
+            real_name="Jane Doe",
+        )

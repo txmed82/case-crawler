@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from casecrawler.models.dataset import DatasetManifest, ExportFormat, GenerationRequest
 from casecrawler.models.synthetic import ComplexityProfile, Modality
 
@@ -9,6 +12,11 @@ def test_generation_request_defaults():
     assert req.complexity == ComplexityProfile.MODERATE
     assert Modality.CLINICAL_TEXT in req.modalities
     assert Modality.LABS in req.modalities
+
+
+def test_generation_request_rejects_invalid_validation_threshold():
+    with pytest.raises(ValidationError):
+        GenerationRequest(topic="sepsis", validation_threshold=1.5)
 
 
 def test_dataset_manifest_records_validation_summary():
@@ -26,4 +34,3 @@ def test_dataset_manifest_records_validation_summary():
 
     assert manifest.approved_count == 91
     assert ExportFormat.SFT_JSONL in manifest.export_formats
-
