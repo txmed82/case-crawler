@@ -22,3 +22,21 @@ def test_structured_generator_rejects_invalid_base_time():
 
     with pytest.raises(ValueError, match="base_time must be ISO-8601"):
         StructuredGenerator().generate("ds-one", req, 0)
+
+
+def test_structured_generator_canonicalizes_base_time_for_seed():
+    first_req = GenerationRequest(
+        topic="sepsis",
+        cohort_constraints={"base_time": "2026-02-03T04:05:06Z"},
+    )
+    second_req = GenerationRequest(
+        topic="sepsis",
+        cohort_constraints={"base_time": "2026-02-03T04:05:06+00:00"},
+    )
+    generator = StructuredGenerator()
+
+    first = generator.generate("ds-one", first_req, 0)
+    second = generator.generate("ds-one", second_req, 0)
+
+    assert first.record_id == second.record_id
+    assert first.provenance.created_at == second.provenance.created_at

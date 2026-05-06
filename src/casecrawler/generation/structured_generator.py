@@ -99,6 +99,11 @@ def _normalize_base_time(value) -> str:
 
 
 def _stable_record_seed(req: GenerationRequest, index: int) -> str:
-    constraints = json.dumps(req.cohort_constraints, sort_keys=True, default=str)
+    canonical_constraints = dict(req.cohort_constraints)
+    if "base_time" in canonical_constraints:
+        canonical_constraints["base_time"] = _normalize_base_time(
+            canonical_constraints["base_time"]
+        )
+    constraints = json.dumps(canonical_constraints, sort_keys=True, default=str)
     modalities = ",".join(modality.value for modality in req.modalities)
     return f"{req.topic}:{req.complexity.value}:{modalities}:{constraints}:{index}"
