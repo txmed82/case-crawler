@@ -23,6 +23,18 @@ embedding:
 storage:
   chroma_persist_dir: "./data/chroma"
 
+synthetic:
+  default_complexity: "moderate"
+  default_modalities:
+    - structured_ehr
+    - clinical_text
+    - labs
+    - vitals
+  validation_threshold: 0.8
+  imaging_backend: "placeholder"
+  export_formats:
+    - sft_jsonl
+
 api:
   host: "0.0.0.0"
   port: 8000

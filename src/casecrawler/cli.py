@@ -166,6 +166,34 @@ def serve() -> None:
     )
 
 
+@cli.command("generate-dataset")
+@click.argument("topic")
+@click.option("--count", default=1, type=int, help="Number of synthetic records to generate")
+@click.option("--complexity", default="moderate", help="simple, moderate, complex, or rare")
+def generate_dataset(topic: str, count: int, complexity: str) -> None:
+    """Generate synthetic healthcare records for AI training."""
+    from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
+    from casecrawler.models.dataset import GenerationRequest
+    from casecrawler.models.synthetic import ComplexityProfile
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    try:
+        complexity_profile = ComplexityProfile(complexity)
+    except ValueError:
+        choices = ", ".join(profile.value for profile in ComplexityProfile)
+        click.echo(f"Error: complexity must be one of: {choices}")
+        return
+
+    req = GenerationRequest(topic=topic, count=count, complexity=complexity_profile)
+    result = asyncio.run(SyntheticPipeline().generate(req))
+    store = DatasetStore()
+    for record in result["records"]:
+        store.save_record(record)
+    click.echo(f"Dataset: {result['dataset_id']}")
+    click.echo(f"Generated: {result['generated']}")
+    click.echo(f"Approved: {result['approved']}")
+
+
 @cli.command()
 @click.argument("topic")
 @click.option("--difficulty", default=None, help="medical_student, resident, or attending")

@@ -1,5 +1,5 @@
 # tests/test_lab_panels.py
-from casecrawler.generation.lab_panels import LAB_PANELS, LabComponent, LabPanel, get_panel
+from casecrawler.generation.lab_panels import LAB_PANELS, LabPanel, get_panel
 
 def test_lab_panel_structure():
     panel = LAB_PANELS["CBC"]

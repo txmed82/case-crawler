@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from casecrawler.llm.base import BaseLLMProvider, GenerationResult, StructuredGenerationResult
+from casecrawler.llm.base import GenerationResult, StructuredGenerationResult
 from casecrawler.llm.factory import get_provider
 
 

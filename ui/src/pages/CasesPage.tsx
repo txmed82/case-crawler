@@ -2,12 +2,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchCases } from "../api/client";
-import { useNavigate } from "react-router-dom";
 
 export default function CasesPage() {
   const [topicFilter, setTopicFilter] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState("");
-  const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
     queryKey: ["cases", topicFilter, difficultyFilter],
@@ -20,7 +18,10 @@ export default function CasesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Cases</h1>
+      <h1 className="text-2xl font-bold">Datasets</h1>
+      <p className="text-sm text-gray-600">
+        Legacy case records remain available while the dataset workbench is expanded.
+      </p>
 
       <div className="flex gap-3">
         <input type="text" value={topicFilter} onChange={(e) => setTopicFilter(e.target.value)}
@@ -41,8 +42,7 @@ export default function CasesPage() {
           <p className="text-sm text-gray-500">{data.total} case(s)</p>
           {data.cases.map((c) => (
             <div key={c.case_id}
-              onClick={() => navigate(`/play/${c.case_id}`)}
-              className="flex items-center justify-between rounded-lg border border-gray-200 p-4 hover:border-blue-300 cursor-pointer">
+              className="flex items-center justify-between rounded-lg border border-gray-200 p-4">
               <div>
                 <p className="font-medium">{c.topic}</p>
                 <p className="text-sm text-gray-500">{c.difficulty} | {c.specialty.join(", ")}</p>

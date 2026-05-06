@@ -32,6 +32,9 @@ dev = [
 anthropic = ["anthropic>=0.40"]
 openai = ["openai>=1.50"]
 all-llm = ["anthropic>=0.40", "openai>=1.50"]
+hf = ["huggingface_hub>=0.28", "datasets>=3.0", "transformers>=4.45"]
+imaging = ["diffusers>=0.31", "torch>=2.4", "pillow>=10.0", "open-clip-torch>=2.26"]
+parquet = ["pyarrow>=17.0", "pandas>=2.2"]
 
 [project.scripts]
 casecrawler = "casecrawler.cli:cli"

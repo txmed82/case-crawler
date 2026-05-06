@@ -1,4 +1,3 @@
-import tempfile
 from unittest.mock import AsyncMock, patch
 
 from click.testing import CliRunner
