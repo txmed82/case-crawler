@@ -40,16 +40,22 @@ class SyntheticPipeline:
                 req=req,
                 index=index,
             )
-            if Modality.CLINICAL_TEXT in req.modalities:
+            if Modality.CLINICAL_TEXT in plan.modalities:
                 record = self._text_generator.add_documents(record)
-            if Modality.TIME_SERIES in req.modalities:
-                record = self._time_series_generator.add_time_series(record)
-            if Modality.IMAGING in req.modalities:
-                image = self._imaging_generator.generate_placeholder(
-                    output_dir="./data/images",
-                    prompt=f"{req.topic} {plan.imaging_views[0] if plan.imaging_views else 'medical image'}",
+            if Modality.TIME_SERIES in plan.modalities:
+                record = self._time_series_generator.add_time_series(
+                    record,
+                    channels=plan.time_series_channels,
                 )
-                record = record.model_copy(update={"imaging": [*record.imaging, image]})
+            if Modality.IMAGING in plan.modalities:
+                images = [
+                    self._imaging_generator.generate_placeholder(
+                        output_dir="./data/images",
+                        prompt=f"{req.topic} {view}",
+                    )
+                    for view in (plan.imaging_views or ["medical_image"])
+                ]
+                record = record.model_copy(update={"imaging": [*record.imaging, *images]})
             validation = self._validator.validate(record)
             record = record.model_copy(update={"validation": validation})
             records.append(record)

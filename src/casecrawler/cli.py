@@ -242,17 +242,18 @@ def validate_dataset(dataset_id: str | None) -> None:
     from casecrawler.validation.synthetic_validator import SyntheticValidator
 
     store = DatasetStore()
-    records = store.list_records(limit=10000)
-    if dataset_id:
-        records = [record for record in records if record.dataset_id.startswith(dataset_id)]
     validator = SyntheticValidator()
     approved = 0
-    for record in records:
+    validated = 0
+    for record in store.iter_records():
+        if dataset_id and not record.dataset_id.startswith(dataset_id):
+            continue
         validation = validator.validate(record)
+        validated += 1
         if validation.approved:
             approved += 1
         store.save_record(record.model_copy(update={"validation": validation}))
-    click.echo(f"Validated: {len(records)}")
+    click.echo(f"Validated: {validated}")
     click.echo(f"Approved: {approved}")
 
 
@@ -271,7 +272,9 @@ def export_dataset(output: str, export_format: str, dataset_id: str | None) -> N
     from casecrawler.storage.dataset_store import DatasetStore
 
     store = DatasetStore()
-    records = store.list_records(dataset_id=dataset_id, limit=10000)
+    if dataset_id and not store.dataset_exists(dataset_id):
+        raise click.ClickException(f"Dataset {dataset_id} not found.")
+    records = list(store.iter_records(dataset_id=dataset_id))
     with open(output, "w") as f:
         for record in records:
             f.write(json.dumps(export_record(record, export_format), sort_keys=True) + "\n")

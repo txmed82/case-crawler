@@ -1,3 +1,5 @@
+import re
+
 from click.testing import CliRunner
 
 from casecrawler.cli import cli
@@ -8,8 +10,9 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     runner = CliRunner()
 
     generate = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generate.output).group(1)
     listed = runner.invoke(cli, ["datasets", "list"])
-    validated = runner.invoke(cli, ["validate", "--dataset-id", "ds"])
+    validated = runner.invoke(cli, ["validate", "--dataset-id", dataset_id])
     exported = runner.invoke(
         cli,
         ["export-dataset", "--output", "synthetic.jsonl", "--format", "sft_jsonl"],

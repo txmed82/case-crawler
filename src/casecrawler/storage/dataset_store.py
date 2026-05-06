@@ -14,7 +14,7 @@ class DatasetStore:
         parent = Path(db_path).parent
         if str(parent) not in ("", "."):
             parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(db_path)
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._create_tables()
 
@@ -83,7 +83,8 @@ class DatasetStore:
         dataset_id: str | None = None,
         topic: str | None = None,
         approved: bool | None = None,
-        limit: int = 1000,
+        limit: int | None = 1000,
+        offset: int = 0,
     ) -> list[SyntheticRecord]:
         query = "SELECT record_json FROM synthetic_records WHERE 1=1"
         params: list = []
@@ -96,10 +97,40 @@ class DatasetStore:
         if approved is not None:
             query += " AND approved = ?"
             params.append(int(approved))
-        query += " LIMIT ?"
-        params.append(limit)
+        query += " ORDER BY record_id"
+        if limit is not None:
+            query += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
         rows = self._conn.execute(query, params).fetchall()
         return [SyntheticRecord.model_validate_json(row["record_json"]) for row in rows]
+
+    def iter_records(
+        self,
+        dataset_id: str | None = None,
+        topic: str | None = None,
+        approved: bool | None = None,
+        page_size: int = 1000,
+    ):
+        offset = 0
+        while True:
+            page = self.list_records(
+                dataset_id=dataset_id,
+                topic=topic,
+                approved=approved,
+                limit=page_size,
+                offset=offset,
+            )
+            if not page:
+                break
+            yield from page
+            offset += len(page)
+
+    def dataset_exists(self, dataset_id: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM synthetic_records WHERE dataset_id = ? LIMIT 1",
+            (dataset_id,),
+        ).fetchone()
+        return row is not None
 
     def list_dataset_ids(self, limit: int = 1000) -> list[str]:
         rows = self._conn.execute(
@@ -109,7 +140,7 @@ class DatasetStore:
         return [row["dataset_id"] for row in rows]
 
     def get_manifest(self, dataset_id: str) -> DatasetManifest:
-        records = self.list_records(dataset_id=dataset_id)
+        records = list(self.iter_records(dataset_id=dataset_id))
         if not records:
             raise KeyError(f"Dataset {dataset_id} not found.")
         modalities = []

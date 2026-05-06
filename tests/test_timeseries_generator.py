@@ -21,5 +21,6 @@ def test_timeseries_generator_adds_longitudinal_channels():
         "spo2",
         "lactate",
     }
-    assert len(updated.time_series[0].points) == 6
-    assert updated.time_series[0].points[0].timestamp == "2026-01-01T00:00:00"
+    heart_rate = next(channel for channel in updated.time_series if channel.name == "heart_rate")
+    assert len(heart_rate.points) == 6
+    assert heart_rate.points[0].timestamp == "2026-01-01T00:00:00"

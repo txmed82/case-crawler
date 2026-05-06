@@ -15,11 +15,12 @@ def test_text_generator_adds_multiple_clinical_note_types():
     updated = TextGenerator().add_documents(record)
 
     note_types = {document.note_type for document in updated.documents}
-    assert note_types >= {
+    assert note_types == {
         "ed_note",
         "progress_note",
         "nursing_note",
         "discharge_summary",
         "radiology_report",
     }
+    assert len(updated.documents) == 5
     assert any("Medication history" in document.clean_text for document in updated.documents)

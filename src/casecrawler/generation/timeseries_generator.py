@@ -10,7 +10,12 @@ from casecrawler.models.synthetic import (
 
 
 class TimeSeriesGenerator:
-    def add_time_series(self, record: SyntheticRecord, points: int = 6) -> SyntheticRecord:
+    def add_time_series(
+        self,
+        record: SyntheticRecord,
+        channels: list[str] | None = None,
+        points: int = 6,
+    ) -> SyntheticRecord:
         if record.time_series:
             return record
 
@@ -29,7 +34,11 @@ class TimeSeriesGenerator:
         }
 
         channels = []
-        for name, base in base_values.items():
+        selected_channels = channels or list(base_values)
+        for name in selected_channels:
+            if name not in base_values:
+                continue
+            base = base_values[name]
             series_points = []
             for offset in range(points):
                 timestamp = (start + timedelta(hours=offset)).isoformat()

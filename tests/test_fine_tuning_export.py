@@ -65,6 +65,7 @@ def test_export_record_dispatches_chat_and_multimodal():
     multimodal = export_multimodal_record(record)
 
     assert export_record(record, "chat_jsonl") == chat
+    assert export_record(record, "multimodal_jsonl") == multimodal
     assert chat["messages"][0]["role"] == "system"
     assert multimodal["images"] == []
     assert multimodal["clinical_context"]["record_id"] == "rec-1"

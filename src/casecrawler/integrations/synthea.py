@@ -98,9 +98,20 @@ def _encounter_start(encounters: list[dict]) -> str | None:
 def _age(birth_date: str | None, created_at: str) -> int:
     if not birth_date:
         return 0
-    birth = date.fromisoformat(birth_date[:10])
-    current = date.fromisoformat(created_at[:10])
+    try:
+        birth = _partial_fhir_date(birth_date)
+        current = _partial_fhir_date(created_at)
+    except ValueError:
+        return 0
     return current.year - birth.year - ((current.month, current.day) < (birth.month, birth.day))
+
+
+def _partial_fhir_date(value: str) -> date:
+    parts = value[:10].split("-")
+    year = int(parts[0])
+    month = int(parts[1]) if len(parts) > 1 and parts[1] else 1
+    day = int(parts[2]) if len(parts) > 2 and parts[2] else 1
+    return date(year, month, day)
 
 
 def _observation_to_lab(resource: dict, created_at: str) -> LabObservation:

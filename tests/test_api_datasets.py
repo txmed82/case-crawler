@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from casecrawler.api.routes import datasets as datasets_routes
@@ -37,9 +39,13 @@ def test_dataset_api_lists_and_exports_records(tmp_path, monkeypatch):
     dataset_id = generated.json()["dataset_id"]
 
     listed = client.get("/api/datasets")
-    exported = client.get(f"/api/datasets/{dataset_id}/export", params={"format": "sft_jsonl"})
+    exported = client.get(
+        f"/api/datasets/{dataset_id}/export",
+        params={"export_format": "sft_jsonl"},
+    )
 
     assert listed.status_code == 200
     assert listed.json()["datasets"][0]["dataset_id"] == dataset_id
     assert exported.status_code == 200
-    assert exported.json()["records"][0]["dataset_id"] == dataset_id
+    first_line = exported.text.strip().splitlines()[0]
+    assert json.loads(first_line)["dataset_id"] == dataset_id
