@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from uuid import NAMESPACE_URL, uuid5
 
@@ -23,7 +24,7 @@ class StructuredGenerator:
         index: int,
     ) -> SyntheticRecord:
         now = _normalize_base_time(req.cohort_constraints.get("base_time"))
-        stable_prefix = f"{dataset_id}:{req.topic}:{index}"
+        stable_prefix = _stable_record_seed(req, index)
         patient = SyntheticPatient(
             patient_id=f"pat-{uuid5(NAMESPACE_URL, f'{stable_prefix}:patient')}",
             age=45 + (index % 35),
@@ -80,11 +81,24 @@ class StructuredGenerator:
 
 
 def _normalize_base_time(value) -> str:
+    if value is None:
+        return "2026-01-01T00:00:00"
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, str):
         try:
             return datetime.fromisoformat(value.replace("Z", "+00:00")).isoformat()
-        except ValueError:
-            pass
-    return "2026-01-01T00:00:00"
+        except ValueError as exc:
+            raise ValueError(
+                f"cohort_constraints.base_time must be ISO-8601, got {value!r}"
+            ) from exc
+    raise ValueError(
+        "cohort_constraints.base_time must be a datetime or ISO-8601 string, "
+        f"got {value!r}"
+    )
+
+
+def _stable_record_seed(req: GenerationRequest, index: int) -> str:
+    constraints = json.dumps(req.cohort_constraints, sort_keys=True, default=str)
+    modalities = ",".join(modality.value for modality in req.modalities)
+    return f"{req.topic}:{req.complexity.value}:{modalities}:{constraints}:{index}"
