@@ -420,6 +420,39 @@ def benchmark_dataset(
         click.echo(f"Warning: {warning}")
 
 
+@cli.command("document-dataset")
+@click.option("--dataset-id", required=True, help="Dataset id")
+@click.option("--output", required=True, help="Markdown output path")
+@click.option(
+    "--kind",
+    type=click.Choice(["dataset", "model"]),
+    default="dataset",
+    help="Card type to generate",
+)
+def document_dataset(dataset_id: str, output: str, kind: str) -> None:
+    """Generate a dataset or generation-pipeline card for a synthetic dataset."""
+    from casecrawler.export.cards import build_dataset_card, build_model_card
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    store = DatasetStore()
+    try:
+        manifest = store.get_manifest(dataset_id)
+    except KeyError as exc:
+        raise click.ClickException(f"Dataset {dataset_id} not found.") from exc
+    records = list(store.iter_records(dataset_id=dataset_id))
+    card = (
+        build_dataset_card(manifest, records)
+        if kind == "dataset"
+        else build_model_card(manifest, records)
+    )
+    try:
+        with open(output, "w") as f:
+            f.write(card)
+    except OSError as exc:
+        raise click.ClickException(f"Failed to write {kind} card to {output}: {exc}") from exc
+    click.echo(f"Wrote {kind} card for {dataset_id} to {output}")
+
+
 @cli.command()
 @click.argument("topic")
 @click.option("--difficulty", default=None, help="medical_student, resident, or attending")
