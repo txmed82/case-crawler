@@ -73,6 +73,42 @@ def test_structured_generator_omits_medications_for_unrelated_topic():
     assert record.medication_history == []
 
 
+def test_structured_generator_emits_only_requested_observation_modalities():
+    generator = StructuredGenerator()
+
+    imaging_only = generator.generate(
+        "ds-one",
+        GenerationRequest(topic="sepsis", modalities=[Modality.IMAGING]),
+        0,
+    )
+    labs_only = generator.generate(
+        "ds-one",
+        GenerationRequest(topic="sepsis", modalities=[Modality.LABS]),
+        0,
+    )
+    vitals_only = generator.generate(
+        "ds-one",
+        GenerationRequest(topic="sepsis", modalities=[Modality.VITALS]),
+        0,
+    )
+    structured_only = generator.generate(
+        "ds-one",
+        GenerationRequest(topic="sepsis", modalities=[Modality.STRUCTURED_EHR]),
+        0,
+    )
+
+    assert imaging_only.labs == []
+    assert imaging_only.vitals == []
+    assert imaging_only.medication_history == []
+    assert labs_only.labs
+    assert labs_only.vitals == []
+    assert vitals_only.labs == []
+    assert vitals_only.vitals
+    assert structured_only.medication_history
+    assert structured_only.labs == []
+    assert structured_only.vitals == []
+
+
 def test_structured_generator_uses_topic_specific_profiles():
     generator = StructuredGenerator()
 

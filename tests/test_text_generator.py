@@ -32,7 +32,12 @@ def test_text_generator_adds_multiple_clinical_note_types():
 def test_text_generator_adds_messy_variants_and_extracted_facts():
     req = GenerationRequest(
         topic="pneumonia",
-        modalities=[Modality.CLINICAL_TEXT],
+        modalities=[
+            Modality.STRUCTURED_EHR,
+            Modality.CLINICAL_TEXT,
+            Modality.LABS,
+            Modality.VITALS,
+        ],
         cohort_constraints={"base_time": "2026-01-01T00:00:00"},
     )
     record = StructuredGenerator().generate("ds-1", req, 0)
