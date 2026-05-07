@@ -309,7 +309,10 @@ def benchmark_dataset(
         raise click.ClickException(f"Reference dataset {reference_dataset_id} not found.")
     generated_records = list(store.iter_records(dataset_id=dataset_id))
     reference_records = list(store.iter_records(dataset_id=reference_dataset_id))
-    report = DatasetBenchmark().compare(generated_records, reference_records)
+    try:
+        report = DatasetBenchmark().compare(generated_records, reference_records)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
     payload = report.model_dump_json(indent=2)
     if output:
         with open(output, "w") as f:

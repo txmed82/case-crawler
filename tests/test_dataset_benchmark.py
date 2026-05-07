@@ -10,7 +10,13 @@ from casecrawler.models.synthetic import (
     ValidationReport,
     VitalObservation,
 )
-from casecrawler.validation.benchmark import DatasetBenchmark, profile_records
+import pytest
+
+from casecrawler.validation.benchmark import (
+    DatasetBenchmark,
+    _distribution_metric,
+    profile_records,
+)
 
 
 def _record(
@@ -123,3 +129,16 @@ def test_dataset_benchmark_flags_modality_mismatch():
 
     assert modality_metric.score == 0.0
     assert any("modality_overlap" in warning for warning in report.warnings)
+
+
+def test_profile_records_rejects_mixed_dataset_records():
+    records = [_record("rec-1", "ds-one"), _record("rec-2", "ds-two")]
+
+    with pytest.raises(ValueError, match="one dataset"):
+        profile_records(records)
+
+
+def test_distribution_metric_handles_empty_side_without_division_error():
+    metric = _distribution_metric("sex_distribution", {}, {"female": 1})
+
+    assert metric.score == 0.5

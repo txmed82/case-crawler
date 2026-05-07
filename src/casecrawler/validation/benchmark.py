@@ -90,6 +90,12 @@ class DatasetBenchmark:
 def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     if not records:
         raise ValueError("records must not be empty.")
+    dataset_ids = {record.dataset_id for record in records}
+    if len(dataset_ids) != 1:
+        raise ValueError(
+            "records must all belong to one dataset; got "
+            f"{', '.join(sorted(dataset_ids))}."
+        )
     modality_counts: Counter[str] = Counter()
     sex_counts: Counter[str] = Counter()
     note_type_counts: Counter[str] = Counter()
@@ -202,8 +208,16 @@ def _distribution_metric(
         reference_total = sum(reference_counts.values())
         distance = 0.0
         for key in keys:
-            generated_share = generated_counts.get(key, 0) / generated_total
-            reference_share = reference_counts.get(key, 0) / reference_total
+            generated_share = (
+                generated_counts.get(key, 0) / generated_total
+                if generated_total > 0
+                else 0.0
+            )
+            reference_share = (
+                reference_counts.get(key, 0) / reference_total
+                if reference_total > 0
+                else 0.0
+            )
             distance += abs(generated_share - reference_share)
         score = max(0.0, 1.0 - distance / 2)
     return BenchmarkMetric(
@@ -242,4 +256,3 @@ def _rounded(value: float | None) -> float | None:
     if value is None:
         return None
     return round(value, 4)
-

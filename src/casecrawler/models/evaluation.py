@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -22,7 +24,7 @@ class BenchmarkMetric(BaseModel):
     score: float
     generated_value: float | int | str | None
     reference_value: float | int | str | None
-    details: dict = Field(default_factory=dict)
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class BenchmarkReport(BaseModel):
@@ -33,4 +35,3 @@ class BenchmarkReport(BaseModel):
     reference_profile: CohortProfile
     metrics: list[BenchmarkMetric]
     warnings: list[str] = Field(default_factory=list)
-

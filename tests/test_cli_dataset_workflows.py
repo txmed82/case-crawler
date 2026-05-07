@@ -79,3 +79,26 @@ def test_dataset_cli_benchmark_against_reference_dataset(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert "Overall score:" in result.output
     assert (tmp_path / "benchmark.json").exists()
+
+
+def test_dataset_cli_benchmark_reports_missing_reference_cleanly(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    generated = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    assert generated.exit_code == 0
+    match = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output)
+    assert match, f"Failed to find dataset id in output: {generated.output}"
+
+    result = runner.invoke(
+        cli,
+        [
+            "benchmark-dataset",
+            "--dataset-id",
+            match.group(1),
+            "--reference-dataset-id",
+            "ds-missing",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Reference dataset ds-missing not found." in result.output
