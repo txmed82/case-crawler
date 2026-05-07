@@ -10,6 +10,7 @@ from casecrawler.validation.clinical_rules import (
 )
 from casecrawler.validation.image_alignment import (
     ImageAlignmentValidator,
+    validate_image_file_asset,
     validate_radiology_label_consistency,
 )
 from casecrawler.validation.privacy import validate_privacy
@@ -44,6 +45,7 @@ class SyntheticValidator:
                 )
             )
         for asset in record.imaging:
+            issues.extend(validate_image_file_asset(asset))
             for message in validate_radiology_label_consistency(asset):
                 issues.append(
                     ValidationIssue(

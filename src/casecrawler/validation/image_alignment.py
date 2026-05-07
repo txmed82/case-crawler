@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from casecrawler.integrations.huggingface import require_package
-from casecrawler.models.synthetic import ImagingAsset
+from casecrawler.models.synthetic import ImagingAsset, Modality, ValidationIssue
 
 
 class ImageAlignmentValidator:
@@ -56,6 +57,54 @@ def validate_radiology_label_consistency(asset: ImagingAsset) -> list[str]:
     return issues
 
 
+def validate_image_file_asset(asset: ImagingAsset) -> list[ValidationIssue]:
+    if asset.generation_backend == "placeholder" and asset.file_path is None:
+        return []
+    field_prefix = f"imaging.{asset.image_id}"
+    issues: list[ValidationIssue] = []
+    if not asset.file_path:
+        return [
+            ValidationIssue(
+                severity="error",
+                modality=Modality.IMAGING,
+                field=f"{field_prefix}.file_path",
+                message="Generated image asset has no file path.",
+            )
+        ]
+    path = Path(asset.file_path)
+    if not path.exists():
+        return [
+            ValidationIssue(
+                severity="error",
+                modality=Modality.IMAGING,
+                field=f"{field_prefix}.file_path",
+                message=f"Generated image file does not exist: {asset.file_path}.",
+            )
+        ]
+    if path.stat().st_size <= 0:
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                modality=Modality.IMAGING,
+                field=f"{field_prefix}.file_size",
+                message=f"Generated image file is empty: {asset.file_path}.",
+            )
+        )
+    if path.suffix.lower() not in _SUPPORTED_IMAGE_EXTENSIONS:
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                modality=Modality.IMAGING,
+                field=f"{field_prefix}.file_format",
+                message=(
+                    "Generated image file extension must be one of "
+                    f"{', '.join(sorted(_SUPPORTED_IMAGE_EXTENSIONS))}."
+                ),
+            )
+        )
+    return issues
+
+
 def _label_terms(display: str, code: str) -> set[str]:
     terms = {display.lower(), code.replace("_", " ").lower()}
     terms.update(_RADIOLOGY_SYNONYMS.get(display.lower(), set()))
@@ -95,6 +144,8 @@ _RADIOLOGY_SYNONYMS: dict[str, set[str]] = {
     "pneumothorax": {"pleural air"},
     "pulmonary edema": {"edema", "interstitial edema"},
 }
+
+_SUPPORTED_IMAGE_EXTENSIONS = {".dcm", ".jpeg", ".jpg", ".png", ".tif", ".tiff"}
 
 
 class BiomedCLIPImageValidator:
