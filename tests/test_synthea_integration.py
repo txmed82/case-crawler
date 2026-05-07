@@ -172,3 +172,25 @@ def test_synthea_adapter_skips_malformed_entries_and_null_periods(tmp_path):
 
     assert record.patient.patient_id == "pat-1"
     assert record.encounters[0].start == "2026-01-01T00:00:00"
+
+
+def test_synthea_adapter_imports_bundle_directory_in_stable_order(tmp_path):
+    first = {
+        "resourceType": "Bundle",
+        "entry": [
+            {"resource": {"resourceType": "Patient", "id": "pat-b"}},
+        ],
+    }
+    second = {
+        "resourceType": "Bundle",
+        "entry": [
+            {"resource": {"resourceType": "Patient", "id": "pat-a"}},
+        ],
+    }
+    (tmp_path / "b.json").write_text(json.dumps(first))
+    (tmp_path / "a.json").write_text(json.dumps(second))
+    (tmp_path / "ignored.txt").write_text("not json")
+
+    records = SyntheaAdapter().import_fhir_path(str(tmp_path), dataset_id="ds-1")
+
+    assert [record.patient.patient_id for record in records] == ["pat-a", "pat-b"]

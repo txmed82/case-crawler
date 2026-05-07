@@ -305,6 +305,59 @@ def test_dataset_cli_imports_hf_reference_dataset(tmp_path, monkeypatch):
     assert store.get_manifest("ds-hf-reference").metadata["record_ids"]
 
 
+def test_dataset_cli_imports_synthea_fhir_directory(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    bundle_dir = tmp_path / "synthea"
+    bundle_dir.mkdir()
+    bundle = {
+        "resourceType": "Bundle",
+        "entry": [
+            {
+                "resource": {
+                    "resourceType": "Patient",
+                    "id": "pat-1",
+                    "gender": "female",
+                    "birthDate": "1970-01-01",
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Encounter",
+                    "id": "enc-1",
+                    "period": {"start": "2026-01-01T00:00:00"},
+                    "reasonCode": [{"text": "sepsis"}],
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Observation",
+                    "code": {"text": "Lactate"},
+                    "valueQuantity": {"value": 3.4, "unit": "mmol/L"},
+                    "effectiveDateTime": "2026-01-01T01:00:00",
+                }
+            },
+        ],
+    }
+    (bundle_dir / "patient.json").write_text(json.dumps(bundle))
+
+    result = runner.invoke(
+        cli,
+        [
+            "import-synthea-fhir",
+            str(bundle_dir),
+            "--dataset-id",
+            "ds-synthea",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Imported 1 Synthea FHIR record(s) into ds-synthea" in result.output
+    record = DatasetStore().list_records(dataset_id="ds-synthea")[0]
+    assert record.patient.patient_id == "pat-1"
+    assert record.labs[0].name == "Lactate"
+
+
 def test_dataset_cli_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
