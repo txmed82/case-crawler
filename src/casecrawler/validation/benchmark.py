@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 
 from casecrawler.models.evaluation import BenchmarkMetric, BenchmarkReport, CohortProfile
 from casecrawler.models.synthetic import SyntheticRecord
@@ -323,6 +323,9 @@ def _channel_duration_hours(channel) -> float | None:
 
 def _parse_datetime(value: str) -> datetime | None:
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)

@@ -128,6 +128,7 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.mean_time_series_points == 2
     assert profile.mean_time_series_duration_hours == 6
     assert profile.imaging_modality_counts == {"XR": 2}
+    assert profile.imaging_body_region_counts == {"chest": 2}
     assert profile.approved_rate == 1.0
 
 
@@ -153,8 +154,10 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "vital_name_overlap",
         "medication_name_overlap",
         "time_series_channel_overlap",
+        "mean_time_series_points",
         "mean_time_series_duration_hours",
         "imaging_modality_overlap",
+        "imaging_body_region_overlap",
     }
 
 
@@ -188,3 +191,36 @@ def test_distribution_metric_handles_empty_side_without_division_error():
     metric = _distribution_metric("sex_distribution", {}, {"female": 1})
 
     assert metric.score == 0.5
+
+
+def test_dataset_benchmark_normalizes_mixed_timezone_time_series():
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "time_series": [
+                    TimeSeriesChannel(
+                        name="heart_rate",
+                        unit="/min",
+                        points=[
+                            TimeSeriesPoint(
+                                timestamp="2026-01-01T00:00:00",
+                                values={"value": 100},
+                            ),
+                            TimeSeriesPoint(
+                                timestamp="2026-01-01T06:00:00+00:00",
+                                values={"value": 105},
+                            ),
+                        ],
+                    )
+                ]
+            }
+        )
+    ]
+    reference = [_record("ref-1", "ds-ref")]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    duration_metric = next(
+        metric for metric in report.metrics if metric.name == "mean_time_series_duration_hours"
+    )
+
+    assert duration_metric.generated_value == 6
