@@ -137,7 +137,12 @@ Start the server with `casecrawler serve` or `docker compose up`.
 | `/api/ingest/{job_id}` | GET | Poll ingestion status |
 | `/api/search?q=...` | GET | Search the knowledge base |
 | `/api/sources` | GET | List available sources |
+| `/api/datasets/capabilities` | GET | List modalities, export formats, validators, and model/profile adapters |
 | `/api/datasets/generate` | POST | Generate synthetic healthcare records |
+| `/api/datasets/reference-catalog` | GET | List registered Hugging Face reference datasets |
+| `/api/datasets/reference-import` | POST | Import registered reference datasets into local storage |
+| `/api/datasets/{dataset_id}/benchmark` | GET | Compare a generated dataset to a reference dataset |
+| `/api/datasets/{dataset_id}/export` | GET | Stream fine-tuning/export records |
 | `/api/generate` | POST | Legacy clinical case generation |
 | `/api/cases` | GET | Legacy case list/filter |
 | `/api/cases/export` | GET | Legacy case JSONL stream |
