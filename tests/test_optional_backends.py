@@ -10,3 +10,52 @@ def test_imaging_placeholder_does_not_require_diffusers(tmp_path):
     assert asset.generation_backend == "placeholder"
     assert asset.modality == "XR"
 
+
+class FakeImage:
+    def save(self, path):
+        with open(path, "wb") as f:
+            f.write(b"fake-png")
+
+
+class FakeDiffusersResult:
+    images = [FakeImage()]
+
+
+class FakeDiffusersPipeline:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, **kwargs):
+        self.calls.append(kwargs)
+        return FakeDiffusersResult()
+
+
+def test_diffusers_backend_uses_injected_pipeline(tmp_path):
+    pipeline = FakeDiffusersPipeline()
+    generator = ImagingGenerator(diffusers_pipeline=pipeline, diffusers_model_id="test/xray")
+
+    asset = generator.generate_diffusers(
+        str(tmp_path),
+        "portable chest x-ray with pulmonary edema",
+        negative_prompt="real patient identifiers",
+    )
+
+    assert asset.generation_backend == "diffusers:test/xray"
+    assert asset.file_path is not None
+    assert (tmp_path / f"{asset.image_id}.png").read_bytes() == b"fake-png"
+    assert pipeline.calls[0]["negative_prompt"] == "real patient identifiers"
+
+
+def test_diffusers_backend_requires_imaging_extra_when_not_injected(monkeypatch, tmp_path):
+    def fake_require_package(import_name: str, extra: str):
+        raise RuntimeError(f"Install casecrawler[{extra}] to use this backend.")
+
+    monkeypatch.setattr("casecrawler.generation.imaging_generator.require_package", fake_require_package)
+    generator = ImagingGenerator()
+
+    try:
+        generator.generate_diffusers(str(tmp_path), "portable chest x-ray")
+    except RuntimeError as exc:
+        assert "casecrawler[imaging]" in str(exc)
+    else:
+        raise AssertionError("Expected RuntimeError for missing imaging extra.")

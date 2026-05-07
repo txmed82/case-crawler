@@ -60,6 +60,7 @@ class SyntheticConfig(BaseModel):
     ]
     validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
     imaging_backend: str = "placeholder"
+    diffusers_model_id: str = "stabilityai/stable-diffusion-2-1"
     synthea_executable: str | None = None
     image_output_dir: str = "./data/images"
     export_formats: list[ExportFormat] = [ExportFormat.SFT_JSONL]

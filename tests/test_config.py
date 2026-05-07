@@ -10,6 +10,7 @@ def test_load_default_config():
     assert config.embedding.model == "all-MiniLM-L6-v2"
     assert config.synthetic.validation_threshold == 0.8
     assert config.synthetic.image_output_dir == "./data/images"
+    assert config.synthetic.diffusers_model_id == "stabilityai/stable-diffusion-2-1"
 
 
 def test_load_config_from_yaml(tmp_path):
@@ -32,6 +33,7 @@ def test_load_synthetic_config_from_yaml(tmp_path):
         "synthetic:\n"
         "  default_complexity: rare\n"
         "  validation_threshold: 0.9\n"
+        "  diffusers_model_id: test/medical-image-model\n"
         f"  synthea_executable: {synthea_executable}\n"
         f"  image_output_dir: {image_output_dir}\n"
         "  max_api_generation_count: 10\n"
@@ -41,6 +43,7 @@ def test_load_synthetic_config_from_yaml(tmp_path):
 
     assert config.synthetic.default_complexity == "rare"
     assert config.synthetic.validation_threshold == 0.9
+    assert config.synthetic.diffusers_model_id == "test/medical-image-model"
     assert config.synthetic.synthea_executable == str(synthea_executable)
     assert config.synthetic.image_output_dir == str(image_output_dir)
     assert config.synthetic.max_api_generation_count == 10
