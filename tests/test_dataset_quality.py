@@ -1,6 +1,8 @@
 from casecrawler.models.synthetic import (
     ClinicalDocument,
+    Code,
     ComplexityProfile,
+    Encounter,
     ImagingAsset,
     LabObservation,
     Modality,
@@ -22,9 +24,23 @@ def _record(record_id: str, *, approved: bool = True, issues=None) -> SyntheticR
         dataset_id="ds-quality",
         topic="sepsis",
         complexity=ComplexityProfile.MODERATE,
-        modalities=[Modality.CLINICAL_TEXT, Modality.LABS],
+        modalities=[Modality.STRUCTURED_EHR, Modality.CLINICAL_TEXT, Modality.LABS],
         patient=SyntheticPatient(patient_id=f"pat-{record_id}", age=64, sex="male"),
-        encounters=[],
+        encounters=[
+            Encounter(
+                encounter_id=f"enc-{record_id}",
+                start="2026-01-01T00:00:00",
+                setting="emergency_department",
+                reason="sepsis",
+                diagnoses=[
+                    Code(
+                        system="synthetic",
+                        code="sepsis",
+                        display="sepsis",
+                    )
+                ],
+            )
+        ],
         documents=[
             ClinicalDocument(
                 document_id=f"doc-{record_id}-ed",
@@ -66,6 +82,9 @@ def _record(record_id: str, *, approved: bool = True, issues=None) -> SyntheticR
                 effective_time="2026-01-01T00:00:00",
             )
         ],
+        medication_history=[
+            MedicationStatement(name="Ceftriaxone", route="IV", status="active")
+        ],
         provenance=Provenance(generator="unit-test", created_at="2026-01-01T00:00:00"),
         validation=ValidationReport(
             schema_score=1.0,
@@ -86,7 +105,7 @@ def test_quality_report_marks_fully_approved_dataset_export_ready():
 
     assert report.export_ready is True
     assert report.approval_rate == 1.0
-    assert report.modality_counts == {"clinical_text": 2, "labs": 2}
+    assert report.modality_counts == {"clinical_text": 2, "labs": 2, "structured_ehr": 2}
     assert report.recommendations == []
 
 
@@ -139,6 +158,24 @@ def test_quality_report_requires_declared_modality_artifacts():
     assert "time_series.missing_artifacts" in report.issue_counts_by_field
     assert "imaging.missing_artifacts" in report.issue_counts_by_field
     assert any("missing modality artifacts" in item for item in report.recommendations)
+
+
+def test_quality_report_requires_structured_ehr_artifacts():
+    record = _record("rec-1").model_copy(
+        update={
+            "modalities": [Modality.STRUCTURED_EHR, Modality.CLINICAL_TEXT],
+            "encounters": [],
+            "medication_history": [],
+        }
+    )
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.export_ready is False
+    assert report.issue_counts_by_field["structured_ehr.encounters.missing"] == 1
+    assert report.issue_counts_by_field["structured_ehr.diagnoses.missing"] == 1
+    assert report.issue_counts_by_field["structured_ehr.medication_history.missing"] == 1
+    assert any("structured EHR artifacts" in item for item in report.recommendations)
 
 
 def test_quality_report_requires_expected_clinical_document_types():

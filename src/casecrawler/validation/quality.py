@@ -32,6 +32,10 @@ def build_dataset_quality_report(
             record,
             issue_counts_by_field,
         )
+        blocking_issue_count += _count_missing_structured_ehr_artifacts(
+            record,
+            issue_counts_by_field,
+        )
         blocking_issue_count += _count_missing_expected_documents(
             record,
             issue_counts_by_field,
@@ -90,6 +94,10 @@ def _count_artifacts(
     documents = len(record.documents)
     artifact_counts["documents"] += documents
     artifact_counts["messy_documents"] += sum(1 for doc in record.documents if doc.messy_text)
+    artifact_counts["encounters"] += len(record.encounters)
+    artifact_counts["diagnoses"] += sum(
+        len(encounter.diagnoses) for encounter in record.encounters
+    )
     artifact_counts["labs"] += len(record.labs)
     artifact_counts["vitals"] += len(record.vitals)
     artifact_counts["medications"] += len(record.medication_history)
@@ -126,6 +134,27 @@ def _count_missing_declared_artifacts(
             continue
         field, has_artifacts = check
         if not has_artifacts:
+            issue_counts_by_field[field] += 1
+            missing += 1
+    return missing
+
+
+def _count_missing_structured_ehr_artifacts(
+    record: SyntheticRecord,
+    issue_counts_by_field: Counter[str],
+) -> int:
+    if Modality.STRUCTURED_EHR not in record.modalities:
+        return 0
+    missing = 0
+    checks = {
+        "structured_ehr.encounters.missing": bool(record.encounters),
+        "structured_ehr.diagnoses.missing": any(
+            encounter.diagnoses for encounter in record.encounters
+        ),
+        "structured_ehr.medication_history.missing": bool(record.medication_history),
+    }
+    for field, has_artifact in checks.items():
+        if not has_artifact:
             issue_counts_by_field[field] += 1
             missing += 1
     return missing
@@ -202,6 +231,8 @@ def _recommendations(
         recommendations.append("Run validation for records that do not have validation reports.")
     if any(field.endswith(".missing_artifacts") for field in issue_counts_by_field):
         recommendations.append("Resolve missing modality artifacts before fine-tuning export.")
+    if any(field.startswith("structured_ehr.") for field in issue_counts_by_field):
+        recommendations.append("Resolve missing structured EHR artifacts before fine-tuning export.")
     if any(field.startswith("documents.") and field.endswith(".missing") for field in issue_counts_by_field):
         recommendations.append("Add expected clinical document types before fine-tuning export.")
     if any(field.startswith("documents.") and field.endswith(".author_role") for field in issue_counts_by_field):
