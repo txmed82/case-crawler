@@ -258,27 +258,44 @@ def validate_dataset(dataset_id: str | None) -> None:
 
 
 @cli.command("export-dataset")
-@click.option("--output", required=True, help="Output JSONL file path")
+@click.option("--output", required=True, help="Output file path")
 @click.option(
     "--format",
     "export_format",
-    type=click.Choice(["raw_jsonl", "sft_jsonl", "chat_jsonl", "multimodal_jsonl"]),
+    type=click.Choice(
+        [
+            "raw_jsonl",
+            "sft_jsonl",
+            "chat_jsonl",
+            "multimodal_jsonl",
+            "fhir_ndjson",
+            "parquet",
+        ]
+    ),
     default="sft_jsonl",
 )
 @click.option("--dataset-id", default=None, help="Dataset id filter")
 def export_dataset(output: str, export_format: str, dataset_id: str | None) -> None:
-    """Export synthetic datasets to fine-tuning JSONL."""
-    from casecrawler.export.fine_tuning import export_record
+    """Export synthetic datasets to fine-tuning files."""
+    from casecrawler.export.fine_tuning import export_parquet_dataset, export_record
+    from casecrawler.models.dataset import ExportFormat
     from casecrawler.storage.dataset_store import DatasetStore
 
     store = DatasetStore()
     if dataset_id and not store.dataset_exists(dataset_id):
         raise click.ClickException(f"Dataset {dataset_id} not found.")
-    record_count = 0
-    with open(output, "w") as f:
-        for record in store.iter_records(dataset_id=dataset_id):
-            f.write(json.dumps(export_record(record, export_format), sort_keys=True) + "\n")
-            record_count += 1
+    records = store.iter_records(dataset_id=dataset_id)
+    if ExportFormat(export_format) == ExportFormat.PARQUET:
+        try:
+            record_count = export_parquet_dataset(records, output)
+        except RuntimeError as exc:
+            raise click.ClickException(str(exc)) from exc
+    else:
+        record_count = 0
+        with open(output, "w") as f:
+            for record in records:
+                f.write(json.dumps(export_record(record, export_format), sort_keys=True) + "\n")
+                record_count += 1
     if dataset_id:
         store.save_export_manifest(
             dataset_id=dataset_id,

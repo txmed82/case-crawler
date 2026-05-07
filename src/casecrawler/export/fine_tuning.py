@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
 import json
+from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
 from casecrawler.models.dataset import ExportFormat
@@ -99,6 +102,108 @@ def export_multimodal_record(record: SyntheticRecord) -> dict[str, Any]:
     }
 
 
+def export_fhir_record(record: SyntheticRecord) -> dict[str, Any]:
+    """Export one synthetic record as a FHIR collection Bundle."""
+    entries: list[dict[str, Any]] = [_entry(_patient_resource(record))]
+    entries.extend(
+        _entry(_encounter_resource(record, encounter))
+        for encounter in record.encounters
+    )
+    entries.extend(_entry(_lab_observation_resource(record, lab)) for lab in record.labs)
+    entries.extend(
+        _entry(_vital_observation_resource(record, vital)) for vital in record.vitals
+    )
+    entries.extend(
+        _entry(_medication_statement_resource(record, medication))
+        for medication in record.medication_history
+    )
+    entries.extend(
+        _entry(_document_reference_resource(record, document))
+        for document in record.documents
+    )
+    entries.extend(
+        _entry(_imaging_report_resource(record, asset)) for asset in record.imaging
+    )
+    entries.extend(
+        _entry(_time_series_observation_resource(record, channel))
+        for channel in record.time_series
+    )
+    entries.append(_entry(_provenance_resource(record)))
+    return {
+        "resourceType": "Bundle",
+        "id": record.record_id,
+        "type": "collection",
+        "meta": {
+            "tag": [
+                {
+                    "system": "https://casecrawler.dev/fhir/tags",
+                    "code": "synthetic",
+                    "display": "Synthetic healthcare training data",
+                }
+            ]
+        },
+        "entry": entries,
+    }
+
+
+def export_parquet_record(record: SyntheticRecord) -> dict[str, Any]:
+    """Export one synthetic record as a scalar-friendly tabular row."""
+    validation = record.validation.model_dump() if record.validation else None
+    return {
+        "record_id": record.record_id,
+        "dataset_id": record.dataset_id,
+        "topic": record.topic,
+        "complexity": record.complexity.value,
+        "modalities": json.dumps(
+            [modality.value for modality in record.modalities], sort_keys=True
+        ),
+        "patient_id": record.patient.patient_id,
+        "patient_age": record.patient.age,
+        "patient_sex": record.patient.sex,
+        "patient_demographics_json": json.dumps(
+            record.patient.demographics, sort_keys=True
+        ),
+        "encounters_json": json.dumps(
+            [encounter.model_dump() for encounter in record.encounters],
+            sort_keys=True,
+        ),
+        "labs_json": json.dumps(
+            [lab.model_dump() for lab in record.labs], sort_keys=True
+        ),
+        "vitals_json": json.dumps(
+            [vital.model_dump() for vital in record.vitals], sort_keys=True
+        ),
+        "medication_history_json": json.dumps(
+            [med.model_dump() for med in record.medication_history],
+            sort_keys=True,
+        ),
+        "time_series_json": json.dumps(
+            [channel.model_dump() for channel in record.time_series], sort_keys=True
+        ),
+        "documents_json": json.dumps(
+            [document.model_dump() for document in record.documents], sort_keys=True
+        ),
+        "imaging_json": json.dumps(
+            [asset.model_dump() for asset in record.imaging], sort_keys=True
+        ),
+        "provenance_json": json.dumps(record.provenance.model_dump(), sort_keys=True),
+        "validation_json": json.dumps(validation, sort_keys=True),
+        "metadata_json": json.dumps(record.metadata, sort_keys=True),
+        "synthetic": True,
+    }
+
+
+def export_parquet_dataset(records: Iterable[SyntheticRecord], output: str | Path) -> int:
+    """Write records to a parquet file using optional pandas/pyarrow dependencies."""
+    from casecrawler.integrations.huggingface import require_package
+
+    pandas = require_package("pandas", "parquet")
+    require_package("pyarrow", "parquet")
+    rows = [export_parquet_record(record) for record in records]
+    pandas.DataFrame(rows).to_parquet(output, index=False)
+    return len(rows)
+
+
 def export_record(record: SyntheticRecord, export_format: str | ExportFormat) -> dict[str, Any]:
     resolved_format = ExportFormat(export_format)
     if resolved_format == ExportFormat.SFT_JSONL:
@@ -109,6 +214,10 @@ def export_record(record: SyntheticRecord, export_format: str | ExportFormat) ->
         return export_multimodal_record(record)
     if resolved_format == ExportFormat.RAW_JSONL:
         return record.model_dump()
+    if resolved_format == ExportFormat.FHIR_NDJSON:
+        return export_fhir_record(record)
+    if resolved_format == ExportFormat.PARQUET:
+        return export_parquet_record(record)
     raise ValueError(f"Export format {resolved_format.value} is not implemented yet.")
 
 
@@ -133,3 +242,275 @@ def _metadata(record: SyntheticRecord) -> dict[str, Any]:
         "modalities": [m.value for m in record.modalities],
         "synthetic": True,
     }
+
+
+def _entry(resource: dict[str, Any]) -> dict[str, Any]:
+    return {"resource": resource}
+
+
+def _patient_reference(record: SyntheticRecord) -> dict[str, str]:
+    return {"reference": f"Patient/{record.patient.patient_id}"}
+
+
+def _patient_resource(record: SyntheticRecord) -> dict[str, Any]:
+    gender = record.patient.sex.lower()
+    if gender not in {"male", "female", "other", "unknown"}:
+        gender = "unknown"
+    return {
+        "resourceType": "Patient",
+        "id": record.patient.patient_id,
+        "gender": gender,
+        "extension": [
+            {
+                "url": "https://casecrawler.dev/fhir/StructureDefinition/synthetic-age",
+                "valueInteger": record.patient.age,
+            }
+        ],
+        "identifier": [
+            {
+                "system": "https://casecrawler.dev/synthetic-patients",
+                "value": record.patient.patient_id,
+            }
+        ],
+    }
+
+
+def _encounter_resource(record: SyntheticRecord, encounter) -> dict[str, Any]:
+    resource: dict[str, Any] = {
+        "resourceType": "Encounter",
+        "id": encounter.encounter_id,
+        "status": "finished",
+        "class": {
+            "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            "code": encounter.setting,
+            "display": encounter.setting,
+        },
+        "subject": _patient_reference(record),
+        "reasonCode": [{"text": encounter.reason}],
+        "period": {"start": encounter.start},
+    }
+    if encounter.end:
+        resource["period"]["end"] = encounter.end
+    if encounter.diagnoses:
+        resource["diagnosis"] = [
+            {"condition": {"display": diagnosis.display}}
+            for diagnosis in encounter.diagnoses
+        ]
+    return resource
+
+
+def _lab_observation_resource(record: SyntheticRecord, lab) -> dict[str, Any]:
+    resource = _observation_base(
+        record,
+        resource_id=f"{record.record_id}-lab-{_slug(lab.name)}-{_slug(lab.effective_time)}",
+        category_code="laboratory",
+        category_display="Laboratory",
+        name=lab.name,
+        effective_time=lab.effective_time,
+    )
+    if lab.loinc:
+        resource["code"] = {
+            "coding": [
+                {
+                    "system": "http://loinc.org",
+                    "code": lab.loinc,
+                    "display": lab.name,
+                }
+            ],
+            "text": lab.name,
+        }
+    _attach_observation_value(resource, lab.value, lab.unit)
+    if lab.reference_low is not None or lab.reference_high is not None:
+        reference_range: dict[str, Any] = {}
+        if lab.reference_low is not None:
+            reference_range["low"] = {"value": lab.reference_low, "unit": lab.unit}
+        if lab.reference_high is not None:
+            reference_range["high"] = {"value": lab.reference_high, "unit": lab.unit}
+        resource["referenceRange"] = [reference_range]
+    if lab.flag:
+        resource["interpretation"] = [{"text": lab.flag}]
+    if lab.specimen:
+        resource["specimen"] = {"display": lab.specimen}
+    return resource
+
+
+def _vital_observation_resource(record: SyntheticRecord, vital) -> dict[str, Any]:
+    resource = _observation_base(
+        record,
+        resource_id=f"{record.record_id}-vital-{_slug(vital.name)}-{_slug(vital.effective_time)}",
+        category_code="vital-signs",
+        category_display="Vital Signs",
+        name=vital.name,
+        effective_time=vital.effective_time,
+    )
+    _attach_observation_value(resource, vital.value, vital.unit)
+    return resource
+
+
+def _time_series_observation_resource(record: SyntheticRecord, channel) -> dict[str, Any]:
+    return {
+        "resourceType": "Observation",
+        "id": f"{record.record_id}-timeseries-{_slug(channel.name)}",
+        "status": "final",
+        "category": [{"coding": [{"code": "survey", "display": "Time Series"}]}],
+        "code": {"text": channel.name},
+        "subject": _patient_reference(record),
+        "component": [
+            {
+                "code": {"text": timestamped_value},
+                "valueQuantity": {"value": value, "unit": channel.unit},
+            }
+            for point in channel.points
+            for timestamped_value, value in {
+                f"{point.timestamp}:{name}": observed_value
+                for name, observed_value in point.values.items()
+            }.items()
+        ],
+    }
+
+
+def _medication_statement_resource(record: SyntheticRecord, medication) -> dict[str, Any]:
+    resource: dict[str, Any] = {
+        "resourceType": "MedicationStatement",
+        "id": f"{record.record_id}-med-{_slug(medication.name)}",
+        "status": medication.status,
+        "subject": _patient_reference(record),
+        "medicationCodeableConcept": {"text": medication.name},
+    }
+    if medication.rxnorm:
+        resource["medicationCodeableConcept"] = {
+            "coding": [
+                {
+                    "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                    "code": medication.rxnorm,
+                    "display": medication.name,
+                }
+            ],
+            "text": medication.name,
+        }
+    dosage_bits = [medication.dose, medication.route, medication.frequency]
+    dosage_text = " ".join(bit for bit in dosage_bits if bit)
+    if dosage_text:
+        resource["dosage"] = [{"text": dosage_text}]
+    if medication.start or medication.end:
+        resource["effectivePeriod"] = {}
+        if medication.start:
+            resource["effectivePeriod"]["start"] = medication.start
+        if medication.end:
+            resource["effectivePeriod"]["end"] = medication.end
+    return resource
+
+
+def _document_reference_resource(record: SyntheticRecord, document) -> dict[str, Any]:
+    clean_text = document.clean_text.encode("utf-8")
+    resource: dict[str, Any] = {
+        "resourceType": "DocumentReference",
+        "id": document.document_id,
+        "status": "current",
+        "type": {"text": document.note_type},
+        "subject": _patient_reference(record),
+        "date": document.timestamp,
+        "author": [{"display": document.author_role}],
+        "content": [
+            {
+                "attachment": {
+                    "contentType": "text/plain",
+                    "data": base64.b64encode(clean_text).decode("ascii"),
+                    "title": document.note_type,
+                }
+            }
+        ],
+    }
+    if document.messy_text:
+        resource["description"] = (
+            "Includes clean_text and messy_text in synthetic source record."
+        )
+    return resource
+
+
+def _imaging_report_resource(record: SyntheticRecord, asset) -> dict[str, Any]:
+    resource: dict[str, Any] = {
+        "resourceType": "DiagnosticReport",
+        "id": asset.image_id,
+        "status": "final",
+        "code": {"text": f"{asset.modality} {asset.body_region} synthetic imaging report"},
+        "subject": _patient_reference(record),
+        "conclusion": asset.report_text,
+        "media": [
+            {
+                "comment": asset.prompt,
+                "link": {"display": asset.file_path or asset.image_id},
+            }
+        ],
+    }
+    if asset.labels:
+        resource["result"] = [{"display": label.display} for label in asset.labels]
+    return resource
+
+
+def _provenance_resource(record: SyntheticRecord) -> dict[str, Any]:
+    return {
+        "resourceType": "Provenance",
+        "id": f"{record.record_id}-provenance",
+        "recorded": record.provenance.created_at,
+        "target": [{"reference": f"Bundle/{record.record_id}"}],
+        "agent": [
+            {
+                "type": {"text": "synthetic-data-generator"},
+                "who": {
+                    "display": record.provenance.generator,
+                },
+            }
+        ],
+        "entity": [
+            {
+                "role": "source",
+                "what": {"display": json.dumps(source_ref, sort_keys=True)},
+            }
+            for source_ref in record.provenance.source_refs
+        ],
+    }
+
+
+def _observation_base(
+    record: SyntheticRecord,
+    *,
+    resource_id: str,
+    category_code: str,
+    category_display: str,
+    name: str,
+    effective_time: str,
+) -> dict[str, Any]:
+    return {
+        "resourceType": "Observation",
+        "id": resource_id,
+        "status": "final",
+        "category": [
+            {
+                "coding": [
+                    {
+                        "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                        "code": category_code,
+                        "display": category_display,
+                    }
+                ]
+            }
+        ],
+        "code": {"text": name},
+        "subject": _patient_reference(record),
+        "effectiveDateTime": effective_time,
+    }
+
+
+def _attach_observation_value(resource: dict[str, Any], value: float | str, unit: str) -> None:
+    if isinstance(value, (int, float)):
+        resource["valueQuantity"] = {"value": value, "unit": unit}
+    else:
+        resource["valueString"] = value
+
+
+def _slug(value: str) -> str:
+    normalized = "".join(
+        character.lower() if character.isalnum() else "-" for character in value
+    )
+    return "-".join(part for part in normalized.split("-") if part)[:80] or "value"
