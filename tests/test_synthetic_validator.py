@@ -82,6 +82,46 @@ def test_validator_rejects_missing_lab_flag():
     assert any(issue.field == "labs.flag" for issue in report.issues)
 
 
+def test_validator_rejects_invalid_lab_reference_ranges_and_flag_direction():
+    bad = _record(
+        labs=[
+            LabObservation(
+                name="Sodium",
+                value=130,
+                unit="mmol/L",
+                reference_low=145,
+                reference_high=135,
+                flag="H",
+                effective_time="2026-05-06T08:30:00",
+            ),
+            LabObservation(
+                name="Potassium",
+                value=2.8,
+                unit="mmol/L",
+                reference_low=3.5,
+                reference_high=5.1,
+                flag="H",
+                effective_time="2026-05-06T08:35:00",
+            ),
+            LabObservation(
+                name="Creatinine",
+                value=2.4,
+                unit="mg/dL",
+                reference_low=0.6,
+                reference_high=1.3,
+                flag="L",
+                effective_time="2026-05-06T08:40:00",
+            ),
+        ]
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "labs.reference_range" for issue in report.issues)
+    assert sum(issue.field == "labs.flag_direction" for issue in report.issues) == 2
+
+
 def test_validator_rejects_phi_like_text():
     bad = _record(metadata={"free_text": "Call patient at 555-123-4567 tomorrow."})
 
