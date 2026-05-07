@@ -43,13 +43,6 @@ class LlmConfig(BaseModel):
     ollama_base_url: str = "http://localhost:11434"
 
 
-class GenerationConfig(BaseModel):
-    max_retries: int = 3
-    review_threshold: float = 0.7
-    default_difficulty: str = "resident"
-    retriever_chunk_count: int = 25
-
-
 class SyntheticConfig(BaseModel):
     default_complexity: ComplexityProfile = ComplexityProfile.MODERATE
     default_modalities: list[Modality] = [
@@ -80,5 +73,4 @@ class AppConfig(BaseModel):
     storage: StorageConfig = StorageConfig()
     api: ApiConfig = ApiConfig()
     llm: LlmConfig = LlmConfig()
-    generation: GenerationConfig = GenerationConfig()
     synthetic: SyntheticConfig = SyntheticConfig()
