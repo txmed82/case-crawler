@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import {
   fetchReferenceDatasetCatalog,
   importReferenceDataset,
+  importSyntheaFhir,
   startDatasetGenerate,
 } from "../api/client";
 import type {
   DatasetGenerateResponse,
   ReferenceDatasetCatalogItem,
   ReferenceDatasetImportResponse,
+  SyntheaImportResponse,
   SyntheticModality,
 } from "../api/client";
 
@@ -59,6 +61,12 @@ export default function GeneratePage() {
   const [referenceImportResult, setReferenceImportResult] =
     useState<ReferenceDatasetImportResponse | null>(null);
   const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [syntheaPath, setSyntheaPath] = useState("");
+  const [syntheaDatasetId, setSyntheaDatasetId] = useState("");
+  const [isImportingSynthea, setIsImportingSynthea] = useState(false);
+  const [syntheaImportResult, setSyntheaImportResult] =
+    useState<SyntheaImportResponse | null>(null);
+  const [syntheaError, setSyntheaError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -195,6 +203,26 @@ export default function GeneratePage() {
       setReferenceError(err instanceof Error ? err.message : "Reference import failed");
     } finally {
       setIsImportingReference(false);
+    }
+  };
+
+  const handleSyntheaImport = async () => {
+    if (!syntheaPath.trim() || !syntheaDatasetId.trim() || isImportingSynthea) {
+      return;
+    }
+    setSyntheaImportResult(null);
+    setSyntheaError(null);
+    setIsImportingSynthea(true);
+    try {
+      const resp = await importSyntheaFhir({
+        path: syntheaPath.trim(),
+        dataset_id: syntheaDatasetId.trim(),
+      });
+      setSyntheaImportResult(resp);
+    } catch (err) {
+      setSyntheaError(err instanceof Error ? err.message : "Synthea import failed");
+    } finally {
+      setIsImportingSynthea(false);
     }
   };
 
@@ -576,6 +604,70 @@ export default function GeneratePage() {
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
             <p className="font-medium text-red-800">Reference import unavailable</p>
             <p className="text-sm text-red-700">{referenceError}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-gray-200 pt-6">
+        <h2 className="text-xl font-semibold">Import Synthea FHIR</h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Load Synthea FHIR JSON bundles from a file or directory into the dataset workbench.
+        </p>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>FHIR path</span>
+            <input
+              aria-label="Synthea FHIR path"
+              type="text"
+              value={syntheaPath}
+              onChange={(event) => setSyntheaPath(event.target.value)}
+              placeholder="/path/to/synthea/output/fhir"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Dataset id</span>
+            <input
+              aria-label="Synthea dataset id"
+              type="text"
+              value={syntheaDatasetId}
+              onChange={(event) => setSyntheaDatasetId(event.target.value)}
+              placeholder="ds-synthea-cohort"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+        </div>
+
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={handleSyntheaImport}
+            disabled={!syntheaPath.trim() || !syntheaDatasetId.trim() || isImportingSynthea}
+            className="rounded-lg bg-gray-900 px-6 py-2 text-white hover:bg-gray-800 disabled:opacity-50"
+          >
+            Import Synthea
+          </button>
+        </div>
+
+        {isImportingSynthea && (
+          <div className="mt-4 text-sm text-gray-600">Importing Synthea records...</div>
+        )}
+
+        {syntheaImportResult && (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+            <p className="font-medium text-green-800">Synthea dataset imported</p>
+            <p className="text-sm text-green-700">
+              {syntheaImportResult.imported} records from {syntheaImportResult.source}
+            </p>
+            <p className="text-xs text-green-700">{syntheaImportResult.dataset_id}</p>
+          </div>
+        )}
+
+        {syntheaError && (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
+            <p className="font-medium text-red-800">Synthea import unavailable</p>
+            <p className="text-sm text-red-700">{syntheaError}</p>
           </div>
         )}
       </div>
