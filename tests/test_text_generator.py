@@ -29,6 +29,25 @@ def test_text_generator_adds_multiple_clinical_note_types():
     assert any("Medication history" in document.clean_text for document in updated.documents)
 
 
+def test_text_generator_adds_messy_variants_and_extracted_facts():
+    req = GenerationRequest(
+        topic="pneumonia",
+        modalities=[Modality.CLINICAL_TEXT],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0)
+
+    updated = TextGenerator().add_documents(record)
+    documents_by_type = {document.note_type: document for document in updated.documents}
+
+    assert "pt msg:" in documents_by_type["ed_note"].messy_text
+    assert "OCR:" in documents_by_type["radiology_report"].messy_text
+    assert "MAR:" in documents_by_type["nursing_note"].messy_text
+    assert documents_by_type["ed_note"].extracted_facts["topic"] == "pneumonia"
+    assert "WBC" in documents_by_type["ed_note"].extracted_facts["lab_names"]
+    assert "Ceftriaxone" in documents_by_type["ed_note"].extracted_facts["medications"]
+
+
 @pytest.mark.asyncio
 async def test_text_generator_can_use_llm_provider_for_documents():
     req = GenerationRequest(
