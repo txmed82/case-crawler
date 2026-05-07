@@ -155,6 +155,74 @@ def test_dataset_api_benchmark_reports_missing_reference(tmp_path, monkeypatch):
     assert response.json()["detail"] == "reference dataset not found"
 
 
+def test_dataset_api_lists_hf_reference_catalog(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    response = client.get("/api/datasets/reference-catalog")
+
+    assert response.status_code == 200
+    datasets = response.json()["datasets"]
+    assert any(item["key"] == "asclepius" for item in datasets)
+    asclepius = next(item for item in datasets if item["key"] == "asclepius")
+    assert asclepius["repo_id"] == "starmpcc/Asclepius-Synthetic-Clinical-Notes"
+    assert asclepius["license"]
+
+
+def test_dataset_api_imports_hf_reference_dataset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    def fake_load_reference_dataset(key, *, split=None, streaming=True):
+        assert key == "asclepius"
+        assert split == "validation"
+        assert streaming is True
+        return [
+            {
+                "patient_id": "ref-1",
+                "note": "Progress Note: 60-year-old male with sepsis.",
+                "question": "Summarize.",
+                "answer": "Sepsis.",
+                "task": "Summarization",
+            }
+        ]
+
+    monkeypatch.setattr(
+        "casecrawler.integrations.huggingface.load_reference_dataset",
+        fake_load_reference_dataset,
+    )
+
+    response = client.post(
+        "/api/datasets/reference-import",
+        json={
+            "reference_key": "asclepius",
+            "dataset_id": "ds-hf-reference",
+            "split": "validation",
+            "limit": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dataset_id"] == "ds-hf-reference"
+    assert body["imported"] == 1
+    assert body["reference_key"] == "asclepius"
+    assert DatasetStore().dataset_exists("ds-hf-reference")
+
+
+def test_dataset_api_reports_unknown_hf_reference_dataset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/reference-import",
+        json={"reference_key": "missing", "dataset_id": "ds-missing"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "reference dataset not found"
+
+
 def test_dataset_api_rejects_invalid_limits(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

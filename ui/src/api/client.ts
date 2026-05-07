@@ -213,6 +213,34 @@ export interface DatasetGenerateResponse {
   records: Record<string, unknown>[];
 }
 
+export interface ReferenceDatasetCatalogItem {
+  key: string;
+  repo_id: string;
+  split: string;
+  license: string;
+  description: string;
+}
+
+export interface ReferenceDatasetCatalogResponse {
+  datasets: ReferenceDatasetCatalogItem[];
+}
+
+export interface ReferenceDatasetImportRequest {
+  reference_key: string;
+  dataset_id: string;
+  split?: string;
+  limit?: number;
+}
+
+export interface ReferenceDatasetImportResponse {
+  dataset_id: string;
+  imported: number;
+  reference_key: string;
+  repo_id: string;
+  split: string;
+  license: string;
+}
+
 export type SyntheticModality =
   | "structured_ehr"
   | "clinical_text"
@@ -371,6 +399,24 @@ export async function startDatasetGenerate(
     body: JSON.stringify(req),
   });
   if (!resp.ok) throw new Error(`Failed to generate dataset: ${await readApiError(resp)}`);
+  return resp.json();
+}
+
+export async function fetchReferenceDatasetCatalog(): Promise<ReferenceDatasetCatalogResponse> {
+  const resp = await fetch(`${BASE}/datasets/reference-catalog`);
+  if (!resp.ok) throw new Error(`Failed to fetch reference datasets: ${await readApiError(resp)}`);
+  return resp.json();
+}
+
+export async function importReferenceDataset(
+  req: ReferenceDatasetImportRequest
+): Promise<ReferenceDatasetImportResponse> {
+  const resp = await fetch(`${BASE}/datasets/reference-import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!resp.ok) throw new Error(`Failed to import reference dataset: ${await readApiError(resp)}`);
   return resp.json();
 }
 
