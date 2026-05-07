@@ -9,10 +9,12 @@ from casecrawler.models.synthetic import (
     ComplexityProfile,
     Encounter,
     LabObservation,
+    MedicationStatement,
     Modality,
     Provenance,
     SyntheticPatient,
     SyntheticRecord,
+    VitalObservation,
 )
 
 
@@ -29,6 +31,7 @@ class SyntheaAdapter:
         patient_resource = _first_resource(resources, "Patient")
         encounter_resources = _resources(resources, "Encounter")
         observation_resources = _resources(resources, "Observation")
+        medication_resources = _resources(resources, "MedicationStatement")
 
         patient_id = patient_resource.get("id", "synthea-patient")
         topic = _topic(encounter_resources) or "synthea import"
@@ -53,17 +56,34 @@ class SyntheaAdapter:
                     reason=_reason(resource) or topic,
                 )
             )
-        labs = [_observation_to_lab(resource, created_at) for resource in observation_resources]
+        labs: list[LabObservation] = []
+        vitals: list[VitalObservation] = []
+        for resource in observation_resources:
+            if _is_vital_observation(resource):
+                vital = _observation_to_vital(resource, created_at)
+                if vital is not None:
+                    vitals.append(vital)
+            else:
+                labs.append(_observation_to_lab(resource, created_at))
+        medications = [
+            medication
+            for medication in (
+                _medication_statement(resource) for resource in medication_resources
+            )
+            if medication is not None
+        ]
 
         return SyntheticRecord(
             record_id=f"synthea-{patient_id}",
             dataset_id=dataset_id,
             topic=topic,
             complexity=ComplexityProfile.MODERATE,
-            modalities=[Modality.STRUCTURED_EHR, Modality.LABS],
+            modalities=_modalities(labs=labs, vitals=vitals),
             patient=patient,
             encounters=encounters,
             labs=labs,
+            vitals=vitals,
+            medication_history=medications,
             provenance=Provenance(
                 generator="synthea-fhir-import",
                 created_at=created_at,
@@ -141,4 +161,61 @@ def _observation_to_lab(resource: dict, created_at: str) -> LabObservation:
         value=value,
         unit=quantity.get("unit", ""),
         effective_time=resource.get("effectiveDateTime", created_at),
+    )
+
+
+def _modalities(
+    *,
+    labs: list[LabObservation],
+    vitals: list[VitalObservation],
+) -> list[Modality]:
+    modalities = [Modality.STRUCTURED_EHR]
+    if labs:
+        modalities.append(Modality.LABS)
+    if vitals:
+        modalities.append(Modality.VITALS)
+    return modalities
+
+
+def _is_vital_observation(resource: dict) -> bool:
+    for category in resource.get("category") or []:
+        if not isinstance(category, Mapping):
+            continue
+        for coding in category.get("coding") or []:
+            if isinstance(coding, Mapping) and coding.get("code") == "vital-signs":
+                return True
+    return False
+
+
+def _observation_to_vital(resource: dict, created_at: str) -> VitalObservation | None:
+    quantity = resource.get("valueQuantity") or {}
+    value = quantity.get("value")
+    if not isinstance(value, (int, float)):
+        return None
+    code = resource.get("code") or {}
+    coding = code.get("coding") or [{}]
+    primary_code = coding[0] if coding else {}
+    return VitalObservation(
+        name=code.get("text") or primary_code.get("display", "Vital sign"),
+        value=float(value),
+        unit=quantity.get("unit", ""),
+        effective_time=resource.get("effectiveDateTime", created_at),
+    )
+
+
+def _medication_statement(resource: dict) -> MedicationStatement | None:
+    concept = resource.get("medicationCodeableConcept") or {}
+    name = concept.get("text") if isinstance(concept, Mapping) else None
+    if not name:
+        return None
+    dosage = next(
+        (item for item in resource.get("dosage") or [] if isinstance(item, Mapping)),
+        {},
+    )
+    route = dosage.get("route") or {}
+    return MedicationStatement(
+        name=name,
+        dose=dosage.get("text"),
+        route=route.get("text") if isinstance(route, Mapping) else None,
+        status=resource.get("status", "unknown"),
     )
