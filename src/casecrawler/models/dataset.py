@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +17,33 @@ class ExportFormat(str, Enum):
     RL_JSONL = "rl_jsonl"
     FHIR_NDJSON = "fhir_ndjson"
     PARQUET = "parquet"
+
+
+class HumanReviewStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    NEEDS_REVISION = "needs_revision"
+
+
+class HumanReviewDecision(BaseModel):
+    status: HumanReviewStatus
+    reviewer: str = "human"
+    notes: list[str] = Field(default_factory=list)
+    reviewed_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReviewQueueItem(BaseModel):
+    record_id: str
+    dataset_id: str
+    topic: str
+    complexity: ComplexityProfile
+    modalities: list[Modality]
+    validation_approved: bool | None = None
+    human_review: HumanReviewDecision | None = None
+    issue_count: int = 0
+    blocking_issue_count: int = 0
 
 
 class GenerationRequest(BaseModel):

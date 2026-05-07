@@ -4,6 +4,13 @@ from click.testing import CliRunner
 
 from casecrawler.cli import cli
 from casecrawler.integrations.huggingface import import_reference_rows
+from casecrawler.models.synthetic import (
+    ComplexityProfile,
+    Modality,
+    Provenance,
+    SyntheticPatient,
+    SyntheticRecord,
+)
 from casecrawler.storage.dataset_store import DatasetStore
 
 
@@ -158,3 +165,48 @@ def test_dataset_cli_benchmark_reports_output_write_errors(tmp_path, monkeypatch
 
     assert result.exit_code != 0
     assert "Failed to write benchmark report" in result.output
+
+
+def test_dataset_cli_review_queue_and_mark(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = DatasetStore()
+    store.save_record(
+        SyntheticRecord(
+            record_id="rec-review",
+            dataset_id="ds-review",
+            topic="sepsis",
+            complexity=ComplexityProfile.MODERATE,
+            modalities=[Modality.CLINICAL_TEXT],
+            patient=SyntheticPatient(patient_id="pat-1", age=64, sex="male"),
+            encounters=[],
+            provenance=Provenance(
+                generator="unit-test",
+                created_at="2026-05-06T10:00:00",
+            ),
+        )
+    )
+    runner = CliRunner()
+
+    queue = runner.invoke(cli, ["reviews", "queue", "--dataset-id", "ds-review"])
+    marked = runner.invoke(
+        cli,
+        [
+            "reviews",
+            "mark",
+            "rec-review",
+            "--status",
+            "approved",
+            "--reviewer",
+            "clinical-reviewer",
+            "--note",
+            "Approved after manual chart review.",
+        ],
+    )
+    queue_after = runner.invoke(cli, ["reviews", "queue", "--dataset-id", "ds-review"])
+
+    assert queue.exit_code == 0
+    assert "rec-review" in queue.output
+    assert marked.exit_code == 0
+    assert "effective_approved=True" in marked.output
+    assert queue_after.exit_code == 0
+    assert "No records need human review." in queue_after.output

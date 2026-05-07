@@ -257,6 +257,79 @@ def validate_dataset(dataset_id: str | None) -> None:
     click.echo(f"Approved: {approved}")
 
 
+@cli.group("reviews", invoke_without_command=True)
+@click.pass_context
+def reviews_group(ctx: click.Context) -> None:
+    """Manage human review decisions for synthetic records."""
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(reviews_queue)
+
+
+@reviews_group.command("queue")
+@click.option("--dataset-id", default=None, help="Dataset id filter")
+@click.option("--limit", default=100, type=int, help="Max records")
+@click.option("--include-reviewed", is_flag=True, help="Include closed review items")
+def reviews_queue(dataset_id: str | None, limit: int, include_reviewed: bool) -> None:
+    """List records that need human review."""
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    store = DatasetStore()
+    items = store.list_review_queue(
+        dataset_id=dataset_id,
+        include_reviewed=include_reviewed,
+        limit=limit,
+    )
+    if not items:
+        click.echo("No records need human review.")
+        return
+    for item in items:
+        review_status = item.human_review.status.value if item.human_review else "pending"
+        click.echo(
+            f"{item.record_id} {item.dataset_id} {item.topic} "
+            f"validation={item.validation_approved} review={review_status} "
+            f"issues={item.issue_count}"
+        )
+
+
+@reviews_group.command("mark")
+@click.argument("record_id")
+@click.option(
+    "--status",
+    "review_status",
+    required=True,
+    type=click.Choice(["approved", "rejected", "needs_revision", "pending"]),
+)
+@click.option("--reviewer", default="human", help="Reviewer identifier")
+@click.option("--note", "notes", multiple=True, help="Reviewer note")
+def reviews_mark(
+    record_id: str,
+    review_status: str,
+    reviewer: str,
+    notes: tuple[str, ...],
+) -> None:
+    """Save a human review decision for a synthetic record."""
+    from casecrawler.models.dataset import HumanReviewDecision, HumanReviewStatus
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    store = DatasetStore()
+    try:
+        record = store.save_human_review(
+            record_id,
+            HumanReviewDecision(
+                status=HumanReviewStatus(review_status),
+                reviewer=reviewer,
+                notes=list(notes),
+            ),
+        )
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(
+        f"Reviewed {record.record_id}: "
+        f"{record.metadata['human_review']['status']} "
+        f"effective_approved={store.effective_approved(record)}"
+    )
+
+
 @cli.command("export-dataset")
 @click.option("--output", required=True, help="Output file path")
 @click.option(

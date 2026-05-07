@@ -5,6 +5,14 @@ from fastapi.testclient import TestClient
 from casecrawler.api.routes import datasets as datasets_routes
 from casecrawler.api.app import app
 from casecrawler.models.config import AppConfig, SyntheticConfig
+from casecrawler.models.synthetic import (
+    ComplexityProfile,
+    Modality,
+    Provenance,
+    SyntheticPatient,
+    SyntheticRecord,
+)
+from casecrawler.storage.dataset_store import DatasetStore
 
 
 def test_generate_dataset_api_smoke(tmp_path, monkeypatch):
@@ -49,6 +57,45 @@ def test_dataset_api_lists_and_exports_records(tmp_path, monkeypatch):
     assert exported.status_code == 200
     first_line = exported.text.strip().splitlines()[0]
     assert json.loads(first_line)["dataset_id"] == dataset_id
+
+
+def test_dataset_api_lists_and_saves_human_reviews(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = DatasetStore()
+    store.save_record(
+        SyntheticRecord(
+            record_id="rec-review",
+            dataset_id="ds-review",
+            topic="sepsis",
+            complexity=ComplexityProfile.MODERATE,
+            modalities=[Modality.CLINICAL_TEXT],
+            patient=SyntheticPatient(patient_id="pat-1", age=64, sex="male"),
+            encounters=[],
+            provenance=Provenance(
+                generator="unit-test",
+                created_at="2026-05-06T10:00:00",
+            ),
+        )
+    )
+    client = TestClient(app)
+
+    queue = client.get("/api/datasets/ds-review/reviews")
+    reviewed = client.post(
+        "/api/records/rec-review/review",
+        json={
+            "status": "approved",
+            "reviewer": "clinical-reviewer",
+            "notes": ["Approved for fine-tuning export."],
+        },
+    )
+    queue_after = client.get("/api/datasets/ds-review/reviews")
+
+    assert queue.status_code == 200
+    assert queue.json()["records"][0]["record_id"] == "rec-review"
+    assert reviewed.status_code == 200
+    assert reviewed.json()["effective_approved"] is True
+    assert reviewed.json()["human_review"]["reviewer"] == "clinical-reviewer"
+    assert queue_after.json()["records"] == []
 
 
 def test_dataset_api_rejects_invalid_limits(tmp_path, monkeypatch):

@@ -4,7 +4,14 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from casecrawler.models.dataset import DatasetManifest, ExportFormat, ExportManifest
+from casecrawler.models.dataset import (
+    DatasetManifest,
+    ExportFormat,
+    ExportManifest,
+    HumanReviewDecision,
+    HumanReviewStatus,
+    ReviewQueueItem,
+)
 from casecrawler.models.synthetic import SyntheticRecord
 
 
@@ -53,7 +60,8 @@ class DatasetStore:
         self._conn.commit()
 
     def save_record(self, record: SyntheticRecord) -> None:
-        approved = None if record.validation is None else int(record.validation.approved)
+        effective_approved = self.effective_approved(record)
+        approved = None if effective_approved is None else int(effective_approved)
         self._conn.execute(
             """INSERT OR REPLACE INTO synthetic_records
             (record_id, dataset_id, topic, complexity, approved, record_json)
@@ -68,6 +76,81 @@ class DatasetStore:
             ),
         )
         self._conn.commit()
+
+    def save_human_review(
+        self,
+        record_id: str,
+        decision: HumanReviewDecision,
+    ) -> SyntheticRecord:
+        record = self.get_record(record_id)
+        if record is None:
+            raise KeyError(f"Record {record_id} not found.")
+        metadata = dict(record.metadata)
+        metadata["human_review"] = decision.model_dump()
+        updated = record.model_copy(update={"metadata": metadata})
+        self.save_record(updated)
+        return updated
+
+    def get_human_review(
+        self, record: SyntheticRecord
+    ) -> HumanReviewDecision | None:
+        payload = record.metadata.get("human_review")
+        if payload is None:
+            return None
+        return HumanReviewDecision.model_validate(payload)
+
+    def effective_approved(self, record: SyntheticRecord) -> bool | None:
+        human_review = self.get_human_review(record)
+        if human_review and human_review.status == HumanReviewStatus.APPROVED:
+            return True
+        if human_review and human_review.status in {
+            HumanReviewStatus.REJECTED,
+            HumanReviewStatus.NEEDS_REVISION,
+        }:
+            return False
+        if record.validation is None:
+            return None
+        return record.validation.approved
+
+    def list_review_queue(
+        self,
+        dataset_id: str | None = None,
+        include_reviewed: bool = False,
+        limit: int = 100,
+    ) -> list[ReviewQueueItem]:
+        items: list[ReviewQueueItem] = []
+        for record in self.iter_records(dataset_id=dataset_id):
+            human_review = self.get_human_review(record)
+            effective_approved = self.effective_approved(record)
+            if not include_reviewed and (
+                effective_approved is True
+                or (
+                    human_review is not None
+                    and human_review.status == HumanReviewStatus.REJECTED
+                )
+            ):
+                continue
+            issues = record.validation.issues if record.validation else []
+            items.append(
+                ReviewQueueItem(
+                    record_id=record.record_id,
+                    dataset_id=record.dataset_id,
+                    topic=record.topic,
+                    complexity=record.complexity,
+                    modalities=record.modalities,
+                    validation_approved=(
+                        None if record.validation is None else record.validation.approved
+                    ),
+                    human_review=human_review,
+                    issue_count=len(issues),
+                    blocking_issue_count=sum(
+                        1 for issue in issues if issue.severity == "error"
+                    ),
+                )
+            )
+            if len(items) >= limit:
+                break
+        return items
 
     def get_record(self, record_id: str) -> SyntheticRecord | None:
         row = self._conn.execute(
@@ -158,9 +241,7 @@ class DatasetStore:
             for modality in record.modalities:
                 if modality not in modalities:
                     modalities.append(modality)
-        approved_count = sum(
-            1 for record in records if record.validation and record.validation.approved
-        )
+        approved_count = sum(1 for record in records if self.effective_approved(record))
         first = records[0]
         return DatasetManifest(
             dataset_id=dataset_id,
