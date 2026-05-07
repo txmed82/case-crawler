@@ -221,6 +221,7 @@ def reference_row_to_record(
             "source_task": task,
             "instruction": question,
             "answer": answer,
+            "source_fields": _source_fields(row, spec),
         },
     )
     return SyntheticRecord(
@@ -294,3 +295,20 @@ def _note_type(note: str) -> str:
     if "progress note" in prefix:
         return "progress_note"
     return "clinical_note"
+
+
+def _source_fields(row: dict, spec: HuggingFaceReferenceDataset) -> dict:
+    mapped_fields = {
+        spec.note_field,
+        spec.question_field,
+        spec.answer_field,
+    }
+    return {
+        str(key): value
+        for key, value in sorted(row.items())
+        if key not in mapped_fields and _is_source_field_value(value)
+    }
+
+
+def _is_source_field_value(value) -> bool:
+    return value is None or isinstance(value, (str, int, float, bool, list, dict))

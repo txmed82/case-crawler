@@ -95,6 +95,12 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
     assert record.documents[0].extracted_facts["answer"] == (
         '{"resourceType":"Bundle","type":"collection"}'
     )
+    assert record.documents[0].extracted_facts["source_fields"] == {
+        "difficulty": "easy",
+        "exampleId": "10004",
+        "valid": True,
+        "validation_errors": None,
+    }
     assert record.topic == "easy"
     assert record.metadata["reference_dataset"] == "ai-galileo/clinical-notes-to-fhir"
 
@@ -122,6 +128,15 @@ def test_radiology_consistency_reference_row_maps_image_evidence_to_instruction(
         "Small left pleural effusion without pneumothorax."
     )
     assert record.documents[0].extracted_facts["answer"] == "INCONSISTENT"
+    assert record.documents[0].extracted_facts["source_fields"] == {
+        "case_id": "rad-1",
+        "consistency_issue": "contradiction",
+        "expected_rationale_bullets": (
+            "effusion present|report denies effusion"
+        ),
+        "modality": "XR",
+        "study": "chest radiograph",
+    }
     assert record.topic == "contradiction"
     assert record.metadata["reference_dataset"] == (
         "ClarusC64/image-report-consistency-radiology-v01"
