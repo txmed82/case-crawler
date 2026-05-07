@@ -125,7 +125,9 @@ def reference_row_to_record(
         if spec.patient_id_field
         else _stable_note_hash(note)
     )
-    stable_seed = f"{spec.repo_id}:{patient_source_id}:{_stable_note_hash(note)}"
+    stable_seed = (
+        f"{dataset_id}:{spec.repo_id}:{patient_source_id}:{_stable_note_hash(note)}"
+    )
     patient_age = _extract_age(note)
     patient_sex = _extract_sex(note)
     record_id = f"hf-{uuid5(NAMESPACE_URL, stable_seed)}"

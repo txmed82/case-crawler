@@ -35,7 +35,7 @@ class StructuredGenerator:
         index: int,
     ) -> SyntheticRecord:
         now = _normalize_base_time(req.cohort_constraints.get("base_time"))
-        stable_prefix = _stable_record_seed(req, index)
+        stable_prefix = _stable_record_seed(dataset_id, req, index)
         age = _age_for_index(req.cohort_constraints, index)
         sex = _sex_for_index(req.cohort_constraints, index)
         profile = _profile_for_topic(req.topic)
@@ -99,7 +99,7 @@ def _normalize_base_time(value) -> str:
     )
 
 
-def _stable_record_seed(req: GenerationRequest, index: int) -> str:
+def _stable_record_seed(dataset_id: str, req: GenerationRequest, index: int) -> str:
     canonical_constraints = dict(req.cohort_constraints)
     if "base_time" in canonical_constraints:
         canonical_constraints["base_time"] = _normalize_base_time(
@@ -107,7 +107,10 @@ def _stable_record_seed(req: GenerationRequest, index: int) -> str:
         )
     constraints = json.dumps(canonical_constraints, sort_keys=True, default=str)
     modalities = ",".join(sorted(modality.value for modality in req.modalities))
-    return f"{req.topic}:{req.complexity.value}:{modalities}:{constraints}:{index}"
+    return (
+        f"{dataset_id}:{req.topic}:{req.complexity.value}:"
+        f"{modalities}:{constraints}:{index}"
+    )
 
 
 def _age_for_index(cohort_constraints: dict, index: int) -> int:

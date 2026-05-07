@@ -98,6 +98,22 @@ def test_reference_row_ids_do_not_depend_on_row_order():
     }
 
 
+def test_reference_row_ids_are_scoped_to_dataset_id():
+    row = {
+        "patient_id": "a",
+        "note": "Progress Note: 72-year-old female with heart failure.",
+        "question": "Extract problems.",
+        "answer": "Heart failure.",
+        "task": "Extraction",
+    }
+
+    first = import_reference_rows([row], dataset_id="ds-one")
+    second = import_reference_rows([row], dataset_id="ds-two")
+
+    assert first[0].record_id != second[0].record_id
+    assert first[0].patient.patient_id != second[0].patient.patient_id
+
+
 def test_load_reference_dataset_requires_hf_extra_when_datasets_missing(monkeypatch):
     def fake_require_package(import_name: str, extra: str):
         raise RuntimeError(f"Install casecrawler[{extra}] to use this backend.")
