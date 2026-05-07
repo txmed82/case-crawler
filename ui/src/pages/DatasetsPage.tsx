@@ -20,7 +20,7 @@ import type {
   SyntheticRecordPreview,
 } from "../api/client";
 
-export default function CasesPage() {
+export default function DatasetsPage() {
   const [topicFilter, setTopicFilter] = useState("");
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("sft_jsonl");
