@@ -27,6 +27,8 @@ export default function DatasetsPage() {
   const [includeReviewed, setIncludeReviewed] = useState(false);
   const [cardKind, setCardKind] = useState<"dataset" | "model">("dataset");
   const [referenceDatasetId, setReferenceDatasetId] = useState("");
+  const [benchmarkMinOverallScore, setBenchmarkMinOverallScore] = useState(0.75);
+  const [benchmarkMinMetricScore, setBenchmarkMinMetricScore] = useState(0.5);
   const queryClient = useQueryClient();
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -82,9 +84,20 @@ export default function DatasetsPage() {
     isLoading: isBenchmarkLoading,
     error: benchmarkError,
   } = useQuery({
-    queryKey: ["dataset-benchmark", activeDatasetId, referenceDatasetId],
+    queryKey: [
+      "dataset-benchmark",
+      activeDatasetId,
+      referenceDatasetId,
+      benchmarkMinOverallScore,
+      benchmarkMinMetricScore,
+    ],
     queryFn: () =>
-      fetchDatasetBenchmark(activeDatasetId as string, referenceDatasetId),
+      fetchDatasetBenchmark(
+        activeDatasetId as string,
+        referenceDatasetId,
+        benchmarkMinOverallScore,
+        benchmarkMinMetricScore
+      ),
     enabled: Boolean(activeDatasetId && referenceDatasetId),
   });
   const reviewMutation = useMutation({
@@ -270,6 +283,10 @@ export default function DatasetsPage() {
                   benchmark={benchmark ?? null}
                   isLoading={isBenchmarkLoading}
                   error={benchmarkError}
+                  minOverallScore={benchmarkMinOverallScore}
+                  minMetricScore={benchmarkMinMetricScore}
+                  onMinOverallScoreChange={setBenchmarkMinOverallScore}
+                  onMinMetricScoreChange={setBenchmarkMinMetricScore}
                 />
 
                 <div className="space-y-3">
@@ -299,6 +316,10 @@ function BenchmarkPanel({
   benchmark,
   isLoading,
   error,
+  minOverallScore,
+  minMetricScore,
+  onMinOverallScoreChange,
+  onMinMetricScoreChange,
 }: {
   datasets: DatasetManifest[];
   activeDatasetId: string;
@@ -307,6 +328,10 @@ function BenchmarkPanel({
   benchmark: BenchmarkReport | null;
   isLoading: boolean;
   error: unknown;
+  minOverallScore: number;
+  minMetricScore: number;
+  onMinOverallScoreChange: (score: number) => void;
+  onMinMetricScoreChange: (score: number) => void;
 }) {
   const referenceOptions = datasets.filter(
     (dataset) => dataset.dataset_id !== activeDatasetId
@@ -319,18 +344,48 @@ function BenchmarkPanel({
           <p className="text-sm font-semibold text-gray-900">Benchmark comparison</p>
           <p className="text-xs text-gray-500">Compare against a stored reference dataset</p>
         </div>
-        <select
-          value={referenceDatasetId}
-          onChange={(event) => onReferenceDatasetChange(event.target.value)}
-          className="min-w-64 rounded-md border border-gray-300 px-3 py-2 text-sm"
-        >
-          <option value="">Select reference dataset</option>
-          {referenceOptions.map((dataset) => (
-            <option key={dataset.dataset_id} value={dataset.dataset_id}>
-              {dataset.topic} | {dataset.dataset_id}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={referenceDatasetId}
+            onChange={(event) => onReferenceDatasetChange(event.target.value)}
+            className="min-w-64 rounded-md border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">Select reference dataset</option>
+            {referenceOptions.map((dataset) => (
+              <option key={dataset.dataset_id} value={dataset.dataset_id}>
+                {dataset.topic} | {dataset.dataset_id}
+              </option>
+            ))}
+          </select>
+          <label className="text-xs text-gray-600">
+            Overall
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              value={minOverallScore}
+              onChange={(event) =>
+                onMinOverallScoreChange(clampScore(event.target.valueAsNumber))
+              }
+              className="ml-2 w-20 rounded-md border border-gray-300 px-2 py-2 text-sm"
+            />
+          </label>
+          <label className="text-xs text-gray-600">
+            Metric
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              value={minMetricScore}
+              onChange={(event) =>
+                onMinMetricScoreChange(clampScore(event.target.valueAsNumber))
+              }
+              className="ml-2 w-20 rounded-md border border-gray-300 px-2 py-2 text-sm"
+            />
+          </label>
+        </div>
       </div>
       {referenceOptions.length === 0 && (
         <p className="mt-3 rounded-md bg-gray-50 p-3 text-sm text-gray-500">
@@ -389,6 +444,11 @@ function BenchmarkPanel({
       )}
     </div>
   );
+}
+
+function clampScore(value: number): number {
+  if (Number.isNaN(value)) return 0;
+  return Math.max(0, Math.min(1, value));
 }
 
 function QualityPanel({

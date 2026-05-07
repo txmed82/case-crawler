@@ -442,9 +442,15 @@ export async function fetchDatasetCard(
 
 export async function fetchDatasetBenchmark(
   datasetId: string,
-  referenceDatasetId: string
+  referenceDatasetId: string,
+  minOverallScore = 0.75,
+  minMetricScore = 0.5
 ): Promise<BenchmarkReport> {
-  const qs = new URLSearchParams({ reference_dataset_id: referenceDatasetId });
+  const qs = new URLSearchParams({
+    reference_dataset_id: referenceDatasetId,
+    min_overall_score: String(minOverallScore),
+    min_metric_score: String(minMetricScore),
+  });
   const resp = await fetch(`${BASE}/datasets/${datasetId}/benchmark?${qs}`);
   if (!resp.ok) throw new Error(`Failed to benchmark dataset: ${await readApiError(resp)}`);
   return resp.json();
