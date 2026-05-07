@@ -1,10 +1,13 @@
 from casecrawler.export.fine_tuning import (
+    export_dpo_record,
     export_chat_record,
     export_fhir_record,
     export_multimodal_record,
     export_parquet_record,
     export_record,
+    export_rl_record,
     export_sft_record,
+    export_tool_call_record,
 )
 from casecrawler.models.synthetic import (
     ClinicalDocument,
@@ -125,6 +128,53 @@ def test_export_record_dispatches_fhir_and_parquet():
 
     assert export_record(record, "fhir_ndjson") == export_fhir_record(record)
     assert export_record(record, "parquet") == export_parquet_record(record)
+
+
+def test_export_tool_call_record_contains_clinical_extraction_call():
+    record = _multimodal_record()
+
+    exported = export_tool_call_record(record)
+    assistant = exported["messages"][-1]
+
+    assert exported["tools"][0]["function"]["name"] == "emit_synthetic_clinical_facts"
+    assert assistant["tool_calls"][0]["function"]["name"] == "emit_synthetic_clinical_facts"
+    assert "Lactate" in assistant["tool_calls"][0]["function"]["arguments"]
+    assert exported["metadata"]["export_profile"] == "tool_call_jsonl"
+
+
+def test_export_dpo_record_contains_preferred_and_rejected_answers():
+    record = _multimodal_record()
+
+    exported = export_dpo_record(record)
+
+    assert exported["prompt"][0]["role"] == "system"
+    assert "chosen" in exported
+    assert "rejected" in exported
+    assert "synthetic" in exported["chosen"][0]["content"].lower()
+    assert "ignore" in exported["rejected"][0]["content"].lower()
+    assert exported["metadata"]["export_profile"] == "dpo_jsonl"
+
+
+def test_export_rl_record_contains_rewarded_clinical_actions():
+    record = _multimodal_record()
+
+    exported = export_rl_record(record)
+    step = exported["steps"][0]
+
+    assert exported["record_id"] == "rec-1"
+    assert step["observation"]["patient"]["age"] == 64
+    assert step["optimal_action"] == "review_structured_record"
+    assert step["reward_table"]["review_structured_record"] == 1.0
+    assert step["reward_table"]["disregard_synthetic_provenance"] < 0
+    assert exported["metadata"]["export_profile"] == "rl_jsonl"
+
+
+def test_export_record_dispatches_training_profiles():
+    record = _multimodal_record()
+
+    assert export_record(record, "tool_call_jsonl") == export_tool_call_record(record)
+    assert export_record(record, "dpo_jsonl") == export_dpo_record(record)
+    assert export_record(record, "rl_jsonl") == export_rl_record(record)
 
 
 def _multimodal_record() -> SyntheticRecord:

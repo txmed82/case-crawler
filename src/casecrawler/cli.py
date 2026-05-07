@@ -367,7 +367,10 @@ def reviews_mark(
             "raw_jsonl",
             "sft_jsonl",
             "chat_jsonl",
+            "tool_call_jsonl",
             "multimodal_jsonl",
+            "dpo_jsonl",
+            "rl_jsonl",
             "fhir_ndjson",
             "parquet",
         ]
