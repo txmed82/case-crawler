@@ -1,6 +1,15 @@
-import { useState } from "react";
-import { startDatasetGenerate } from "../api/client";
-import type { DatasetGenerateResponse, SyntheticModality } from "../api/client";
+import { useEffect, useState } from "react";
+import {
+  fetchReferenceDatasetCatalog,
+  importReferenceDataset,
+  startDatasetGenerate,
+} from "../api/client";
+import type {
+  DatasetGenerateResponse,
+  ReferenceDatasetCatalogItem,
+  ReferenceDatasetImportResponse,
+  SyntheticModality,
+} from "../api/client";
 
 const modalityOptions: { value: SyntheticModality; label: string }[] = [
   { value: "structured_ehr", label: "EHR" },
@@ -31,6 +40,34 @@ export default function GeneratePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<DatasetGenerateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [referenceCatalog, setReferenceCatalog] = useState<ReferenceDatasetCatalogItem[]>([]);
+  const [referenceKey, setReferenceKey] = useState("");
+  const [referenceDatasetId, setReferenceDatasetId] = useState("");
+  const [referenceSplit, setReferenceSplit] = useState("");
+  const [referenceLimit, setReferenceLimit] = useState("25");
+  const [isImportingReference, setIsImportingReference] = useState(false);
+  const [referenceImportResult, setReferenceImportResult] =
+    useState<ReferenceDatasetImportResponse | null>(null);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchReferenceDatasetCatalog()
+      .then((resp) => {
+        if (!active) return;
+        setReferenceCatalog(resp.datasets);
+        setReferenceKey((current) => current || resp.datasets[0]?.key || "");
+      })
+      .catch((err) => {
+        if (!active) return;
+        setReferenceError(
+          err instanceof Error ? err.message : "Failed to load reference datasets"
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleGenerate = async () => {
     if (!topic.trim() || modalities.length === 0 || isGenerating) return;
@@ -95,6 +132,36 @@ export default function GeneratePage() {
       current.includes(sex) ? current.filter((item) => item !== sex) : [...current, sex]
     );
   };
+
+  const handleReferenceImport = async () => {
+    if (!referenceKey || !referenceDatasetId.trim() || isImportingReference) return;
+    const parsedLimit = referenceLimit === "" ? undefined : Number(referenceLimit);
+    if (
+      parsedLimit !== undefined &&
+      (!Number.isInteger(parsedLimit) || parsedLimit < 1)
+    ) {
+      setReferenceError("Reference import limit must be a positive integer.");
+      return;
+    }
+    setReferenceImportResult(null);
+    setReferenceError(null);
+    setIsImportingReference(true);
+    try {
+      const resp = await importReferenceDataset({
+        reference_key: referenceKey,
+        dataset_id: referenceDatasetId.trim(),
+        ...(referenceSplit.trim() ? { split: referenceSplit.trim() } : {}),
+        ...(parsedLimit !== undefined ? { limit: parsedLimit } : {}),
+      });
+      setReferenceImportResult(resp);
+    } catch (err) {
+      setReferenceError(err instanceof Error ? err.message : "Reference import failed");
+    } finally {
+      setIsImportingReference(false);
+    }
+  };
+
+  const selectedReference = referenceCatalog.find((item) => item.key === referenceKey);
 
   return (
     <div className="space-y-6">
@@ -264,6 +331,108 @@ export default function GeneratePage() {
           <p className="text-sm text-red-700">{error}</p>
         </div>
       )}
+
+      <div className="border-t border-gray-200 pt-6">
+        <h2 className="text-xl font-semibold">Import Reference Dataset</h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Pull registered Hugging Face synthetic clinical reference datasets into the
+          workbench for benchmarking and export.
+        </p>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,18rem)_minmax(0,16rem)_minmax(0,10rem)_minmax(0,8rem)]">
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Reference</span>
+            <select
+              aria-label="Reference dataset"
+              value={referenceKey}
+              onChange={(event) => setReferenceKey(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            >
+              {referenceCatalog.map((item) => (
+                <option key={item.key} value={item.key}>
+                  {item.key}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Dataset id</span>
+            <input
+              aria-label="Imported reference dataset id"
+              type="text"
+              value={referenceDatasetId}
+              onChange={(event) => setReferenceDatasetId(event.target.value)}
+              placeholder="ds-asclepius-ref"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Split</span>
+            <input
+              aria-label="Reference split"
+              type="text"
+              value={referenceSplit}
+              onChange={(event) => setReferenceSplit(event.target.value)}
+              placeholder={selectedReference?.split || "default"}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Limit</span>
+            <input
+              aria-label="Reference import limit"
+              type="number"
+              value={referenceLimit}
+              onChange={(event) => setReferenceLimit(event.target.value)}
+              min={1}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+        </div>
+
+        {selectedReference && (
+          <p className="mt-3 text-xs text-gray-600">
+            {selectedReference.repo_id} - {selectedReference.license}
+          </p>
+        )}
+
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={handleReferenceImport}
+            disabled={
+              !referenceKey ||
+              !referenceDatasetId.trim() ||
+              isImportingReference ||
+              referenceCatalog.length === 0
+            }
+            className="rounded-lg bg-gray-900 px-6 py-2 text-white hover:bg-gray-800 disabled:opacity-50"
+          >
+            Import Reference
+          </button>
+        </div>
+
+        {isImportingReference && (
+          <div className="mt-4 text-sm text-gray-600">Importing reference records...</div>
+        )}
+
+        {referenceImportResult && (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+            <p className="font-medium text-green-800">Reference dataset imported</p>
+            <p className="text-sm text-green-700">
+              {referenceImportResult.imported} records from {referenceImportResult.reference_key}
+            </p>
+            <p className="text-xs text-green-700">{referenceImportResult.dataset_id}</p>
+          </div>
+        )}
+
+        {referenceError && (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
+            <p className="font-medium text-red-800">Reference import unavailable</p>
+            <p className="text-sm text-red-700">{referenceError}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

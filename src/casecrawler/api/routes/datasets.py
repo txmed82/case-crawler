@@ -4,6 +4,7 @@ import json
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
 from casecrawler.config import get_config
 from casecrawler.export.cards import build_dataset_card, build_model_card
@@ -18,6 +19,13 @@ from casecrawler.storage.dataset_store import DatasetStore
 from casecrawler.validation.benchmark import DatasetBenchmark
 
 router = APIRouter()
+
+
+class ReferenceImportRequest(BaseModel):
+    reference_key: str = Field(min_length=1)
+    dataset_id: str = Field(min_length=1)
+    split: str | None = None
+    limit: int | None = Field(default=None, ge=1)
 
 
 @router.get("/datasets")
@@ -48,6 +56,64 @@ async def generate_dataset(req: GenerationRequest):
         "approved": result["approved"],
         "total_records": len(result["records"]),
         "records": [record.model_dump() for record in returned_records],
+    }
+
+
+@router.get("/datasets/reference-catalog")
+def list_reference_catalog():
+    from casecrawler.integrations.huggingface import REFERENCE_DATASETS
+
+    return {
+        "datasets": [
+            {
+                "key": key,
+                "repo_id": spec.repo_id,
+                "split": spec.split,
+                "license": spec.license,
+                "description": spec.description,
+            }
+            for key, spec in REFERENCE_DATASETS.items()
+        ]
+    }
+
+
+@router.post("/datasets/reference-import")
+def import_reference_dataset(req: ReferenceImportRequest):
+    from casecrawler.integrations.huggingface import (
+        REFERENCE_DATASETS,
+        import_reference_rows,
+        load_reference_dataset,
+    )
+
+    if req.reference_key not in REFERENCE_DATASETS:
+        raise HTTPException(status_code=404, detail="reference dataset not found")
+    try:
+        rows = load_reference_dataset(
+            req.reference_key,
+            split=req.split,
+            streaming=True,
+        )
+        records = import_reference_rows(
+            rows,
+            dataset_id=req.dataset_id,
+            reference_key=req.reference_key,
+            split=req.split,
+            limit=req.limit,
+        )
+    except RuntimeError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+
+    store = DatasetStore()
+    for record in records:
+        store.save_record(record)
+    spec = REFERENCE_DATASETS[req.reference_key]
+    return {
+        "dataset_id": req.dataset_id,
+        "imported": len(records),
+        "reference_key": req.reference_key,
+        "repo_id": spec.repo_id,
+        "split": req.split or spec.split,
+        "license": spec.license,
     }
 
 
