@@ -58,3 +58,11 @@ def test_structured_generator_seed_sorts_modalities():
     second = generator.generate("ds-one", second_req, 0)
 
     assert first.record_id == second.record_id
+
+
+def test_structured_generator_omits_medications_for_unrelated_topic():
+    req = GenerationRequest(topic="annual wellness")
+
+    record = StructuredGenerator().generate("ds-one", req, 0)
+
+    assert record.medication_history == []

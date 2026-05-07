@@ -113,17 +113,22 @@ def _stable_record_seed(req: GenerationRequest, index: int) -> str:
 
 def _medications_for_topic(topic: str, start: str) -> list[MedicationStatement]:
     normalized = topic.lower()
-    medications = [
-        MedicationStatement(
-            name="Acetaminophen",
-            rxnorm="161",
-            dose="650 mg",
-            route="oral",
-            frequency="every 6 hours as needed",
-            status="active",
-            start=start,
+    medications = []
+    if any(
+        term in normalized
+        for term in ["pain", "fever", "headache", "sepsis", "pneumonia", "infection"]
+    ):
+        medications.append(
+            MedicationStatement(
+                name="Acetaminophen",
+                rxnorm="161",
+                dose="650 mg",
+                route="oral",
+                frequency="every 6 hours as needed",
+                status="active",
+                start=start,
+            )
         )
-    ]
     if any(term in normalized for term in ["sepsis", "pneumonia", "infection"]):
         medications.append(
             MedicationStatement(

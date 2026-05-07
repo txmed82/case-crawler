@@ -101,12 +101,14 @@ def _age(birth_date: str | None, created_at: str) -> int:
     try:
         birth = _partial_fhir_date(birth_date)
         current = _partial_fhir_date(created_at)
-    except ValueError:
+    except (TypeError, ValueError):
         return 0
     return current.year - birth.year - ((current.month, current.day) < (birth.month, birth.day))
 
 
 def _partial_fhir_date(value: str) -> date:
+    if not isinstance(value, str):
+        raise TypeError("FHIR date must be a string.")
     parts = value[:10].split("-")
     year = int(parts[0])
     month = int(parts[1]) if len(parts) > 1 and parts[1] else 1
@@ -115,13 +117,15 @@ def _partial_fhir_date(value: str) -> date:
 
 
 def _observation_to_lab(resource: dict, created_at: str) -> LabObservation:
-    quantity = resource.get("valueQuantity", {})
-    code = resource.get("code", {})
+    quantity = resource.get("valueQuantity") or {}
+    code = resource.get("code") or {}
+    coding = code.get("coding") or [{}]
+    primary_code = coding[0] if coding else {}
     quantity_value = quantity.get("value")
-    value = quantity_value if quantity_value is not None else resource.get("valueString", "")
+    value = quantity_value if quantity_value is not None else (resource.get("valueString") or "")
     return LabObservation(
-        name=code.get("text") or code.get("coding", [{}])[0].get("display", "Observation"),
-        loinc=code.get("coding", [{}])[0].get("code"),
+        name=code.get("text") or primary_code.get("display", "Observation"),
+        loinc=primary_code.get("code"),
         value=value,
         unit=quantity.get("unit", ""),
         effective_time=resource.get("effectiveDateTime", created_at),

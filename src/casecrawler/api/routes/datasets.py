@@ -71,20 +71,22 @@ async def export_dataset(
     def _iter_jsonl():
         record_count = 0
         byte_count = 0
-        for record in store.iter_records(dataset_id=dataset_id):
-            line = json.dumps(export_record(record, export_format), sort_keys=True)
-            record_count += 1
-            byte_count += len(line.encode("utf-8")) + 1
-            yield line + "\n"
-        store.save_export_manifest(
-            dataset_id=dataset_id,
-            export_format=export_format,
-            file_path=(
-                f"api://datasets/{dataset_id}/export?"
-                f"export_format={export_format.value}"
-            ),
-            record_count=record_count,
-            metadata={"transport": "api", "jsonl_bytes": byte_count},
-        )
+        try:
+            for record in store.iter_records(dataset_id=dataset_id):
+                line = json.dumps(export_record(record, export_format), sort_keys=True)
+                record_count += 1
+                byte_count += len(line.encode("utf-8")) + 1
+                yield line + "\n"
+        finally:
+            store.save_export_manifest(
+                dataset_id=dataset_id,
+                export_format=export_format,
+                file_path=(
+                    f"api://datasets/{dataset_id}/export?"
+                    f"export_format={export_format.value}"
+                ),
+                record_count=record_count,
+                metadata={"transport": "api", "jsonl_bytes": byte_count},
+            )
 
     return StreamingResponse(_iter_jsonl(), media_type="application/x-ndjson")

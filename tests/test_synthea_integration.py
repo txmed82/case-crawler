@@ -73,3 +73,44 @@ def test_synthea_adapter_handles_partial_fhir_dates(tmp_path):
     record = SyntheaAdapter().import_fhir_bundle(str(path), dataset_id="ds-1")
 
     assert record.patient.age == 56
+
+
+def test_synthea_adapter_handles_null_observation_fields(tmp_path):
+    bundle = {
+        "resourceType": "Bundle",
+        "entry": [
+            {
+                "resource": {
+                    "resourceType": "Patient",
+                    "id": "pat-1",
+                    "gender": "female",
+                    "birthDate": 1970,
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Encounter",
+                    "id": "enc-1",
+                    "period": {"start": "2026-01-01T00:00:00"},
+                    "reasonCode": [{"text": "screening"}],
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Observation",
+                    "code": None,
+                    "valueQuantity": None,
+                    "valueString": "positive",
+                    "effectiveDateTime": "2026-01-01T01:00:00",
+                }
+            },
+        ],
+    }
+    path = tmp_path / "patient-null-observation.json"
+    path.write_text(json.dumps(bundle))
+
+    record = SyntheaAdapter().import_fhir_bundle(str(path), dataset_id="ds-1")
+
+    assert record.patient.age == 0
+    assert record.labs[0].name == "Observation"
+    assert record.labs[0].value == "positive"

@@ -10,6 +10,7 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     runner = CliRunner()
 
     generate = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    assert generate.exit_code == 0
     match = re.search(r"Dataset: (ds-[0-9a-f-]+)", generate.output)
     assert match, f"Failed to find dataset id in output: {generate.output}"
     dataset_id = match.group(1)
@@ -28,7 +29,6 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
         ],
     )
 
-    assert generate.exit_code == 0
     assert listed.exit_code == 0
     assert "sepsis" in listed.output
     assert validated.exit_code == 0
