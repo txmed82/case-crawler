@@ -186,6 +186,64 @@ def test_dataset_cli_imports_hf_reference_dataset(tmp_path, monkeypatch):
     assert store.get_manifest("ds-hf-reference").metadata["record_ids"]
 
 
+def test_dataset_cli_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    def fake_load_huggingface_dataset(repo_id, *, split, streaming=True):
+        assert repo_id == "org/custom-synthetic-notes"
+        assert split == "eval"
+        assert streaming is True
+        return [
+            {
+                "subject_id": "ref-1",
+                "clinical_note": "Progress Note: 57-year-old female with COPD.",
+                "prompt": "Extract diagnosis.",
+                "completion": "COPD.",
+                "task_name": "extraction",
+            }
+        ]
+
+    monkeypatch.setattr(
+        "casecrawler.integrations.huggingface.load_huggingface_dataset",
+        fake_load_huggingface_dataset,
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "import-reference-dataset",
+            "--repo-id",
+            "org/custom-synthetic-notes",
+            "--dataset-id",
+            "ds-custom-reference",
+            "--split",
+            "eval",
+            "--license",
+            "cc-by-4.0",
+            "--note-field",
+            "clinical_note",
+            "--question-field",
+            "prompt",
+            "--answer-field",
+            "completion",
+            "--task-field",
+            "task_name",
+            "--patient-id-field",
+            "subject_id",
+            "--limit",
+            "1",
+        ],
+    )
+    store = DatasetStore()
+
+    assert result.exit_code == 0
+    assert "Imported 1 reference record(s) from org/custom-synthetic-notes" in result.output
+    record = store.list_records(dataset_id="ds-custom-reference")[0]
+    assert record.metadata["reference_dataset"] == "org/custom-synthetic-notes"
+    assert record.documents[0].extracted_facts["instruction"] == "Extract diagnosis."
+
+
 def test_dataset_cli_benchmark_reports_missing_reference_cleanly(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

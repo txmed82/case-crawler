@@ -4,6 +4,7 @@ from casecrawler.integrations.huggingface import (
     REFERENCE_DATASETS,
     import_reference_rows,
     list_reference_datasets,
+    reference_dataset_spec,
     load_reference_dataset,
     reference_row_to_record,
 )
@@ -112,6 +113,42 @@ def test_reference_row_ids_are_scoped_to_dataset_id():
 
     assert first[0].record_id != second[0].record_id
     assert first[0].patient.patient_id != second[0].patient.patient_id
+
+
+def test_import_reference_rows_accepts_custom_dataset_spec():
+    custom_spec = reference_dataset_spec(
+        repo_id="org/custom-synthetic-notes",
+        split="eval",
+        license="cc-by-4.0",
+        note_field="clinical_note",
+        question_field="prompt",
+        answer_field="completion",
+        task_field="task_name",
+        patient_id_field="subject_id",
+        description="Custom synthetic notes fixture.",
+    )
+    rows = [
+        {
+            "subject_id": "abc",
+            "clinical_note": "Progress Note: 57-year-old female with COPD.",
+            "prompt": "Extract diagnosis.",
+            "completion": "COPD.",
+            "task_name": "extraction",
+        }
+    ]
+
+    records = import_reference_rows(
+        rows,
+        dataset_id="ds-custom",
+        split="eval",
+        limit=1,
+        spec=custom_spec,
+    )
+
+    assert len(records) == 1
+    assert records[0].metadata["reference_dataset"] == "org/custom-synthetic-notes"
+    assert records[0].metadata["reference_license"] == "cc-by-4.0"
+    assert records[0].documents[0].extracted_facts["instruction"] == "Extract diagnosis."
 
 
 def test_load_reference_dataset_requires_hf_extra_when_datasets_missing(monkeypatch):

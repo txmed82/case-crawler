@@ -183,9 +183,16 @@ def reference_datasets() -> None:
 
 
 @cli.command("import-reference-dataset")
-@click.argument("reference_key")
+@click.argument("reference_key", required=False)
 @click.option("--dataset-id", required=True, help="Dataset id for imported reference records")
+@click.option("--repo-id", default=None, help="Custom Hugging Face dataset repo id")
 @click.option("--split", default=None, help="Override the configured dataset split")
+@click.option("--license", "license_name", default=None, help="License for custom repo imports")
+@click.option("--note-field", default="note", help="Clinical note text field")
+@click.option("--question-field", default=None, help="Optional instruction/question field")
+@click.option("--answer-field", default=None, help="Optional answer/completion field")
+@click.option("--task-field", default=None, help="Optional task field")
+@click.option("--patient-id-field", default=None, help="Optional source patient id field")
 @click.option("--limit", default=100, type=int, help="Maximum reference rows to import")
 @click.option(
     "--no-streaming",
@@ -193,9 +200,16 @@ def reference_datasets() -> None:
     help="Use non-streaming Hugging Face dataset loading",
 )
 def import_reference_dataset(
-    reference_key: str,
+    reference_key: str | None,
     dataset_id: str,
+    repo_id: str | None,
     split: str | None,
+    license_name: str | None,
+    note_field: str,
+    question_field: str | None,
+    answer_field: str | None,
+    task_field: str | None,
+    patient_id_field: str | None,
     limit: int,
     no_streaming: bool,
 ) -> None:
@@ -203,11 +217,15 @@ def import_reference_dataset(
     from casecrawler.integrations.huggingface import (
         REFERENCE_DATASETS,
         import_reference_rows,
+        load_huggingface_dataset,
         load_reference_dataset,
+        reference_dataset_spec,
     )
     from casecrawler.storage.dataset_store import DatasetStore
 
-    if reference_key not in REFERENCE_DATASETS:
+    if not reference_key and not repo_id:
+        raise click.ClickException("Provide a reference key or --repo-id.")
+    if not repo_id and reference_key not in REFERENCE_DATASETS:
         choices = ", ".join(sorted(REFERENCE_DATASETS))
         raise click.ClickException(
             f"Unknown reference dataset {reference_key!r}. Choose from: {choices}"
@@ -215,18 +233,47 @@ def import_reference_dataset(
     if limit < 1:
         raise click.ClickException("limit must be at least 1.")
     try:
-        rows = load_reference_dataset(
-            reference_key,
-            split=split,
-            streaming=not no_streaming,
-        )
-        records = import_reference_rows(
-            rows,
-            dataset_id=dataset_id,
-            reference_key=reference_key,
-            split=split,
-            limit=limit,
-        )
+        if repo_id:
+            effective_split = split or "train"
+            spec = reference_dataset_spec(
+                repo_id=repo_id,
+                split=effective_split,
+                license=license_name or "unspecified",
+                note_field=note_field,
+                question_field=question_field,
+                answer_field=answer_field,
+                task_field=task_field,
+                patient_id_field=patient_id_field,
+                description="User-specified Hugging Face reference dataset.",
+            )
+            rows = load_huggingface_dataset(
+                repo_id,
+                split=effective_split,
+                streaming=not no_streaming,
+            )
+            records = import_reference_rows(
+                rows,
+                dataset_id=dataset_id,
+                split=effective_split,
+                limit=limit,
+                spec=spec,
+            )
+            source_name = repo_id
+        else:
+            assert reference_key is not None
+            rows = load_reference_dataset(
+                reference_key,
+                split=split,
+                streaming=not no_streaming,
+            )
+            records = import_reference_rows(
+                rows,
+                dataset_id=dataset_id,
+                reference_key=reference_key,
+                split=split,
+                limit=limit,
+            )
+            source_name = reference_key
     except RuntimeError as exc:
         raise click.ClickException(str(exc)) from exc
 
@@ -234,7 +281,7 @@ def import_reference_dataset(
     for record in records:
         store.save_record(record)
     click.echo(
-        f"Imported {len(records)} reference record(s) from {reference_key} "
+        f"Imported {len(records)} reference record(s) from {source_name} "
         f"into {dataset_id}"
     )
 
