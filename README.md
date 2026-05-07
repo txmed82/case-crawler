@@ -91,6 +91,7 @@ Optional backends are intentionally lazy:
 - `casecrawler[imaging]` for diffusers/image validation backends
 - `casecrawler[parquet]` for parquet exports
 - Existing OpenAI, Anthropic, OpenRouter, and Ollama providers remain available for model-backed generation
+- `synthetic.clinical_text_backend: llm` routes clinical document drafting through the configured LLM provider while the default deterministic backend remains no-key
 
 ## CLI Reference
 
@@ -180,6 +181,18 @@ generation:
   review_threshold: 0.7
   default_difficulty: "resident"
   retriever_chunk_count: 25
+
+synthetic:
+  clinical_text_backend: "deterministic" # or "llm"
+  imaging_backend: "placeholder"
+  time_series_backend: "deterministic"
+  export_formats:
+    - sft_jsonl
+    - chat_jsonl
+    - tool_call_jsonl
+    - multimodal_jsonl
+    - dpo_jsonl
+    - rl_jsonl
 
 api:
   host: "0.0.0.0"

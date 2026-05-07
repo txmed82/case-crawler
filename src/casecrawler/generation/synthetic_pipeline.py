@@ -8,6 +8,7 @@ from casecrawler.generation.modality_plan import ModalityPlanner
 from casecrawler.generation.structured_generator import StructuredGenerator
 from casecrawler.generation.text_generator import TextGenerator
 from casecrawler.generation.timeseries_generator import TimeSeriesGenerator
+from casecrawler.llm.factory import get_provider
 from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import Modality
 from casecrawler.validation.synthetic_validator import SyntheticValidator
@@ -27,7 +28,12 @@ class SyntheticPipeline:
     ) -> None:
         config = get_config()
         self._structured_generator = structured_generator or StructuredGenerator()
-        self._text_generator = text_generator or TextGenerator()
+        self._text_generator = text_generator or _text_generator_from_config(
+            config.synthetic.clinical_text_backend,
+            config.llm.provider,
+            config.llm.model,
+            config.llm.ollama_base_url,
+        )
         self._time_series_generator = time_series_generator or _time_series_generator_from_config(
             config.synthetic.time_series_backend,
             config.synthetic.time_series_command,
@@ -53,7 +59,7 @@ class SyntheticPipeline:
                 index=index,
             )
             if Modality.CLINICAL_TEXT in plan.modalities:
-                record = self._text_generator.add_documents(record)
+                record = await self._text_generator.add_documents_async(record)
             if Modality.TIME_SERIES in plan.modalities:
                 record = self._time_series_generator.add_time_series(
                     record,
@@ -106,3 +112,17 @@ def _time_series_generator_from_config(
             )
         return TimeSeriesGenerator(external_command=command)
     raise ValueError(f"Unknown synthetic time-series backend: {backend}")
+
+
+def _text_generator_from_config(
+    backend: str,
+    provider_name: str,
+    model: str,
+    ollama_base_url: str,
+) -> TextGenerator:
+    if backend == "deterministic":
+        return TextGenerator()
+    if backend == "llm":
+        provider = get_provider(provider_name, model, base_url=ollama_base_url)
+        return TextGenerator(provider=provider)
+    raise ValueError(f"Unknown synthetic clinical text backend: {backend}")

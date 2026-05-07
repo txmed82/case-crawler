@@ -59,6 +59,7 @@ class SyntheticConfig(BaseModel):
         Modality.VITALS,
     ]
     validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    clinical_text_backend: str = "deterministic"
     imaging_backend: str = "placeholder"
     imaging_model_profile: str | None = None
     diffusers_model_id: str = "stabilityai/stable-diffusion-2-1"
