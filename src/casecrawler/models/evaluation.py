@@ -42,3 +42,16 @@ class BenchmarkReport(BaseModel):
     reference_profile: CohortProfile
     metrics: list[BenchmarkMetric]
     warnings: list[str] = Field(default_factory=list)
+
+
+class DatasetQualityReport(BaseModel):
+    dataset_id: str
+    record_count: int
+    approved_count: int
+    approval_rate: float
+    export_ready: bool
+    modality_counts: dict[str, int] = Field(default_factory=dict)
+    blocking_issue_count: int = 0
+    warning_issue_count: int = 0
+    issue_counts_by_field: dict[str, int] = Field(default_factory=dict)
+    recommendations: list[str] = Field(default_factory=list)

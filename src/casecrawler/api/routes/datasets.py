@@ -18,6 +18,7 @@ from casecrawler.models.dataset import (
 from casecrawler.models.synthetic import ComplexityProfile, Modality
 from casecrawler.storage.dataset_store import DatasetStore
 from casecrawler.validation.benchmark import DatasetBenchmark
+from casecrawler.validation.quality import build_dataset_quality_report
 
 router = APIRouter()
 
@@ -258,6 +259,19 @@ def list_dataset_review_queue(
             )
         ],
     }
+
+
+@router.get("/datasets/{dataset_id}/quality")
+def get_dataset_quality(dataset_id: str):
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+    records = list(store.iter_records(dataset_id=dataset_id))
+    return build_dataset_quality_report(
+        dataset_id,
+        records,
+        effective_approved=store.effective_approved,
+    ).model_dump()
 
 
 @router.post("/records/{record_id}/review")

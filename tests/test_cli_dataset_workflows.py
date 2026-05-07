@@ -24,6 +24,7 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     assert match, f"Failed to find dataset id in output: {generate.output}"
     dataset_id = match.group(1)
     listed = runner.invoke(cli, ["datasets", "list"])
+    quality = runner.invoke(cli, ["datasets", "quality", dataset_id])
     validated = runner.invoke(cli, ["validate", "--dataset-id", dataset_id])
     exported = runner.invoke(
         cli,
@@ -40,6 +41,8 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
 
     assert listed.exit_code == 0
     assert "sepsis" in listed.output
+    assert quality.exit_code == 0
+    assert '"export_ready": true' in quality.output
     assert validated.exit_code == 0
     assert "Validated:" in validated.output
     assert exported.exit_code == 0

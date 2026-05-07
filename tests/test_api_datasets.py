@@ -98,6 +98,33 @@ def test_dataset_api_lists_and_saves_human_reviews(tmp_path, monkeypatch):
     assert queue_after.json()["records"] == []
 
 
+def test_dataset_api_serves_quality_report(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    dataset_id = generated.json()["dataset_id"]
+
+    response = client.get(f"/api/datasets/{dataset_id}/quality")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dataset_id"] == dataset_id
+    assert body["record_count"] == 1
+    assert body["approved_count"] == 1
+    assert body["export_ready"] is True
+    assert "clinical_text" in body["modality_counts"]
+
+
+def test_dataset_api_quality_report_handles_missing_dataset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    response = client.get("/api/datasets/ds-missing/quality")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "dataset not found"
+
+
 def test_dataset_api_serves_dataset_and_model_cards(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)
