@@ -36,6 +36,15 @@ def test_cli_config():
     assert "chunk_size" in result.output.lower() or "embedding" in result.output.lower()
 
 
+def test_cli_imaging_models():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["imaging-models"])
+
+    assert result.exit_code == 0
+    assert "prompt2medimage" in result.output
+    assert "cxr_pneumonia_dreambooth" in result.output
+
+
 def test_cli_ingest(tmp_path):
     runner = CliRunner()
     fake_search = AsyncMock(return_value=[_fake_doc()])

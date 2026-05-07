@@ -5,6 +5,10 @@ from typing import Protocol
 from uuid import uuid4
 
 from casecrawler.integrations.huggingface import require_package
+from casecrawler.generation.imaging_models import (
+    ImagingModelProfile,
+    resolve_imaging_model_profile,
+)
 from casecrawler.models.synthetic import ImagingAsset
 
 
@@ -21,9 +25,16 @@ class ImagingGenerator:
         self,
         diffusers_pipeline=None,
         diffusers_model_id: str = "stabilityai/stable-diffusion-2-1",
+        imaging_model_profile: str | ImagingModelProfile | None = None,
     ) -> None:
+        profile = (
+            imaging_model_profile
+            if isinstance(imaging_model_profile, ImagingModelProfile)
+            else resolve_imaging_model_profile(imaging_model_profile)
+        )
         self._diffusers_pipeline = diffusers_pipeline
-        self._diffusers_model_id = diffusers_model_id
+        self._imaging_model_profile = profile
+        self._diffusers_model_id = profile.model_id if profile else diffusers_model_id
 
     def generate_placeholder(
         self,
@@ -54,6 +65,12 @@ class ImagingGenerator:
         body_region: str = "chest",
         negative_prompt: str | None = None,
     ) -> ImagingAsset:
+        profile = self._imaging_model_profile
+        if profile:
+            prompt = profile.render_prompt(prompt)
+            modality = modality if modality != "XR" else profile.modality
+            body_region = body_region if body_region != "chest" else profile.body_region
+            negative_prompt = negative_prompt or profile.default_negative_prompt
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         image_id = f"img-{uuid4()}"
@@ -75,7 +92,11 @@ class ImagingGenerator:
                 f"Synthetic {modality} image of the {body_region}. "
                 "Generated pixels require downstream clinical validation."
             ),
-            generation_backend=f"diffusers:{self._diffusers_model_id}",
+            generation_backend=(
+                f"diffusers:{profile.name}:{self._diffusers_model_id}"
+                if profile
+                else f"diffusers:{self._diffusers_model_id}"
+            ),
         )
 
     def _load_diffusers_pipeline(self):
