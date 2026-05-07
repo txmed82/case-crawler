@@ -119,10 +119,7 @@ def _document(
     timestamp: str,
     clean_text: str,
 ) -> ClinicalDocument:
-    messy = clean_text.replace("patient", "pt").replace("with", "w/").replace(
-        "Initial",
-        "Init",
-    )
+    messy = _messy_text(note_type, clean_text)
     return ClinicalDocument(
         document_id=f"doc-{uuid5(NAMESPACE_URL, f'{record.record_id}:{note_type}')}",
         note_type=note_type,
@@ -130,7 +127,61 @@ def _document(
         timestamp=timestamp,
         clean_text=clean_text,
         messy_text=messy,
+        extracted_facts=_extracted_facts(record, note_type),
     )
+
+
+def _messy_text(note_type: str, clean_text: str) -> str:
+    shorthand = (
+        clean_text.replace("patient", "pt")
+        .replace("Patient", "Pt")
+        .replace("with", "w/")
+        .replace("Initial", "Init")
+        .replace("Medication", "Med")
+        .replace("medication", "med")
+        .replace("Assessment and plan", "A/P")
+        .replace("shortness of breath", "SOB")
+    )
+    if note_type == "ed_note":
+        return f"pt msg: {shorthand}"
+    if note_type == "progress_note":
+        return f"prog note - {shorthand}"
+    if note_type == "nursing_note":
+        return f"MAR: {shorthand}; I/O ck, fall scrn, meds given per synthetic MAR"
+    if note_type == "discharge_summary":
+        return f"d/c summ: {shorthand}"
+    if note_type == "radiology_report":
+        ocr_like = shorthand.replace("Synthetic", "5ynthetic").replace("labels", "1abels")
+        return f"OCR: {ocr_like}"
+    return shorthand
+
+
+def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:
+    abnormal_labs = [
+        {
+            "name": lab.name,
+            "value": lab.value,
+            "unit": lab.unit,
+            "flag": lab.flag,
+        }
+        for lab in record.labs
+        if lab.flag
+    ]
+    return {
+        "topic": record.topic,
+        "note_type": note_type,
+        "patient_age": record.patient.age,
+        "patient_sex": record.patient.sex,
+        "diagnoses": [
+            diagnosis.display
+            for encounter in record.encounters
+            for diagnosis in encounter.diagnoses
+        ],
+        "lab_names": [lab.name for lab in record.labs],
+        "abnormal_labs": abnormal_labs,
+        "vital_names": [vital.name for vital in record.vitals],
+        "medications": [med.name for med in record.medication_history],
+    }
 
 
 def _clinical_document_prompt(record: SyntheticRecord) -> str:
