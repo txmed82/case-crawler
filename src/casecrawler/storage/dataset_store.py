@@ -243,6 +243,7 @@ class DatasetStore:
                     modalities.append(modality)
         approved_count = sum(1 for record in records if self.effective_approved(record))
         first = records[0]
+        export_formats = _manifest_export_formats(records)
         return DatasetManifest(
             dataset_id=dataset_id,
             name=f"{first.topic}-synthetic",
@@ -251,7 +252,7 @@ class DatasetStore:
             generated_count=len(records),
             approved_count=approved_count,
             modalities=modalities,
-            export_formats=list(ExportFormat),
+            export_formats=export_formats,
             created_at=first.provenance.created_at,
             metadata={"record_ids": [record.record_id for record in records]},
         )
@@ -289,3 +290,16 @@ class DatasetStore:
         )
         self._conn.commit()
         return export_manifest
+
+
+def _manifest_export_formats(records: list[SyntheticRecord]) -> list[ExportFormat]:
+    requested: list[ExportFormat] = []
+    for record in records:
+        for value in record.metadata.get("requested_export_formats", []):
+            try:
+                export_format = ExportFormat(value)
+            except ValueError:
+                continue
+            if export_format not in requested:
+                requested.append(export_format)
+    return requested or list(ExportFormat)

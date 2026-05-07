@@ -4,7 +4,7 @@ from casecrawler.generation.structured_generator import (
     StructuredGenerator,
     list_clinical_profile_catalog,
 )
-from casecrawler.models.dataset import GenerationRequest
+from casecrawler.models.dataset import ExportFormat, GenerationRequest
 from casecrawler.models.synthetic import Modality
 
 
@@ -107,6 +107,17 @@ def test_structured_generator_emits_only_requested_observation_modalities():
     assert structured_only.medication_history
     assert structured_only.labs == []
     assert structured_only.vitals == []
+
+
+def test_structured_generator_persists_requested_export_formats():
+    req = GenerationRequest(
+        topic="sepsis",
+        export_formats=[ExportFormat.CHAT_JSONL, ExportFormat.PARQUET],
+    )
+
+    record = StructuredGenerator().generate("ds-one", req, 0)
+
+    assert record.metadata["requested_export_formats"] == ["chat_jsonl", "parquet"]
 
 
 def test_structured_generator_uses_topic_specific_profiles():

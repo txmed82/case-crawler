@@ -104,6 +104,9 @@ class StructuredGenerator:
                     req.cohort_constraints
                 ),
                 "clinical_profile": profile.diagnosis_code,
+                "requested_export_formats": [
+                    export_format.value for export_format in req.export_formats
+                ],
             },
         )
 
