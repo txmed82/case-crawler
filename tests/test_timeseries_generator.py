@@ -32,6 +32,25 @@ def test_timeseries_generator_adds_longitudinal_channels():
     assert heart_rate.points[0].timestamp == "2026-01-01T00:00:00"
 
 
+def test_timeseries_generator_adds_numeric_lab_trajectories():
+    req = GenerationRequest(
+        topic="acute pancreatitis",
+        modalities=[Modality.TIME_SERIES],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0)
+
+    updated = TimeSeriesGenerator().add_time_series(record)
+    channels = {channel.name: channel for channel in updated.time_series}
+
+    assert "lab_lipase" in channels
+    assert "lab_wbc" in channels
+    assert channels["lab_lipase"].unit == "U/L"
+    assert channels["lab_lipase"].points[0].values["value"] == 1240
+    assert channels["lab_lipase"].points[-1].values["value"] < 1240
+    assert channels["lab_wbc"].points[-1].values["value"] < channels["lab_wbc"].points[0].values["value"]
+
+
 def test_timeseries_generator_adds_waveform_like_channels():
     req = GenerationRequest(
         topic="sepsis",
