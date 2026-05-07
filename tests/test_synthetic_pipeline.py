@@ -125,6 +125,54 @@ async def test_synthetic_pipeline_uses_topic_specific_imaging_modalities(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_synthetic_pipeline_uses_expanded_profile_imaging_specs(tmp_path):
+    pipeline = SyntheticPipeline(
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    asthma = await pipeline.generate(
+        GenerationRequest(topic="status asthmaticus", count=1, modalities=[Modality.IMAGING])
+    )
+    pancreatitis = await pipeline.generate(
+        GenerationRequest(topic="acute pancreatitis", count=1, modalities=[Modality.IMAGING])
+    )
+    appendicitis = await pipeline.generate(
+        GenerationRequest(topic="appendicitis", count=1, modalities=[Modality.IMAGING])
+    )
+    pyelo = await pipeline.generate(
+        GenerationRequest(topic="pyelonephritis", count=1, modalities=[Modality.IMAGING])
+    )
+    meningitis = await pipeline.generate(
+        GenerationRequest(topic="bacterial meningitis", count=1, modalities=[Modality.IMAGING])
+    )
+    seizure = await pipeline.generate(
+        GenerationRequest(topic="status epilepticus", count=1, modalities=[Modality.IMAGING])
+    )
+
+    asthma_image = asthma["records"][0].imaging[0]
+    pancreatitis_image = pancreatitis["records"][0].imaging[0]
+    appendicitis_image = appendicitis["records"][0].imaging[0]
+    pyelo_image = pyelo["records"][0].imaging[0]
+    meningitis_image = meningitis["records"][0].imaging[0]
+    seizure_image = seizure["records"][0].imaging[0]
+
+    assert (asthma_image.modality, asthma_image.body_region) == ("XR", "chest")
+    assert any(label.display == "Hyperinflation" for label in asthma_image.labels)
+    assert (pancreatitis_image.modality, pancreatitis_image.body_region) == ("CT", "abdomen")
+    assert any(label.display == "Peripancreatic inflammation" for label in pancreatitis_image.labels)
+    assert (appendicitis_image.modality, appendicitis_image.body_region) == ("CT", "abdomen")
+    assert any(label.display == "Appendicitis" for label in appendicitis_image.labels)
+    assert (pyelo_image.modality, pyelo_image.body_region) == ("CT", "abdomen")
+    assert any(label.display == "Pyelonephritis" for label in pyelo_image.labels)
+    assert (meningitis_image.modality, meningitis_image.body_region) == ("CT", "head")
+    assert "no acute hemorrhage" in meningitis_image.prompt
+    assert (seizure_image.modality, seizure_image.body_region) == ("CT", "head")
+    assert "postictal" in seizure_image.prompt
+
+
+@pytest.mark.asyncio
 async def test_synthetic_pipeline_rejects_unknown_image_backend(tmp_path):
     pipeline = SyntheticPipeline(
         validator=SyntheticValidator(),

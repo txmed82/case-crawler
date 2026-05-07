@@ -47,6 +47,33 @@ def test_infer_imaging_labels_from_prompt_synonyms():
     assert [label.display for label in labels] == ["Opacity", "Pleural effusion"]
 
 
+def test_infer_imaging_labels_for_abdominal_and_neuro_prompts():
+    labels = infer_imaging_labels(
+        "CT abdomen with dilated appendix, appendiceal wall thickening, fat stranding",
+        modality="CT",
+    )
+    assert [label.display for label in labels] == ["Appendicitis", "Fat stranding"]
+
+    labels = infer_imaging_labels(
+        "CT abdomen with striated nephrogram and perinephric stranding pyelonephritis",
+        modality="CT",
+    )
+    assert [label.display for label in labels] == [
+        "Fat stranding",
+        "Perinephric stranding",
+        "Pyelonephritis",
+    ]
+
+    labels = infer_imaging_labels(
+        "Noncontrast head CT no acute hemorrhage, postictal seizure evaluation",
+        modality="CT",
+    )
+    assert [label.display for label in labels] == [
+        "No acute intracranial hemorrhage",
+        "Postictal seizure evaluation",
+    ]
+
+
 def test_build_imaging_report_mentions_labels_and_modality():
     labels = infer_imaging_labels("portable chest x-ray pulmonary edema", modality="XR")
 
