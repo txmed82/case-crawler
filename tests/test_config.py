@@ -12,6 +12,7 @@ def test_load_default_config():
     assert config.synthetic.image_output_dir == "./data/images"
     assert config.synthetic.imaging_model_profile is None
     assert config.synthetic.diffusers_model_id == "stabilityai/stable-diffusion-2-1"
+    assert config.synthetic.time_series_backend == "deterministic"
 
 
 def test_load_config_from_yaml(tmp_path):
@@ -36,6 +37,10 @@ def test_load_synthetic_config_from_yaml(tmp_path):
         "  validation_threshold: 0.9\n"
         "  imaging_model_profile: cxr_pneumonia_dreambooth\n"
         "  diffusers_model_id: test/medical-image-model\n"
+        "  time_series_backend: external\n"
+        "  time_series_model_profile: timediff\n"
+        "  time_series_command:\n"
+        "    - timediff-sample\n"
         f"  synthea_executable: {synthea_executable}\n"
         f"  image_output_dir: {image_output_dir}\n"
         "  max_api_generation_count: 10\n"
@@ -47,6 +52,9 @@ def test_load_synthetic_config_from_yaml(tmp_path):
     assert config.synthetic.validation_threshold == 0.9
     assert config.synthetic.imaging_model_profile == "cxr_pneumonia_dreambooth"
     assert config.synthetic.diffusers_model_id == "test/medical-image-model"
+    assert config.synthetic.time_series_backend == "external"
+    assert config.synthetic.time_series_model_profile == "timediff"
+    assert config.synthetic.time_series_command == ["timediff-sample"]
     assert config.synthetic.synthea_executable == str(synthea_executable)
     assert config.synthetic.image_output_dir == str(image_output_dir)
     assert config.synthetic.max_api_generation_count == 10

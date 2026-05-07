@@ -62,6 +62,9 @@ class SyntheticConfig(BaseModel):
     imaging_backend: str = "placeholder"
     imaging_model_profile: str | None = None
     diffusers_model_id: str = "stabilityai/stable-diffusion-2-1"
+    time_series_backend: str = "deterministic"
+    time_series_model_profile: str | None = None
+    time_series_command: list[str] | None = None
     synthea_executable: str | None = None
     image_output_dir: str = "./data/images"
     export_formats: list[ExportFormat] = [ExportFormat.SFT_JSONL]

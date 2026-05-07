@@ -28,7 +28,10 @@ class SyntheticPipeline:
         config = get_config()
         self._structured_generator = structured_generator or StructuredGenerator()
         self._text_generator = text_generator or TextGenerator()
-        self._time_series_generator = time_series_generator or TimeSeriesGenerator()
+        self._time_series_generator = time_series_generator or _time_series_generator_from_config(
+            config.synthetic.time_series_backend,
+            config.synthetic.time_series_command,
+        )
         self._imaging_generator = imaging_generator or ImagingGenerator(
             diffusers_model_id=config.synthetic.diffusers_model_id,
             imaging_model_profile=config.synthetic.imaging_model_profile,
@@ -87,3 +90,19 @@ class SyntheticPipeline:
                 prompt=prompt,
             )
         raise ValueError(f"Unknown synthetic imaging backend: {self._image_backend}")
+
+
+def _time_series_generator_from_config(
+    backend: str,
+    command: list[str] | None,
+) -> TimeSeriesGenerator:
+    if backend == "deterministic":
+        return TimeSeriesGenerator()
+    if backend == "external":
+        if not command:
+            raise ValueError(
+                "synthetic.time_series_command is required when "
+                "time_series_backend is 'external'."
+            )
+        return TimeSeriesGenerator(external_command=command)
+    raise ValueError(f"Unknown synthetic time-series backend: {backend}")
