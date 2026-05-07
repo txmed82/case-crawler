@@ -347,9 +347,21 @@ function BenchmarkPanel({
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <Metric label="Overall score" value={benchmark.overall_score.toFixed(3)} />
+            <Metric label="Gate" value={benchmark.passed ? "passed" : "failed"} />
             <Metric label="Metric count" value={benchmark.metrics.length} />
+            <Metric label="Failing metrics" value={benchmark.failing_metrics.length} />
             <Metric label="Warnings" value={benchmark.warnings.length} />
           </div>
+          <p className="text-xs text-gray-500">
+            Requires overall &gt;= {formatMetricValue(benchmark.thresholds.min_overall_score)} and each metric &gt;={" "}
+            {formatMetricValue(benchmark.thresholds.min_metric_score)}.
+          </p>
+          {benchmark.failing_metrics.length > 0 && (
+            <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+              <p className="font-medium">Failing benchmark metrics</p>
+              <p className="mt-1">{benchmark.failing_metrics.join(", ")}</p>
+            </div>
+          )}
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {topMetrics.map((metric) => (
               <div key={metric.name} className="rounded-md border border-gray-200 p-3">
