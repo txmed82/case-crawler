@@ -83,6 +83,15 @@ def export_chat_record(record: SyntheticRecord) -> dict[str, Any]:
 
 
 def export_multimodal_record(record: SyntheticRecord) -> dict[str, Any]:
+    image_text_pairs = [
+        {
+            "image_id": asset.image_id,
+            "text": asset.report_text,
+            "task": "radiology_image_report_alignment",
+            "labels": [label.display for label in asset.labels],
+        }
+        for asset in record.imaging
+    ]
     return {
         "record_id": record.record_id,
         "dataset_id": record.dataset_id,
@@ -95,8 +104,26 @@ def export_multimodal_record(record: SyntheticRecord) -> dict[str, Any]:
                 "body_region": asset.body_region,
                 "prompt": asset.prompt,
                 "report_text": asset.report_text,
+                "labels": [label.model_dump() for label in asset.labels],
+                "generation_backend": asset.generation_backend,
             }
             for asset in record.imaging
+        ],
+        "image_text_pairs": image_text_pairs,
+        "supervised_tasks": [
+            {
+                "task": "radiology_image_report_alignment",
+                "input": {
+                    "image_id": pair["image_id"],
+                    "clinical_context": _clinical_context(record),
+                    "report_text": pair["text"],
+                },
+                "target": {
+                    "is_synthetic": True,
+                    "labels": pair["labels"],
+                },
+            }
+            for pair in image_text_pairs
         ],
         "metadata": _metadata(record),
     }
@@ -395,6 +422,7 @@ def _clinical_context(record: SyntheticRecord) -> dict[str, Any]:
         "medication_history": [med.model_dump() for med in record.medication_history],
         "time_series": [channel.model_dump() for channel in record.time_series],
         "documents": [document.model_dump() for document in record.documents],
+        "imaging": [asset.model_dump() for asset in record.imaging],
     }
 
 
@@ -438,6 +466,7 @@ def _tool_schema() -> dict[str, Any]:
             "medication_history": {"type": "array", "items": {"type": "object"}},
             "time_series": {"type": "array", "items": {"type": "object"}},
             "documents": {"type": "array", "items": {"type": "object"}},
+            "imaging": {"type": "array", "items": {"type": "object"}},
         },
         "required": [
             "record_id",
@@ -449,6 +478,7 @@ def _tool_schema() -> dict[str, Any]:
             "medication_history",
             "time_series",
             "documents",
+            "imaging",
         ],
         "additionalProperties": True,
     }

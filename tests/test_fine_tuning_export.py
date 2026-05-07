@@ -84,6 +84,30 @@ def test_export_record_dispatches_chat_and_multimodal():
     assert multimodal["clinical_context"]["record_id"] == "rec-1"
 
 
+def test_export_multimodal_record_preserves_imaging_labels_and_alignment_tasks():
+    record = _multimodal_record()
+
+    exported = export_multimodal_record(record)
+
+    assert exported["clinical_context"]["imaging"][0]["image_id"] == "img-1"
+    assert exported["images"][0]["labels"] == [
+        {
+            "system": "https://casecrawler.dev/synthetic-radiology-labels",
+            "code": "opacity",
+            "display": "Opacity",
+        }
+    ]
+    assert exported["image_text_pairs"] == [
+        {
+            "image_id": "img-1",
+            "text": "Right lower lobe opacity concerning for pneumonia.",
+            "task": "radiology_image_report_alignment",
+            "labels": ["Opacity"],
+        }
+    ]
+    assert exported["supervised_tasks"][0]["target"]["labels"] == ["Opacity"]
+
+
 def test_export_fhir_record_contains_training_bundle_resources():
     record = _multimodal_record()
 
@@ -139,6 +163,7 @@ def test_export_tool_call_record_contains_clinical_extraction_call():
     assert exported["tools"][0]["function"]["name"] == "emit_synthetic_clinical_facts"
     assert assistant["tool_calls"][0]["function"]["name"] == "emit_synthetic_clinical_facts"
     assert "Lactate" in assistant["tool_calls"][0]["function"]["arguments"]
+    assert "img-1" in assistant["tool_calls"][0]["function"]["arguments"]
     assert exported["metadata"]["export_profile"] == "tool_call_jsonl"
 
 
@@ -269,6 +294,13 @@ def _multimodal_record() -> SyntheticRecord:
                 body_region="chest",
                 prompt="Synthetic chest x-ray with right lower lobe opacity",
                 report_text="Right lower lobe opacity concerning for pneumonia.",
+                labels=[
+                    Code(
+                        system="https://casecrawler.dev/synthetic-radiology-labels",
+                        code="opacity",
+                        display="Opacity",
+                    )
+                ],
                 generation_backend="placeholder",
             )
         ],
