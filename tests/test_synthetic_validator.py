@@ -329,6 +329,41 @@ def test_validator_rejects_inconsistent_radiology_labels():
     assert any(issue.field == "imaging.img-1.labels" for issue in report.issues)
 
 
+def test_validator_rejects_invalid_imaging_modality_region_and_report_text():
+    record = _record(
+        modalities=[Modality.IMAGING],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="XR",
+                body_region="brain",
+                prompt="brain x-ray showing stroke",
+                file_path="brain-xray.png",
+                report_text="   ",
+                generation_backend="unit-test",
+            ),
+            ImagingAsset(
+                image_id="img-2",
+                modality="PET",
+                body_region="whole_body",
+                prompt="whole body PET",
+                file_path="pet.png",
+                report_text="Synthetic PET report.",
+                generation_backend="unit-test",
+            ),
+        ],
+    )
+
+    report = SyntheticValidator(
+        image_alignment_validator=FakeImageAlignmentValidator(0.9)
+    ).validate(record)
+
+    assert report.approved is False
+    assert any(issue.field == "imaging.img-1.body_region" for issue in report.issues)
+    assert any(issue.field == "imaging.img-1.report_text" for issue in report.issues)
+    assert any(issue.field == "imaging.img-2.modality" for issue in report.issues)
+
+
 def test_validator_rejects_radiology_document_that_negates_imaging_label():
     record = _record(
         modalities=[Modality.IMAGING, Modality.CLINICAL_TEXT],

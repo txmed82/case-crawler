@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from casecrawler.generation.imaging_templates import get_imaging_template
 from casecrawler.models.synthetic import Modality, SyntheticRecord, ValidationIssue
 
 
@@ -441,6 +442,58 @@ def validate_radiology_document_alignment(
                         ),
                     )
                 )
+    return issues
+
+
+def validate_imaging_asset_clinical_shape(
+    record: SyntheticRecord,
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    for asset in record.imaging:
+        modality = asset.modality.upper().strip()
+        body_region = asset.body_region.lower().strip()
+        template = get_imaging_template(modality)
+        if template is None:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.IMAGING,
+                    field=f"imaging.{asset.image_id}.modality",
+                    message=f"Imaging asset {asset.image_id} uses unsupported modality {asset.modality!r}.",
+                )
+            )
+        elif body_region not in {region.lower() for region in template.valid_body_regions}:
+            valid_regions = ", ".join(template.valid_body_regions)
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.IMAGING,
+                    field=f"imaging.{asset.image_id}.body_region",
+                    message=(
+                        f"Imaging asset {asset.image_id} uses body region "
+                        f"{asset.body_region!r}, which is not valid for {modality}. "
+                        f"Expected one of: {valid_regions}."
+                    ),
+                )
+            )
+        if not asset.report_text.strip():
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.IMAGING,
+                    field=f"imaging.{asset.image_id}.report_text",
+                    message=f"Imaging asset {asset.image_id} has empty radiology report text.",
+                )
+            )
+        if not asset.prompt.strip():
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.IMAGING,
+                    field=f"imaging.{asset.image_id}.prompt",
+                    message=f"Imaging asset {asset.image_id} has empty generation prompt.",
+                )
+            )
     return issues
 
 
