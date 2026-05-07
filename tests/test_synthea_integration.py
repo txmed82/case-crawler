@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from casecrawler.integrations.synthea import SyntheaAdapter
 from casecrawler.models.synthetic import Modality
 
@@ -194,3 +196,38 @@ def test_synthea_adapter_imports_bundle_directory_in_stable_order(tmp_path):
     records = SyntheaAdapter().import_fhir_path(str(tmp_path), dataset_id="ds-1")
 
     assert [record.patient.patient_id for record in records] == ["pat-a", "pat-b"]
+
+
+def test_synthea_adapter_runs_command_and_imports_output_directory(tmp_path):
+    output_dir = tmp_path / "fhir"
+    output_dir.mkdir()
+
+    def fake_runner(command: list[str]) -> None:
+        assert command == ["/opt/synthea/run_synthea", "-p", "2"]
+        bundle = {
+            "resourceType": "Bundle",
+            "entry": [
+                {"resource": {"resourceType": "Patient", "id": "pat-run"}},
+            ],
+        }
+        (output_dir / "patient.json").write_text(json.dumps(bundle))
+
+    records = SyntheaAdapter(runner=fake_runner).run_and_import(
+        executable="/opt/synthea/run_synthea",
+        output_dir=str(output_dir),
+        dataset_id="ds-synthea",
+        population=2,
+    )
+
+    assert len(records) == 1
+    assert records[0].patient.patient_id == "pat-run"
+
+
+def test_synthea_adapter_rejects_invalid_population(tmp_path):
+    with pytest.raises(ValueError, match="population"):
+        SyntheaAdapter().run_and_import(
+            executable="/opt/synthea/run_synthea",
+            output_dir=str(tmp_path),
+            dataset_id="ds-synthea",
+            population=0,
+        )

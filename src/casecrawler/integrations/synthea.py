@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from collections.abc import Mapping
 from datetime import date
 from pathlib import Path
+from typing import Protocol
 
 from casecrawler.models.synthetic import (
     ComplexityProfile,
@@ -18,7 +20,31 @@ from casecrawler.models.synthetic import (
 )
 
 
+SYNTHEA_TIMEOUT_SECONDS = 600.0
+
+
+class SyntheaRunner(Protocol):
+    def __call__(self, command: list[str]) -> None: ...
+
+
 class SyntheaAdapter:
+    def __init__(self, runner: SyntheaRunner | None = None) -> None:
+        self._runner = runner or _run_synthea_command
+
+    def run_and_import(
+        self,
+        *,
+        executable: str,
+        output_dir: str,
+        dataset_id: str,
+        population: int = 1,
+    ) -> list[SyntheticRecord]:
+        if population < 1:
+            raise ValueError("population must be at least 1.")
+        command = [executable, "-p", str(population)]
+        self._runner(command)
+        return self.import_fhir_path(output_dir, dataset_id=dataset_id)
+
     def import_fhir_path(self, path: str, dataset_id: str) -> list[SyntheticRecord]:
         source = Path(path)
         if source.is_dir():
@@ -105,6 +131,14 @@ class SyntheaAdapter:
             ),
             metadata={"source": "synthea"},
         )
+
+
+def _run_synthea_command(command: list[str]) -> None:
+    subprocess.run(
+        command,
+        check=True,
+        timeout=SYNTHEA_TIMEOUT_SECONDS,
+    )
 
 
 def _resources(resources: list[dict], resource_type: str) -> list[dict]:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 import time
 
 import click
@@ -299,6 +300,51 @@ def import_synthea_fhir(path: str, dataset_id: str) -> None:
     for record in records:
         store.save_record(record)
     click.echo(f"Imported {len(records)} Synthea FHIR record(s) into {dataset_id}")
+
+
+@cli.command("run-synthea")
+@click.option("--dataset-id", required=True, help="Dataset id for imported Synthea records")
+@click.option(
+    "--output-dir",
+    required=True,
+    help="Directory where Synthea writes FHIR JSON bundles",
+)
+@click.option("--population", default=1, type=click.IntRange(1), show_default=True)
+@click.option(
+    "--synthea-executable",
+    default=None,
+    help="Path to run_synthea; defaults to synthetic.synthea_executable config.",
+)
+def run_synthea(
+    dataset_id: str,
+    output_dir: str,
+    population: int,
+    synthea_executable: str | None,
+) -> None:
+    """Run a configured Synthea executable and import generated FHIR bundles."""
+    from casecrawler.integrations.synthea import SyntheaAdapter
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    executable = synthea_executable or get_config().synthetic.synthea_executable
+    if not executable:
+        raise click.ClickException(
+            "Provide --synthea-executable or set synthetic.synthea_executable."
+        )
+    try:
+        records = SyntheaAdapter().run_and_import(
+            executable=executable,
+            output_dir=output_dir,
+            dataset_id=dataset_id,
+            population=population,
+        )
+    except (OSError, json.JSONDecodeError, ValueError, subprocess.SubprocessError) as exc:
+        raise click.ClickException(f"Failed to run/import Synthea: {exc}") from exc
+    if not records:
+        raise click.ClickException(f"No Synthea FHIR JSON bundles found at {output_dir}.")
+    store = DatasetStore()
+    for record in records:
+        store.save_record(record)
+    click.echo(f"Ran Synthea and imported {len(records)} record(s) into {dataset_id}")
 
 
 @cli.command("config")
