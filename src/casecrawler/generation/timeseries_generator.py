@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 from datetime import datetime, timedelta
 from typing import Protocol
@@ -54,10 +55,26 @@ class TimeSeriesGenerator:
             "spo2": "%",
             "lactate": "mmol/L",
         }
+        waveform_specs = {
+            "ecg_lead_ii": {"unit": "mV", "sampling_rate_hz": 125.0, "minimum_points": 125},
+            "pleth": {"unit": "relative", "sampling_rate_hz": 25.0, "minimum_points": 100},
+        }
 
         generated_channels = []
-        selected_channels = channels if channels else list(base_values)
+        selected_channels = channels if channels else [*base_values, *waveform_specs]
         for name in selected_channels:
+            if name in waveform_specs:
+                generated_channels.append(
+                    _waveform_channel(
+                        name=name,
+                        start=start,
+                        heart_rate=base_values["heart_rate"],
+                        spo2=base_values["spo2"],
+                        points=points,
+                        spec=waveform_specs[name],
+                    )
+                )
+                continue
             if name not in base_values:
                 continue
             base = base_values[name]
@@ -136,6 +153,65 @@ def _drift(name: str, offset: int) -> float:
     if name == "spo2":
         return 0.4 * offset
     return 0.0
+
+
+def _waveform_channel(
+    *,
+    name: str,
+    start: datetime,
+    heart_rate: float,
+    spo2: float,
+    points: int,
+    spec: dict,
+) -> TimeSeriesChannel:
+    sampling_rate_hz = float(spec["sampling_rate_hz"])
+    point_count = max(points, int(spec["minimum_points"]))
+    series_points = []
+    for sample_index in range(point_count):
+        timestamp = (start + timedelta(seconds=sample_index / sampling_rate_hz)).isoformat()
+        phase = (sample_index / sampling_rate_hz) * (heart_rate / 60.0)
+        if name == "ecg_lead_ii":
+            values = {
+                "millivolts": round(_ecg_sample(phase), 4),
+                "phase": round(phase % 1.0, 4),
+            }
+        else:
+            values = {
+                "amplitude": round(_pleth_sample(phase, spo2), 4),
+                "phase": round(phase % 1.0, 4),
+            }
+        series_points.append(TimeSeriesPoint(timestamp=timestamp, values=values))
+    return TimeSeriesChannel(
+        name=name,
+        unit=spec["unit"],
+        sampling_rate_hz=sampling_rate_hz,
+        points=series_points,
+    )
+
+
+def _ecg_sample(phase: float) -> float:
+    cycle = phase % 1.0
+    baseline = 0.03 * math.sin(2 * math.pi * cycle)
+    p_wave = 0.08 * _gaussian(cycle, 0.18, 0.035)
+    q_wave = -0.12 * _gaussian(cycle, 0.37, 0.012)
+    r_wave = 1.05 * _gaussian(cycle, 0.40, 0.01)
+    s_wave = -0.25 * _gaussian(cycle, 0.43, 0.014)
+    t_wave = 0.28 * _gaussian(cycle, 0.68, 0.08)
+    return baseline + p_wave + q_wave + r_wave + s_wave + t_wave
+
+
+def _pleth_sample(phase: float, spo2: float) -> float:
+    cycle = phase % 1.0
+    oxygen_scale = max(0.75, min(1.05, spo2 / 96.0))
+    upstroke = 1.1 * _gaussian(cycle, 0.18, 0.08)
+    dicrotic_notch = -0.18 * _gaussian(cycle, 0.38, 0.025)
+    runoff = 0.45 * _gaussian(cycle, 0.55, 0.18)
+    respiratory_variation = 0.04 * math.sin(2 * math.pi * phase / 4)
+    return max(0.0, oxygen_scale * (upstroke + dicrotic_notch + runoff) + respiratory_variation)
+
+
+def _gaussian(value: float, mean: float, sigma: float) -> float:
+    return math.exp(-0.5 * ((value - mean) / sigma) ** 2)
 
 
 def _run_external_command(command: list[str], payload: str) -> str:

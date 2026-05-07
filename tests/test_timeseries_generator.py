@@ -24,10 +24,37 @@ def test_timeseries_generator_adds_longitudinal_channels():
         "systolic_bp",
         "spo2",
         "lactate",
+        "ecg_lead_ii",
+        "pleth",
     }
     heart_rate = next(channel for channel in updated.time_series if channel.name == "heart_rate")
     assert len(heart_rate.points) == 6
     assert heart_rate.points[0].timestamp == "2026-01-01T00:00:00"
+
+
+def test_timeseries_generator_adds_waveform_like_channels():
+    req = GenerationRequest(
+        topic="sepsis",
+        modalities=[Modality.TIME_SERIES],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0)
+
+    updated = TimeSeriesGenerator().add_time_series(
+        record,
+        channels=["ecg_lead_ii", "pleth"],
+        points=8,
+    )
+
+    ecg = next(channel for channel in updated.time_series if channel.name == "ecg_lead_ii")
+    pleth = next(channel for channel in updated.time_series if channel.name == "pleth")
+    assert ecg.sampling_rate_hz == 125
+    assert pleth.sampling_rate_hz == 25
+    assert len(ecg.points) >= 125
+    assert len(pleth.points) >= 100
+    assert {"millivolts", "phase"} <= set(ecg.points[0].values)
+    assert {"amplitude", "phase"} <= set(pleth.points[0].values)
+    assert ecg.points[1].timestamp == "2026-01-01T00:00:00.008000"
 
 
 def test_timeseries_generator_honors_requested_channels():

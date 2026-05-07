@@ -39,7 +39,14 @@ class ModalityPlanner:
         if Modality.VITALS in req.modalities:
             vital_signs = ["heart_rate", "systolic_bp", "spo2", "temperature"]
         if Modality.TIME_SERIES in req.modalities:
-            time_series_channels = ["heart_rate", "systolic_bp", "spo2", "lactate"]
+            time_series_channels = [
+                "heart_rate",
+                "systolic_bp",
+                "spo2",
+                "lactate",
+                "ecg_lead_ii",
+                "pleth",
+            ]
         if Modality.IMAGING in req.modalities:
             imaging_views = ["portable_chest_xray"]
 

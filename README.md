@@ -42,7 +42,7 @@ The synthetic dataset path produces `SyntheticRecord` objects with:
 - Labs with units, reference ranges, flags, and timestamps
 - Vitals with timestamps
 - Clean clinical notes and messy note variants
-- Time-series channels for longitudinal vitals, labs, or waveform-like data
+- Time-series channels for longitudinal vitals, labs, ECG lead II, and pleth waveform-like data
 - Imaging asset metadata and optional image-generation backend hooks
 - Provenance metadata
 - Validation reports with schema, clinical consistency, privacy, utility, and modality-alignment scores
