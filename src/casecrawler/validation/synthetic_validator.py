@@ -5,6 +5,7 @@ from casecrawler.validation.clinical_rules import (
     validate_lab_flags,
     validate_temporal_consistency,
     validate_text_structured_contradictions,
+    validate_time_series_waveforms,
     validate_vitals,
 )
 from casecrawler.validation.image_alignment import (
@@ -28,6 +29,7 @@ class SyntheticValidator:
             *validate_temporal_consistency(record),
             *validate_lab_flags(record),
             *validate_vitals(record),
+            *validate_time_series_waveforms(record),
             *validate_text_structured_contradictions(record),
             *validate_privacy(record),
         ]
