@@ -1,7 +1,13 @@
 import pytest
 from pydantic import ValidationError
 
-from casecrawler.models.dataset import DatasetManifest, ExportFormat, GenerationRequest
+from casecrawler.models.dataset import (
+    DatasetManifest,
+    ExportFormat,
+    GenerationRequest,
+    HumanReviewDecision,
+    HumanReviewStatus,
+)
 from casecrawler.models.synthetic import ComplexityProfile, Modality
 
 
@@ -34,3 +40,14 @@ def test_dataset_manifest_records_validation_summary():
 
     assert manifest.approved_count == 91
     assert ExportFormat.SFT_JSONL in manifest.export_formats
+
+
+def test_human_review_decision_defaults_to_timestamped_human_gate():
+    decision = HumanReviewDecision(
+        status=HumanReviewStatus.NEEDS_REVISION,
+        notes=["Temporal contradiction in labs."],
+    )
+
+    assert decision.reviewer == "human"
+    assert decision.reviewed_at
+    assert decision.notes == ["Temporal contradiction in labs."]

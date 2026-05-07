@@ -8,7 +8,11 @@ from fastapi.responses import StreamingResponse
 from casecrawler.config import get_config
 from casecrawler.export.fine_tuning import export_record
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
-from casecrawler.models.dataset import ExportFormat, GenerationRequest
+from casecrawler.models.dataset import (
+    ExportFormat,
+    GenerationRequest,
+    HumanReviewDecision,
+)
 from casecrawler.storage.dataset_store import DatasetStore
 
 router = APIRouter()
@@ -56,6 +60,43 @@ def get_dataset(dataset_id: str, limit: int = Query(100, ge=1, le=1000)):
     return {
         "manifest": manifest.model_dump(),
         "records": [record.model_dump() for record in records],
+    }
+
+
+@router.get("/datasets/{dataset_id}/reviews")
+def list_dataset_review_queue(
+    dataset_id: str,
+    limit: int = Query(100, ge=1, le=1000),
+    include_reviewed: bool = False,
+):
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return {
+        "dataset_id": dataset_id,
+        "records": [
+            item.model_dump()
+            for item in store.list_review_queue(
+                dataset_id=dataset_id,
+                include_reviewed=include_reviewed,
+                limit=limit,
+            )
+        ],
+    }
+
+
+@router.post("/records/{record_id}/review")
+def save_record_review(record_id: str, decision: HumanReviewDecision):
+    store = DatasetStore()
+    try:
+        record = store.save_human_review(record_id, decision)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail="record not found") from err
+    return {
+        "record_id": record.record_id,
+        "dataset_id": record.dataset_id,
+        "human_review": record.metadata["human_review"],
+        "effective_approved": store.effective_approved(record),
     }
 
 
