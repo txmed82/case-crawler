@@ -289,6 +289,39 @@ def export_dataset(output: str, export_format: str, dataset_id: str | None) -> N
     click.echo(f"Exported {record_count} record(s) to {output}")
 
 
+@cli.command("benchmark-dataset")
+@click.option("--dataset-id", required=True, help="Generated dataset id")
+@click.option("--reference-dataset-id", required=True, help="Reference dataset id")
+@click.option("--output", default=None, help="Optional JSON report path")
+def benchmark_dataset(
+    dataset_id: str,
+    reference_dataset_id: str,
+    output: str | None,
+) -> None:
+    """Compare a generated dataset against a stored reference dataset."""
+    from casecrawler.storage.dataset_store import DatasetStore
+    from casecrawler.validation.benchmark import DatasetBenchmark
+
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise click.ClickException(f"Dataset {dataset_id} not found.")
+    if not store.dataset_exists(reference_dataset_id):
+        raise click.ClickException(f"Reference dataset {reference_dataset_id} not found.")
+    generated_records = list(store.iter_records(dataset_id=dataset_id))
+    reference_records = list(store.iter_records(dataset_id=reference_dataset_id))
+    report = DatasetBenchmark().compare(generated_records, reference_records)
+    payload = report.model_dump_json(indent=2)
+    if output:
+        with open(output, "w") as f:
+            f.write(payload + "\n")
+    click.echo(f"Benchmark: {report.generated_dataset_id} vs {report.reference_dataset_id}")
+    click.echo(f"Overall score: {report.overall_score:.4f}")
+    for metric in report.metrics:
+        click.echo(f"  {metric.name}: {metric.score:.4f}")
+    for warning in report.warnings:
+        click.echo(f"Warning: {warning}")
+
+
 @cli.command()
 @click.argument("topic")
 @click.option("--difficulty", default=None, help="medical_student, resident, or attending")
