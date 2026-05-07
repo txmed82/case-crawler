@@ -15,6 +15,9 @@ class CohortProfile(BaseModel):
     note_type_counts: dict[str, int] = Field(default_factory=dict)
     document_author_role_counts: dict[str, int] = Field(default_factory=dict)
     messy_document_rate: float | None = None
+    artifact_counts: dict[str, int] = Field(default_factory=dict)
+    artifact_density: dict[str, float] = Field(default_factory=dict)
+    modality_artifact_coverage: dict[str, float] = Field(default_factory=dict)
     lab_name_counts: dict[str, int] = Field(default_factory=dict)
     lab_flag_counts: dict[str, int] = Field(default_factory=dict)
     lab_numeric_summaries: dict[str, dict[str, float | int]] = Field(default_factory=dict)

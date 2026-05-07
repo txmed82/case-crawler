@@ -138,6 +138,11 @@ casecrawler generate "subarachnoid hemorrhage" --difficulty resident
 casecrawler cases export --output legacy_cases.jsonl
 ```
 
+Benchmark reports compare generated cohorts to stored reference datasets across
+demographics, note types, artifact density, declared-modality artifact coverage,
+labs, vitals, medication history, time-series channels, imaging findings, and
+approval rates.
+
 ## REST API
 
 Start the server with `casecrawler serve` or `docker compose up`.
