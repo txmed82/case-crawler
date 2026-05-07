@@ -11,10 +11,17 @@ const modalityOptions: { value: SyntheticModality; label: string }[] = [
   { value: "imaging", label: "Imaging" },
 ];
 
+const sexOptions = ["female", "male", "other"] as const;
+type SexOption = (typeof sexOptions)[number];
+
 export default function GeneratePage() {
   const [topic, setTopic] = useState("");
   const [complexity, setComplexity] = useState<"simple" | "moderate" | "complex" | "rare">("moderate");
   const [count, setCount] = useState(1);
+  const [ageMin, setAgeMin] = useState("");
+  const [ageMax, setAgeMax] = useState("");
+  const [sexes, setSexes] = useState<SexOption[]>([]);
+  const [baseTime, setBaseTime] = useState("");
   const [modalities, setModalities] = useState<SyntheticModality[]>([
     "structured_ehr",
     "clinical_text",
@@ -31,6 +38,29 @@ export default function GeneratePage() {
       setError("Record count must be a positive integer.");
       return;
     }
+    const parsedAgeMin = ageMin === "" ? undefined : Number(ageMin);
+    const parsedAgeMax = ageMax === "" ? undefined : Number(ageMax);
+    if (
+      (parsedAgeMin !== undefined && (!Number.isInteger(parsedAgeMin) || parsedAgeMin < 0)) ||
+      (parsedAgeMax !== undefined && (!Number.isInteger(parsedAgeMax) || parsedAgeMax < 0))
+    ) {
+      setError("Age limits must be non-negative whole numbers.");
+      return;
+    }
+    if (
+      parsedAgeMin !== undefined &&
+      parsedAgeMax !== undefined &&
+      parsedAgeMin > parsedAgeMax
+    ) {
+      setError("Minimum age cannot be greater than maximum age.");
+      return;
+    }
+    const cohortConstraints: Record<string, unknown> = {};
+    if (parsedAgeMin !== undefined) cohortConstraints.age_min = parsedAgeMin;
+    if (parsedAgeMax !== undefined) cohortConstraints.age_max = parsedAgeMax;
+    if (sexes.length > 0) cohortConstraints.sexes = sexes;
+    if (baseTime) cohortConstraints.base_time = baseTime;
+
     setResult(null);
     setError(null);
     setIsGenerating(true);
@@ -40,6 +70,9 @@ export default function GeneratePage() {
         complexity,
         count,
         modalities,
+        ...(Object.keys(cohortConstraints).length > 0
+          ? { cohort_constraints: cohortConstraints }
+          : {}),
       });
       setResult(resp);
     } catch (err) {
@@ -54,6 +87,12 @@ export default function GeneratePage() {
       current.includes(modality)
         ? current.filter((item) => item !== modality)
         : [...current, modality]
+    );
+  };
+
+  const toggleSex = (sex: SexOption) => {
+    setSexes((current) =>
+      current.includes(sex) ? current.filter((item) => item !== sex) : [...current, sex]
     );
   };
 
@@ -121,6 +160,73 @@ export default function GeneratePage() {
             max={100}
             className="w-24 rounded-lg border border-gray-300 px-3 py-2"
           />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-[repeat(2,minmax(0,14rem))_minmax(0,18rem)]">
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Minimum age</span>
+            <input
+              id="dataset-age-min"
+              aria-label="Minimum age"
+              type="number"
+              value={ageMin}
+              onChange={(e) => setAgeMin(e.target.value)}
+              min={0}
+              max={120}
+              placeholder="Any"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Maximum age</span>
+            <input
+              id="dataset-age-max"
+              aria-label="Maximum age"
+              type="number"
+              value={ageMax}
+              onChange={(e) => setAgeMax(e.target.value)}
+              min={0}
+              max={120}
+              placeholder="Any"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Base time</span>
+            <input
+              id="dataset-base-time"
+              aria-label="Base time"
+              type="datetime-local"
+              value={baseTime}
+              onChange={(e) => setBaseTime(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-sm font-medium text-gray-700">Sex mix</span>
+          {sexOptions.map((sex) => {
+            const selected = sexes.includes(sex);
+            return (
+              <button
+                key={sex}
+                type="button"
+                onClick={() => toggleSex(sex)}
+                aria-pressed={selected}
+                className={`rounded-md border px-3 py-2 text-sm capitalize ${
+                  selected
+                    ? "border-blue-600 bg-blue-50 text-blue-700"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {sex}
+              </button>
+            );
+          })}
+        </div>
+
+        <div>
           <button
             onClick={handleGenerate}
             disabled={
