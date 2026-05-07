@@ -75,6 +75,11 @@ class ImagingGenerator:
     ) -> ImagingAsset:
         profile = self._imaging_model_profile
         if profile:
+            if not profile.is_compatible(modality, body_region):
+                raise ValueError(
+                    f"Imaging model profile '{profile.name}' is incompatible with "
+                    f"requested {modality} {body_region}."
+                )
             prompt = profile.render_prompt(prompt)
             modality = modality if modality != "XR" else profile.modality
             body_region = body_region if body_region != "chest" else profile.body_region

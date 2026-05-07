@@ -1,3 +1,5 @@
+import pytest
+
 from casecrawler.generation.imaging_generator import ImagingGenerator
 
 
@@ -111,3 +113,18 @@ def test_diffusers_backend_uses_imaging_model_profile(tmp_path):
     assert "pneumonia infection" in pipeline.calls[0]["prompt"]
     assert "right lower lobe infiltrate" in pipeline.calls[0]["prompt"]
     assert "patient identifiers" in pipeline.calls[0]["negative_prompt"]
+
+
+def test_diffusers_backend_rejects_incompatible_imaging_model_profile(tmp_path):
+    generator = ImagingGenerator(
+        diffusers_pipeline=FakeDiffusersPipeline(),
+        imaging_model_profile="cxr_pneumonia_dreambooth",
+    )
+
+    with pytest.raises(ValueError, match="incompatible with requested CT abdomen"):
+        generator.generate_diffusers(
+            str(tmp_path),
+            "acute appendicitis fat stranding",
+            modality="CT",
+            body_region="abdomen",
+        )
