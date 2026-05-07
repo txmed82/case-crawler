@@ -1,3 +1,4 @@
+import json
 import re
 
 from click.testing import CliRunner
@@ -186,6 +187,10 @@ def test_dataset_cli_benchmark_against_reference_dataset(tmp_path, monkeypatch):
             dataset_id,
             "--reference-dataset-id",
             "ds-reference",
+            "--min-overall-score",
+            "0.2",
+            "--min-metric-score",
+            "0",
             "--output",
             "benchmark.json",
         ],
@@ -193,7 +198,61 @@ def test_dataset_cli_benchmark_against_reference_dataset(tmp_path, monkeypatch):
 
     assert result.exit_code == 0
     assert "Overall score:" in result.output
+    assert "Passed:" in result.output
     assert (tmp_path / "benchmark.json").exists()
+    report = json.loads((tmp_path / "benchmark.json").read_text())
+    assert report["thresholds"] == {"min_overall_score": 0.2, "min_metric_score": 0.0}
+
+
+def test_dataset_cli_benchmark_reports_failing_gate(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    generated = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    reference = runner.invoke(cli, ["generate-dataset", "heart failure", "--count", "1"])
+    assert generated.exit_code == 0
+    assert reference.exit_code == 0
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output).group(1)
+    reference_dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", reference.output).group(1)
+
+    result = runner.invoke(
+        cli,
+        [
+            "benchmark-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--reference-dataset-id",
+            reference_dataset_id,
+            "--min-overall-score",
+            "1",
+            "--min-metric-score",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Passed: false" in result.output
+    assert "Failing metrics:" in result.output
+
+
+def test_dataset_cli_benchmark_rejects_invalid_threshold(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "benchmark-dataset",
+            "--dataset-id",
+            "ds-one",
+            "--reference-dataset-id",
+            "ds-reference",
+            "--min-overall-score",
+            "1.1",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Invalid value for '--min-overall-score'" in result.output
 
 
 def test_dataset_cli_imports_hf_reference_dataset(tmp_path, monkeypatch):

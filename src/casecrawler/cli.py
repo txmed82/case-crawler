@@ -615,10 +615,26 @@ def export_dataset(
 @cli.command("benchmark-dataset")
 @click.option("--dataset-id", required=True, help="Generated dataset id")
 @click.option("--reference-dataset-id", required=True, help="Reference dataset id")
+@click.option(
+    "--min-overall-score",
+    default=0.75,
+    type=click.FloatRange(0.0, 1.0),
+    show_default=True,
+    help="Minimum overall benchmark score required to pass.",
+)
+@click.option(
+    "--min-metric-score",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    show_default=True,
+    help="Minimum individual metric score required to pass.",
+)
 @click.option("--output", default=None, help="Optional JSON report path")
 def benchmark_dataset(
     dataset_id: str,
     reference_dataset_id: str,
+    min_overall_score: float,
+    min_metric_score: float,
     output: str | None,
 ) -> None:
     """Compare a generated dataset against a stored reference dataset."""
@@ -633,7 +649,10 @@ def benchmark_dataset(
     generated_records = list(store.iter_records(dataset_id=dataset_id))
     reference_records = list(store.iter_records(dataset_id=reference_dataset_id))
     try:
-        report = DatasetBenchmark().compare(generated_records, reference_records)
+        report = DatasetBenchmark(
+            min_overall_score=min_overall_score,
+            min_metric_score=min_metric_score,
+        ).compare(generated_records, reference_records)
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
     payload = report.model_dump_json(indent=2)
@@ -647,6 +666,9 @@ def benchmark_dataset(
             ) from exc
     click.echo(f"Benchmark: {report.generated_dataset_id} vs {report.reference_dataset_id}")
     click.echo(f"Overall score: {report.overall_score:.4f}")
+    click.echo(f"Passed: {str(report.passed).lower()}")
+    if report.failing_metrics:
+        click.echo(f"Failing metrics: {', '.join(report.failing_metrics)}")
     for metric in report.metrics:
         click.echo(f"  {metric.name}: {metric.score:.4f}")
     for warning in report.warnings:
