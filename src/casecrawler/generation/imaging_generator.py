@@ -9,6 +9,10 @@ from casecrawler.generation.imaging_models import (
     ImagingModelProfile,
     resolve_imaging_model_profile,
 )
+from casecrawler.generation.imaging_templates import (
+    build_imaging_report,
+    infer_imaging_labels,
+)
 from casecrawler.models.synthetic import ImagingAsset
 
 
@@ -44,16 +48,20 @@ class ImagingGenerator:
         body_region: str = "chest",
     ) -> ImagingAsset:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
+        labels = infer_imaging_labels(prompt, modality)
         return ImagingAsset(
             image_id="placeholder",
             modality=modality,
             body_region=body_region,
             prompt=prompt,
             file_path=None,
-            report_text=(
-                "Synthetic imaging placeholder. Configure a diffusers backend "
-                "to render pixels."
+            report_text=build_imaging_report(
+                prompt=prompt,
+                modality=modality,
+                body_region=body_region,
+                labels=labels,
             ),
+            labels=labels,
             generation_backend="placeholder",
         )
 
@@ -82,16 +90,20 @@ class ImagingGenerator:
         if not getattr(result, "images", None):
             raise RuntimeError("Diffusers backend returned no images.")
         result.images[0].save(file_path)
+        labels = infer_imaging_labels(prompt, modality)
         return ImagingAsset(
             image_id=image_id,
             modality=modality,
             body_region=body_region,
             prompt=prompt,
             file_path=str(file_path),
-            report_text=(
-                f"Synthetic {modality} image of the {body_region}. "
-                "Generated pixels require downstream clinical validation."
+            report_text=build_imaging_report(
+                prompt=prompt,
+                modality=modality,
+                body_region=body_region,
+                labels=labels,
             ),
+            labels=labels,
             generation_backend=(
                 f"diffusers:{profile.name}:{self._diffusers_model_id}"
                 if profile

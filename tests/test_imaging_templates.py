@@ -1,5 +1,11 @@
 # tests/test_imaging_templates.py
-from casecrawler.generation.imaging_templates import IMAGING_TEMPLATES, ImagingTemplate, get_imaging_template
+from casecrawler.generation.imaging_templates import (
+    IMAGING_TEMPLATES,
+    ImagingTemplate,
+    build_imaging_report,
+    get_imaging_template,
+    infer_imaging_labels,
+)
 
 def test_ct_template():
     ct = IMAGING_TEMPLATES["CT"]
@@ -30,3 +36,27 @@ def test_get_imaging_template_found():
 def test_get_imaging_template_not_found():
     t = get_imaging_template("PET")
     assert t is None
+
+
+def test_infer_imaging_labels_from_prompt_synonyms():
+    labels = infer_imaging_labels(
+        "portable chest x-ray with right lower lobe opacity and effusion",
+        modality="XR",
+    )
+
+    assert [label.display for label in labels] == ["Opacity", "Pleural effusion"]
+
+
+def test_build_imaging_report_mentions_labels_and_modality():
+    labels = infer_imaging_labels("portable chest x-ray pulmonary edema", modality="XR")
+
+    report = build_imaging_report(
+        prompt="portable chest x-ray pulmonary edema",
+        modality="XR",
+        body_region="chest",
+        labels=labels,
+    )
+
+    assert "Synthetic XR chest radiology report" in report
+    assert "Pulmonary edema" in report
+    assert "Impression:" in report
