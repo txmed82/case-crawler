@@ -357,14 +357,11 @@ def _time_series_observation_resource(record: SyntheticRecord, channel) -> dict[
         "subject": _patient_reference(record),
         "component": [
             {
-                "code": {"text": timestamped_value},
-                "valueQuantity": {"value": value, "unit": channel.unit},
+                "code": {"text": f"{point.timestamp}:{name}"},
+                "valueQuantity": {"value": observed_value, "unit": channel.unit},
             }
             for point in channel.points
-            for timestamped_value, value in {
-                f"{point.timestamp}:{name}": observed_value
-                for name, observed_value in point.values.items()
-            }.items()
+            for name, observed_value in point.values.items()
         ],
     }
 
