@@ -43,11 +43,11 @@ The synthetic dataset path produces `SyntheticRecord` objects with:
 - Vitals with timestamps
 - Clean clinical notes and messy note variants
 - Time-series channels for longitudinal vitals, labs, ECG lead II, and pleth waveform-like data
-- Imaging asset metadata and optional image-generation backend hooks
+- Imaging asset metadata, optional image-generation backend hooks, and inline image payloads in multimodal exports when image files exist
 - Provenance metadata
 - Validation reports with schema, clinical consistency, privacy, utility, and modality-alignment scores
 
-Older case-generation internals remain only for backward compatibility. New usage should use `generate-dataset`, dataset quality reports, benchmarks, and export profiles.
+The primary workflow is `generate-dataset`, dataset quality reports, reference benchmarks, human review, and export profiles.
 
 ## Data Sources
 
@@ -116,6 +116,12 @@ casecrawler reference-datasets
 casecrawler import-reference-dataset asclepius --dataset-id ds-asclepius-ref --limit 100
 casecrawler import-reference-dataset clinical_notes_to_fhir --dataset-id ds-fhir-ref --limit 100
 casecrawler import-reference-dataset radiology_report_consistency --dataset-id ds-rad-ref --limit 100
+casecrawler import-synthea-fhir ./synthea/output/fhir --dataset-id ds-synthea-ref
+casecrawler run-synthea \
+  --synthea-executable ./synthea/run_synthea \
+  --output-dir ./synthea/output/fhir \
+  --dataset-id ds-synthea-ref \
+  --population 100
 casecrawler import-reference-dataset \
   --repo-id org/custom-synthetic-notes \
   --dataset-id ds-custom-ref \
@@ -124,7 +130,11 @@ casecrawler import-reference-dataset \
   --answer-field completion \
   --split eval \
   --limit 100
-casecrawler benchmark-dataset --dataset-id <dataset_id> --reference-dataset-id ds-asclepius-ref
+casecrawler benchmark-dataset \
+  --dataset-id <dataset_id> \
+  --reference-dataset-id ds-asclepius-ref \
+  --min-overall-score 0.8 \
+  --min-metric-score 0.5
 casecrawler datasets quality <dataset_id>
 casecrawler export-dataset --dataset-id <dataset_id> --format sft_jsonl --output train.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format tool_call_jsonl --output tools.jsonl
@@ -134,7 +144,8 @@ casecrawler export-dataset --dataset-id <dataset_id> --format fhir_ndjson --outp
 casecrawler export-dataset --dataset-id <dataset_id> --format parquet --output records.parquet
 ```
 
-Benchmark reports compare generated cohorts to stored reference datasets across
+Benchmark reports compare generated cohorts to stored reference datasets and
+return explicit pass/fail gates plus failing metric names. They compare across
 demographics, note types, artifact density, declared-modality artifact coverage,
 labs, vitals, medication history, time-series channels, imaging findings, and
 approval rates.
@@ -153,7 +164,8 @@ Start the server with `casecrawler serve` or `docker compose up`.
 | `/api/datasets/generate` | POST | Generate synthetic healthcare records |
 | `/api/datasets/reference-catalog` | GET | List registered Hugging Face reference datasets |
 | `/api/datasets/reference-import` | POST | Import registered reference datasets into local storage |
-| `/api/datasets/{dataset_id}/benchmark` | GET | Compare a generated dataset to a reference dataset |
+| `/api/datasets/synthea-import` | POST | Import Synthea FHIR JSON bundles into local storage |
+| `/api/datasets/{dataset_id}/benchmark` | GET | Compare a generated dataset to a reference dataset with configurable pass/fail thresholds |
 | `/api/datasets/{dataset_id}/quality` | GET | Summarize validation and fine-tuning export readiness |
 | `/api/datasets/{dataset_id}/export` | GET | Stream fine-tuning/export records |
 
@@ -204,6 +216,7 @@ synthetic:
   clinical_text_backend: "deterministic" # or "llm"
   imaging_backend: "placeholder"
   time_series_backend: "deterministic"
+  synthea_executable: null
   # GenerationRequest.cohort_constraints supports age_min, age_max, sexes,
   # sex_cycle, and base_time for deterministic cohort composition.
   export_formats:
