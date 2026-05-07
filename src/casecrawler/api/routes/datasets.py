@@ -306,6 +306,8 @@ def get_dataset_card(dataset_id: str, kind: str = Query("dataset", pattern="^(da
 def benchmark_dataset(
     dataset_id: str,
     reference_dataset_id: str = Query(..., min_length=1),
+    min_overall_score: float = Query(0.75, ge=0.0, le=1.0),
+    min_metric_score: float = Query(0.5, ge=0.0, le=1.0),
 ):
     store = DatasetStore()
     if not store.dataset_exists(dataset_id):
@@ -315,7 +317,10 @@ def benchmark_dataset(
     generated_records = list(store.iter_records(dataset_id=dataset_id))
     reference_records = list(store.iter_records(dataset_id=reference_dataset_id))
     try:
-        report = DatasetBenchmark().compare(generated_records, reference_records)
+        report = DatasetBenchmark(
+            min_overall_score=min_overall_score,
+            min_metric_score=min_metric_score,
+        ).compare(generated_records, reference_records)
     except ValueError as err:
         raise HTTPException(status_code=422, detail=str(err)) from err
     return report.model_dump()

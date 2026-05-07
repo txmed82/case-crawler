@@ -205,7 +205,50 @@ def test_dataset_api_benchmarks_against_reference_dataset(tmp_path, monkeypatch)
     assert body["generated_dataset_id"] == dataset_id
     assert body["reference_dataset_id"] == reference_dataset_id
     assert body["overall_score"] >= 0
+    assert body["thresholds"] == {"min_overall_score": 0.75, "min_metric_score": 0.5}
     assert any(metric["name"] == "modality_overlap" for metric in body["metrics"])
+
+
+def test_dataset_api_uses_custom_benchmark_thresholds(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    reference = client.post(
+        "/api/datasets/generate",
+        json={"topic": "sepsis", "count": 1},
+    )
+    dataset_id = generated.json()["dataset_id"]
+    reference_dataset_id = reference.json()["dataset_id"]
+
+    response = client.get(
+        f"/api/datasets/{dataset_id}/benchmark",
+        params={
+            "reference_dataset_id": reference_dataset_id,
+            "min_overall_score": 1.0,
+            "min_metric_score": 1.0,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["thresholds"] == {"min_overall_score": 1.0, "min_metric_score": 1.0}
+    assert "passed" in body
+    assert "failing_metrics" in body
+
+
+def test_dataset_api_rejects_invalid_benchmark_thresholds(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/datasets/ds-any/benchmark",
+        params={
+            "reference_dataset_id": "ds-ref",
+            "min_overall_score": 1.1,
+        },
+    )
+
+    assert response.status_code == 422
 
 
 def test_dataset_api_benchmark_reports_missing_reference(tmp_path, monkeypatch):
