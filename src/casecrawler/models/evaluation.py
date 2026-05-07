@@ -21,6 +21,8 @@ class CohortProfile(BaseModel):
     mean_time_series_duration_hours: float | None = None
     imaging_modality_counts: dict[str, int] = Field(default_factory=dict)
     imaging_body_region_counts: dict[str, int] = Field(default_factory=dict)
+    imaging_label_counts: dict[str, int] = Field(default_factory=dict)
+    imaging_label_pair_counts: dict[str, int] = Field(default_factory=dict)
     approved_rate: float | None = None
 
 

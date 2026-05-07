@@ -1,5 +1,6 @@
 from casecrawler.models.synthetic import (
     ClinicalDocument,
+    Code,
     ComplexityProfile,
     ImagingAsset,
     LabObservation,
@@ -90,6 +91,10 @@ def _record(
                 body_region="chest",
                 prompt="portable chest x-ray",
                 report_text="No focal opacity.",
+                labels=[
+                    Code(system="synthetic", code="opacity", display="Opacity"),
+                    Code(system="synthetic", code="effusion", display="Effusion"),
+                ],
                 generation_backend="placeholder",
             )
         ],
@@ -129,6 +134,8 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.mean_time_series_duration_hours == 6
     assert profile.imaging_modality_counts == {"XR": 2}
     assert profile.imaging_body_region_counts == {"chest": 2}
+    assert profile.imaging_label_counts == {"effusion": 2, "opacity": 2}
+    assert profile.imaging_label_pair_counts == {"effusion|opacity": 2}
     assert profile.approved_rate == 1.0
 
 
@@ -158,7 +165,75 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "mean_time_series_duration_hours",
         "imaging_modality_overlap",
         "imaging_body_region_overlap",
+        "imaging_label_overlap",
+        "imaging_label_distribution",
+        "imaging_label_pair_overlap",
     }
+
+
+def test_dataset_benchmark_compares_imaging_finding_labels():
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "imaging": [
+                    ImagingAsset(
+                        image_id="img-gen",
+                        modality="XR",
+                        body_region="chest",
+                        prompt="portable chest x-ray with pulmonary edema",
+                        report_text="Pulmonary edema without focal pneumonia.",
+                        labels=[
+                            Code(
+                                system="synthetic",
+                                code="pulmonary_edema",
+                                display="Pulmonary edema",
+                            )
+                        ],
+                        generation_backend="placeholder",
+                    )
+                ]
+            }
+        )
+    ]
+    reference = [
+        _record("ref-1", "ds-ref").model_copy(
+            update={
+                "imaging": [
+                    ImagingAsset(
+                        image_id="img-ref",
+                        modality="XR",
+                        body_region="chest",
+                        prompt="portable chest x-ray with pleural effusion",
+                        report_text="Small pleural effusion.",
+                        labels=[
+                            Code(
+                                system="synthetic",
+                                code="pleural_effusion",
+                                display="Pleural effusion",
+                            )
+                        ],
+                        generation_backend="reference",
+                    )
+                ]
+            }
+        )
+    ]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    label_metric = next(
+        metric for metric in report.metrics if metric.name == "imaging_label_overlap"
+    )
+    distribution_metric = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "imaging_label_distribution"
+    )
+
+    assert label_metric.score == 0.0
+    assert label_metric.details["generated_only"] == ["pulmonary edema"]
+    assert label_metric.details["reference_only"] == ["pleural effusion"]
+    assert distribution_metric.score == 0.0
+    assert any("imaging_label_overlap" in warning for warning in report.warnings)
 
 
 def test_dataset_benchmark_flags_modality_mismatch():
