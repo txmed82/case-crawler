@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import re
+from hashlib import sha256
 from dataclasses import dataclass
 from typing import Iterable
 from uuid import NAMESPACE_URL, uuid5
@@ -87,14 +88,23 @@ def import_reference_rows(
     *,
     dataset_id: str,
     reference_key: str = "asclepius",
+    split: str | None = None,
     limit: int | None = None,
 ) -> list[SyntheticRecord]:
     spec = REFERENCE_DATASETS[reference_key]
+    effective_split = split or spec.split
     records: list[SyntheticRecord] = []
     for index, row in enumerate(rows):
         if limit is not None and index >= limit:
             break
-        records.append(reference_row_to_record(row, dataset_id=dataset_id, spec=spec, index=index))
+        records.append(
+            reference_row_to_record(
+                row,
+                dataset_id=dataset_id,
+                spec=spec,
+                split=effective_split,
+            )
+        )
     return records
 
 
@@ -103,16 +113,19 @@ def reference_row_to_record(
     *,
     dataset_id: str,
     spec: HuggingFaceReferenceDataset,
-    index: int,
+    split: str | None = None,
 ) -> SyntheticRecord:
+    effective_split = split or spec.split
     note = _coerce_text(row.get(spec.note_field))
     question = _coerce_text(row.get(spec.question_field)) if spec.question_field else ""
     answer = _coerce_text(row.get(spec.answer_field)) if spec.answer_field else ""
     task = _coerce_text(row.get(spec.task_field)) if spec.task_field else "clinical_note"
     patient_source_id = (
-        _coerce_text(row.get(spec.patient_id_field)) if spec.patient_id_field else str(index)
+        _coerce_text(row.get(spec.patient_id_field))
+        if spec.patient_id_field
+        else _stable_note_hash(note)
     )
-    stable_seed = f"{spec.repo_id}:{patient_source_id}:{index}:{note[:80]}"
+    stable_seed = f"{spec.repo_id}:{patient_source_id}:{_stable_note_hash(note)}"
     patient_age = _extract_age(note)
     patient_sex = _extract_sex(note)
     record_id = f"hf-{uuid5(NAMESPACE_URL, stable_seed)}"
@@ -150,7 +163,7 @@ def reference_row_to_record(
             source_refs=[
                 {
                     "repo_id": spec.repo_id,
-                    "split": spec.split,
+                    "split": effective_split,
                     "license": spec.license,
                 }
             ],
@@ -159,7 +172,7 @@ def reference_row_to_record(
         metadata={
             "reference_dataset": spec.repo_id,
             "reference_license": spec.license,
-            "reference_row_index": index,
+            "reference_split": effective_split,
             "use_policy": "reference_import_not_relicensed",
         },
     )
@@ -171,6 +184,10 @@ def _coerce_text(value) -> str:
     if isinstance(value, str):
         return value.strip()
     return str(value).strip()
+
+
+def _stable_note_hash(note: str) -> str:
+    return sha256(note.encode("utf-8")).hexdigest()[:16]
 
 
 def _extract_age(note: str) -> int:

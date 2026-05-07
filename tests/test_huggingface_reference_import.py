@@ -30,7 +30,7 @@ def test_asclepius_row_maps_to_synthetic_record():
         row,
         dataset_id="ds-hf",
         spec=REFERENCE_DATASETS["asclepius"],
-        index=0,
+        split="validation",
     )
 
     assert record.dataset_id == "ds-hf"
@@ -39,6 +39,8 @@ def test_asclepius_row_maps_to_synthetic_record():
     assert record.documents[0].note_type == "discharge_summary"
     assert record.documents[0].extracted_facts["instruction"] == "Summarize the record."
     assert record.metadata["reference_license"] == "cc-by-nc-sa-4.0"
+    assert record.metadata["reference_split"] == "validation"
+    assert record.provenance.source_refs[0]["split"] == "validation"
     assert record.modalities == [Modality.CLINICAL_TEXT]
 
 
@@ -66,6 +68,28 @@ def test_import_reference_rows_honors_limit_and_stable_ids():
     assert len(first) == 1
     assert first[0].record_id == second[0].record_id
     assert first[0].documents[0].note_type == "progress_note"
+
+
+def test_reference_row_ids_do_not_depend_on_row_order():
+    first_row = {
+        "patient_id": "a",
+        "note": "Progress Note: 72-year-old female with heart failure.",
+        "question": "Extract problems.",
+        "answer": "Heart failure.",
+        "task": "Extraction",
+    }
+    second_row = {
+        "patient_id": "b",
+        "note": "Progress Note: 40-year-old male with sepsis.",
+        "question": "Extract problems.",
+        "answer": "Sepsis.",
+        "task": "Extraction",
+    }
+
+    original = import_reference_rows([first_row, second_row], dataset_id="ds-hf")
+    reordered = import_reference_rows([second_row, first_row], dataset_id="ds-hf")
+
+    assert original[0].record_id == reordered[1].record_id
 
 
 def test_load_reference_dataset_requires_hf_extra_when_datasets_missing(monkeypatch):
