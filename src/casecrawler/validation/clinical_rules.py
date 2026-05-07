@@ -124,6 +124,20 @@ def validate_lab_flags(record: SyntheticRecord) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     for lab in record.labs:
         if (
+            lab.reference_low is not None
+            and lab.reference_high is not None
+            and lab.reference_low > lab.reference_high
+        ):
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.LABS,
+                    field="labs.reference_range",
+                    message=f"{lab.name} reference_low is greater than reference_high.",
+                )
+            )
+            continue
+        if (
             isinstance(lab.value, int | float)
             and lab.reference_low is not None
             and lab.reference_high is not None
@@ -138,6 +152,26 @@ def validate_lab_flags(record: SyntheticRecord) -> list[ValidationIssue]:
                         message=f"{lab.name} is outside reference range but has no flag.",
                     )
                 )
+            if lab.flag:
+                normalized_flag = lab.flag.lower()
+                if lab.value < lab.reference_low and normalized_flag.startswith("h"):
+                    issues.append(
+                        ValidationIssue(
+                            severity="error",
+                            modality=Modality.LABS,
+                            field="labs.flag_direction",
+                            message=f"{lab.name} is below range but flagged high.",
+                        )
+                    )
+                if lab.value > lab.reference_high and normalized_flag.startswith("l"):
+                    issues.append(
+                        ValidationIssue(
+                            severity="error",
+                            modality=Modality.LABS,
+                            field="labs.flag_direction",
+                            message=f"{lab.name} is above range but flagged low.",
+                        )
+                    )
     return issues
 
 
