@@ -15,6 +15,7 @@ from casecrawler.models.dataset import (
     HumanReviewDecision,
 )
 from casecrawler.storage.dataset_store import DatasetStore
+from casecrawler.validation.benchmark import DatasetBenchmark
 
 router = APIRouter()
 
@@ -112,6 +113,25 @@ def get_dataset_card(dataset_id: str, kind: str = Query("dataset", pattern="^(da
     if kind == "dataset":
         return build_dataset_card(manifest, records)
     return build_model_card(manifest, records)
+
+
+@router.get("/datasets/{dataset_id}/benchmark")
+def benchmark_dataset(
+    dataset_id: str,
+    reference_dataset_id: str = Query(..., min_length=1),
+):
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+    if not store.dataset_exists(reference_dataset_id):
+        raise HTTPException(status_code=404, detail="reference dataset not found")
+    generated_records = list(store.iter_records(dataset_id=dataset_id))
+    reference_records = list(store.iter_records(dataset_id=reference_dataset_id))
+    try:
+        report = DatasetBenchmark().compare(generated_records, reference_records)
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+    return report.model_dump()
 
 
 @router.get("/datasets/{dataset_id}/export")

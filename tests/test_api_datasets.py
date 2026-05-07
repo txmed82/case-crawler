@@ -116,6 +116,45 @@ def test_dataset_api_serves_dataset_and_model_cards(tmp_path, monkeypatch):
     assert "# Model Card:" in model_card.text
 
 
+def test_dataset_api_benchmarks_against_reference_dataset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    reference = client.post(
+        "/api/datasets/generate",
+        json={"topic": "heart failure", "count": 1},
+    )
+    dataset_id = generated.json()["dataset_id"]
+    reference_dataset_id = reference.json()["dataset_id"]
+
+    response = client.get(
+        f"/api/datasets/{dataset_id}/benchmark",
+        params={"reference_dataset_id": reference_dataset_id},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generated_dataset_id"] == dataset_id
+    assert body["reference_dataset_id"] == reference_dataset_id
+    assert body["overall_score"] >= 0
+    assert any(metric["name"] == "modality_overlap" for metric in body["metrics"])
+
+
+def test_dataset_api_benchmark_reports_missing_reference(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    dataset_id = generated.json()["dataset_id"]
+
+    response = client.get(
+        f"/api/datasets/{dataset_id}/benchmark",
+        params={"reference_dataset_id": "ds-missing"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "reference dataset not found"
+
+
 def test_dataset_api_rejects_invalid_limits(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)
