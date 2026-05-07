@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from typing import NamedTuple
 from uuid import NAMESPACE_URL, uuid5
@@ -25,6 +26,17 @@ class ClinicalProfile(NamedTuple):
     labs: list[dict]
     vitals: list[dict]
     medications: list[dict]
+
+
+@dataclass(frozen=True)
+class ClinicalProfileCatalogItem:
+    key: str
+    keywords: tuple[str, ...]
+    diagnosis_display: str
+    diagnosis_code: str
+    lab_names: list[str]
+    vital_names: list[str]
+    medication_names: list[str]
 
 
 class StructuredGenerator:
@@ -192,6 +204,21 @@ def _profile_for_topic(topic: str) -> ClinicalProfile:
         ],
         medications=[],
     )
+
+
+def list_clinical_profile_catalog() -> list[ClinicalProfileCatalogItem]:
+    return [
+        ClinicalProfileCatalogItem(
+            key=profile.diagnosis_code,
+            keywords=keywords,
+            diagnosis_display=profile.diagnosis_display,
+            diagnosis_code=profile.diagnosis_code,
+            lab_names=[lab["name"] for lab in profile.labs],
+            vital_names=[vital["name"] for vital in profile.vitals],
+            medication_names=[medication["name"] for medication in profile.medications],
+        )
+        for keywords, profile in _TOPIC_PROFILES
+    ]
 
 
 def _lab_observation(template: dict, effective_time: str, index: int) -> LabObservation:

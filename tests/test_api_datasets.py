@@ -185,6 +185,10 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert "timediff" in {
         profile["name"] for profile in body["time_series_model_profiles"]
     }
+    assert "sepsis" in {profile["key"] for profile in body["clinical_profiles"]}
+    sepsis = next(profile for profile in body["clinical_profiles"] if profile["key"] == "sepsis")
+    assert "Lactate" in sepsis["lab_names"]
+    assert "Ceftriaxone" in sepsis["medication_names"]
     assert "biomedclip" in {validator["key"] for validator in body["validators"]}
     assert "medgemma" in {validator["key"] for validator in body["validators"]}
 
