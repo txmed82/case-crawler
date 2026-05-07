@@ -39,6 +39,22 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     assert "Exported" in exported.output
     assert (tmp_path / "synthetic.jsonl").exists()
 
+    fhir_exported = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--output",
+            "synthetic.fhir.ndjson",
+            "--format",
+            "fhir_ndjson",
+        ],
+    )
+    assert fhir_exported.exit_code == 0
+    assert "Exported" in fhir_exported.output
+    assert "Bundle" in (tmp_path / "synthetic.fhir.ndjson").read_text()
+
 
 def test_dataset_cli_benchmark_against_reference_dataset(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
