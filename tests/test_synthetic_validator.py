@@ -1,4 +1,5 @@
 from casecrawler.models.synthetic import (
+    ImagingAsset,
     ComplexityProfile,
     LabObservation,
     Modality,
@@ -82,6 +83,62 @@ def test_validator_rejects_phi_like_text():
 
     assert report.approved is False
     assert any(issue.field == "privacy" for issue in report.issues)
+
+
+class FakeImageAlignmentValidator:
+    def __init__(self, score: float):
+        self._score = score
+
+    def score(self, asset: ImagingAsset) -> float:
+        return self._score
+
+
+def test_validator_records_modality_alignment_score_for_images():
+    record = _record(
+        modalities=[Modality.IMAGING],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="XR",
+                body_region="chest",
+                prompt="portable chest x-ray pulmonary edema",
+                file_path="xray.png",
+                report_text="portable chest x-ray pulmonary edema",
+                generation_backend="unit-test",
+            )
+        ],
+    )
+
+    report = SyntheticValidator(
+        image_alignment_validator=FakeImageAlignmentValidator(0.9)
+    ).validate(record)
+
+    assert report.approved is True
+    assert report.modality_alignment_score == 0.9
+
+
+def test_validator_rejects_low_image_alignment():
+    record = _record(
+        modalities=[Modality.IMAGING],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="XR",
+                body_region="chest",
+                prompt="portable chest x-ray pulmonary edema",
+                file_path="xray.png",
+                report_text="unrelated report",
+                generation_backend="unit-test",
+            )
+        ],
+    )
+
+    report = SyntheticValidator(
+        image_alignment_validator=FakeImageAlignmentValidator(0.2)
+    ).validate(record)
+
+    assert report.approved is False
+    assert any(issue.field == "imaging.alignment" for issue in report.issues)
 
 
 def test_validator_scans_nested_record_fields_for_phi():
