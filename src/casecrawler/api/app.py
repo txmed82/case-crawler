@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from casecrawler.api.routes import cases, datasets, generate, ingest, search, sources
+from casecrawler.api.routes import datasets, ingest, search, sources
 from casecrawler.config import load_config
 
 # Import sources for registry discovery
@@ -38,8 +38,6 @@ def create_app() -> FastAPI:
     app.include_router(ingest.router, prefix="/api")
     app.include_router(search.router, prefix="/api")
     app.include_router(sources.router, prefix="/api")
-    app.include_router(generate.router, prefix="/api")
-    app.include_router(cases.router, prefix="/api")
     app.include_router(datasets.router, prefix="/api")
 
     return app
