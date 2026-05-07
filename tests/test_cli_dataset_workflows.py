@@ -210,3 +210,41 @@ def test_dataset_cli_review_queue_and_mark(tmp_path, monkeypatch):
     assert "effective_approved=True" in marked.output
     assert queue_after.exit_code == 0
     assert "No records need human review." in queue_after.output
+
+
+def test_dataset_cli_generates_dataset_and_model_cards(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    generated = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    assert generated.exit_code == 0
+    match = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output)
+    assert match, f"Failed to find dataset id in output: {generated.output}"
+    dataset_id = match.group(1)
+
+    dataset_card = runner.invoke(
+        cli,
+        [
+            "document-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--output",
+            "DATASET_CARD.md",
+        ],
+    )
+    model_card = runner.invoke(
+        cli,
+        [
+            "document-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--output",
+            "MODEL_CARD.md",
+            "--kind",
+            "model",
+        ],
+    )
+
+    assert dataset_card.exit_code == 0
+    assert model_card.exit_code == 0
+    assert "# Dataset Card:" in (tmp_path / "DATASET_CARD.md").read_text()
+    assert "# Model Card:" in (tmp_path / "MODEL_CARD.md").read_text()

@@ -98,6 +98,24 @@ def test_dataset_api_lists_and_saves_human_reviews(tmp_path, monkeypatch):
     assert queue_after.json()["records"] == []
 
 
+def test_dataset_api_serves_dataset_and_model_cards(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    dataset_id = generated.json()["dataset_id"]
+
+    dataset_card = client.get(f"/api/datasets/{dataset_id}/card")
+    model_card = client.get(
+        f"/api/datasets/{dataset_id}/card",
+        params={"kind": "model"},
+    )
+
+    assert dataset_card.status_code == 200
+    assert "# Dataset Card:" in dataset_card.text
+    assert model_card.status_code == 200
+    assert "# Model Card:" in model_card.text
+
+
 def test_dataset_api_rejects_invalid_limits(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

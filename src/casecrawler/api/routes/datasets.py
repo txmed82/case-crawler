@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from casecrawler.config import get_config
+from casecrawler.export.cards import build_dataset_card, build_model_card
 from casecrawler.export.fine_tuning import export_record
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.dataset import (
@@ -98,6 +99,19 @@ def save_record_review(record_id: str, decision: HumanReviewDecision):
         "human_review": record.metadata["human_review"],
         "effective_approved": store.effective_approved(record),
     }
+
+
+@router.get("/datasets/{dataset_id}/card", response_class=PlainTextResponse)
+def get_dataset_card(dataset_id: str, kind: str = Query("dataset", pattern="^(dataset|model)$")):
+    store = DatasetStore()
+    try:
+        manifest = store.get_manifest(dataset_id)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail="dataset not found") from err
+    records = list(store.iter_records(dataset_id=dataset_id))
+    if kind == "dataset":
+        return build_dataset_card(manifest, records)
+    return build_model_card(manifest, records)
 
 
 @router.get("/datasets/{dataset_id}/export")
