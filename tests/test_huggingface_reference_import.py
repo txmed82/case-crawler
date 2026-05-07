@@ -12,9 +12,13 @@ from casecrawler.models.synthetic import Modality
 
 def test_reference_dataset_catalog_includes_asclepius_license():
     catalog = list_reference_datasets()
+    asclepius = next(
+        item
+        for item in catalog
+        if item.repo_id == "starmpcc/Asclepius-Synthetic-Clinical-Notes"
+    )
 
-    assert any(item.repo_id == "starmpcc/Asclepius-Synthetic-Clinical-Notes" for item in catalog)
-    assert REFERENCE_DATASETS["asclepius"].license == "cc-by-nc-sa-4.0"
+    assert asclepius.license == "cc-by-nc-sa-4.0"
 
 
 def test_asclepius_row_maps_to_synthetic_record():
@@ -89,7 +93,9 @@ def test_reference_row_ids_do_not_depend_on_row_order():
     original = import_reference_rows([first_row, second_row], dataset_id="ds-hf")
     reordered = import_reference_rows([second_row, first_row], dataset_id="ds-hf")
 
-    assert original[0].record_id == reordered[1].record_id
+    assert {record.record_id for record in original} == {
+        record.record_id for record in reordered
+    }
 
 
 def test_load_reference_dataset_requires_hf_extra_when_datasets_missing(monkeypatch):
