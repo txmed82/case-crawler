@@ -4,7 +4,7 @@ from casecrawler.llm.base import StructuredGenerationResult
 from casecrawler.generation.structured_generator import StructuredGenerator
 from casecrawler.generation.text_generator import TextGenerator
 from casecrawler.models.dataset import GenerationRequest
-from casecrawler.models.synthetic import ClinicalDocument, Modality
+from casecrawler.models.synthetic import ClinicalDocument, Code, ImagingAsset, Modality
 
 
 def test_text_generator_adds_multiple_clinical_note_types():
@@ -46,6 +46,45 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     assert documents_by_type["ed_note"].extracted_facts["topic"] == "pneumonia"
     assert "WBC" in documents_by_type["ed_note"].extracted_facts["lab_names"]
     assert "Ceftriaxone" in documents_by_type["ed_note"].extracted_facts["medications"]
+
+
+def test_text_generator_radiology_report_reflects_imaging_assets():
+    req = GenerationRequest(
+        topic="appendicitis",
+        modalities=[Modality.CLINICAL_TEXT, Modality.IMAGING],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0).model_copy(
+        update={
+            "imaging": [
+                ImagingAsset(
+                    image_id="img-appendicitis",
+                    modality="CT",
+                    body_region="abdomen",
+                    prompt="CT abdomen dilated appendix fat stranding",
+                    report_text="Synthetic CT abdomen report. Impression: Appendicitis.",
+                    labels=[
+                        Code(
+                            system="synthetic",
+                            code="appendicitis",
+                            display="Appendicitis",
+                        )
+                    ],
+                    generation_backend="placeholder",
+                )
+            ]
+        }
+    )
+
+    updated = TextGenerator().add_documents(record)
+    radiology_report = next(
+        document for document in updated.documents if document.note_type == "radiology_report"
+    )
+
+    assert "CT abdomen" in radiology_report.clean_text
+    assert "Appendicitis" in radiology_report.clean_text
+    assert "img-appendicitis" in radiology_report.extracted_facts["imaging_asset_ids"]
+    assert "Appendicitis" in radiology_report.extracted_facts["imaging_labels"]
 
 
 @pytest.mark.asyncio

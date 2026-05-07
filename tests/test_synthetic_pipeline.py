@@ -173,6 +173,33 @@ async def test_synthetic_pipeline_uses_expanded_profile_imaging_specs(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_synthetic_pipeline_clinical_text_radiology_report_uses_generated_imaging(tmp_path):
+    pipeline = SyntheticPipeline(
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="acute pancreatitis",
+            count=1,
+            modalities=[Modality.CLINICAL_TEXT, Modality.IMAGING],
+        )
+    )
+    record = result["records"][0]
+    radiology_report = next(
+        document for document in record.documents if document.note_type == "radiology_report"
+    )
+
+    assert record.imaging[0].modality == "CT"
+    assert record.imaging[0].body_region == "abdomen"
+    assert "CT abdomen" in radiology_report.clean_text
+    assert "Peripancreatic inflammation" in radiology_report.clean_text
+    assert record.imaging[0].image_id in radiology_report.extracted_facts["imaging_asset_ids"]
+
+
+@pytest.mark.asyncio
 async def test_synthetic_pipeline_rejects_unknown_image_backend(tmp_path):
     pipeline = SyntheticPipeline(
         validator=SyntheticValidator(),
