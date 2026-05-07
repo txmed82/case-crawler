@@ -58,6 +58,8 @@ class DatasetQualityReport(BaseModel):
     approval_rate: float
     export_ready: bool
     modality_counts: dict[str, int] = Field(default_factory=dict)
+    artifact_counts: dict[str, int] = Field(default_factory=dict)
+    note_type_counts: dict[str, int] = Field(default_factory=dict)
     blocking_issue_count: int = 0
     warning_issue_count: int = 0
     issue_counts_by_field: dict[str, int] = Field(default_factory=dict)

@@ -422,6 +422,8 @@ export interface DatasetQualityReport {
   approval_rate: number;
   export_ready: boolean;
   modality_counts: Record<string, number>;
+  artifact_counts: Record<string, number>;
+  note_type_counts: Record<string, number>;
   blocking_issue_count: number;
   warning_issue_count: number;
   issue_counts_by_field: Record<string, number>;
