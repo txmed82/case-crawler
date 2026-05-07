@@ -102,3 +102,43 @@ def test_dataset_cli_benchmark_reports_missing_reference_cleanly(tmp_path, monke
 
     assert result.exit_code != 0
     assert "Reference dataset ds-missing not found." in result.output
+
+
+def test_dataset_cli_benchmark_reports_output_write_errors(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    generated = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    assert generated.exit_code == 0
+    match = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output)
+    assert match, f"Failed to find dataset id in output: {generated.output}"
+    dataset_id = match.group(1)
+    store = DatasetStore()
+    for record in import_reference_rows(
+        [
+            {
+                "patient_id": "ref-1",
+                "note": "Progress Note: 60-year-old male with sepsis.",
+                "question": "Summarize.",
+                "answer": "Sepsis.",
+                "task": "Summarization",
+            }
+        ],
+        dataset_id="ds-reference",
+    ):
+        store.save_record(record)
+
+    result = runner.invoke(
+        cli,
+        [
+            "benchmark-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--reference-dataset-id",
+            "ds-reference",
+            "--output",
+            "missing-dir/benchmark.json",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Failed to write benchmark report" in result.output

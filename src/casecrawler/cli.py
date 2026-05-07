@@ -315,8 +315,13 @@ def benchmark_dataset(
         raise click.ClickException(str(exc)) from exc
     payload = report.model_dump_json(indent=2)
     if output:
-        with open(output, "w") as f:
-            f.write(payload + "\n")
+        try:
+            with open(output, "w") as f:
+                f.write(payload + "\n")
+        except OSError as exc:
+            raise click.ClickException(
+                f"Failed to write benchmark report to {output}: {exc}"
+            ) from exc
     click.echo(f"Benchmark: {report.generated_dataset_id} vs {report.reference_dataset_id}")
     click.echo(f"Overall score: {report.overall_score:.4f}")
     for metric in report.metrics:
