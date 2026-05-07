@@ -33,6 +33,7 @@ synthetic:
     - time_series
   validation_threshold: 0.8
   imaging_backend: "placeholder"
+  diffusers_model_id: "stabilityai/stable-diffusion-2-1"
   synthea_executable: null
   image_output_dir: "./data/images"
   export_formats:

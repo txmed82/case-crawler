@@ -23,15 +23,19 @@ class SyntheticPipeline:
         modality_planner: ModalityPlanner | None = None,
         validator: SyntheticValidator | None = None,
         image_output_dir: str | None = None,
+        image_backend: str | None = None,
     ) -> None:
         config = get_config()
         self._structured_generator = structured_generator or StructuredGenerator()
         self._text_generator = text_generator or TextGenerator()
         self._time_series_generator = time_series_generator or TimeSeriesGenerator()
-        self._imaging_generator = imaging_generator or ImagingGenerator()
+        self._imaging_generator = imaging_generator or ImagingGenerator(
+            diffusers_model_id=config.synthetic.diffusers_model_id,
+        )
         self._modality_planner = modality_planner or ModalityPlanner()
         self._validator = validator or SyntheticValidator()
         self._image_output_dir = image_output_dir or config.synthetic.image_output_dir
+        self._image_backend = image_backend or config.synthetic.imaging_backend
 
     async def generate(self, req: GenerationRequest) -> dict:
         dataset_id = f"ds-{uuid4()}"
@@ -53,10 +57,7 @@ class SyntheticPipeline:
                 )
             if Modality.IMAGING in plan.modalities:
                 images = [
-                    self._imaging_generator.generate_placeholder(
-                        output_dir=self._image_output_dir,
-                        prompt=f"{req.topic} {view}",
-                    )
+                    self._generate_image_asset(prompt=f"{req.topic} {view}")
                     for view in (plan.imaging_views or ["medical_image"])
                 ]
                 record = record.model_copy(update={"imaging": [*record.imaging, *images]})
@@ -72,3 +73,16 @@ class SyntheticPipeline:
             "plan": plan,
             "records": records,
         }
+
+    def _generate_image_asset(self, prompt: str):
+        if self._image_backend == "diffusers":
+            return self._imaging_generator.generate_diffusers(
+                output_dir=self._image_output_dir,
+                prompt=prompt,
+            )
+        if self._image_backend == "placeholder":
+            return self._imaging_generator.generate_placeholder(
+                output_dir=self._image_output_dir,
+                prompt=prompt,
+            )
+        raise ValueError(f"Unknown synthetic imaging backend: {self._image_backend}")
