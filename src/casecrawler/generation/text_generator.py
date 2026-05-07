@@ -154,6 +154,18 @@ def _messy_text(note_type: str, clean_text: str) -> str:
 
 
 def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:
+    lab_values = [
+        {
+            "name": lab.name,
+            "value": lab.value,
+            "unit": lab.unit,
+            "reference_low": lab.reference_low,
+            "reference_high": lab.reference_high,
+            "flag": lab.flag,
+            "effective_time": lab.effective_time,
+        }
+        for lab in record.labs
+    ]
     abnormal_labs = [
         {
             "name": lab.name,
@@ -163,6 +175,38 @@ def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:
         }
         for lab in record.labs
         if lab.flag
+    ]
+    vital_values = [
+        {
+            "name": vital.name,
+            "value": vital.value,
+            "unit": vital.unit,
+            "effective_time": vital.effective_time,
+        }
+        for vital in record.vitals
+    ]
+    abnormal_vitals = [
+        {
+            "name": vital.name,
+            "value": vital.value,
+            "unit": vital.unit,
+            "direction": direction,
+        }
+        for vital in record.vitals
+        if (direction := _vital_abnormality(vital.name, vital.value)) is not None
+    ]
+    medication_details = [
+        {
+            "name": med.name,
+            "rxnorm": med.rxnorm,
+            "dose": med.dose,
+            "route": med.route,
+            "frequency": med.frequency,
+            "status": med.status,
+            "start": med.start,
+            "end": med.end,
+        }
+        for med in record.medication_history
     ]
     facts = {
         "topic": record.topic,
@@ -175,9 +219,14 @@ def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:
             for diagnosis in encounter.diagnoses
         ],
         "lab_names": [lab.name for lab in record.labs],
+        "lab_values": lab_values,
         "abnormal_labs": abnormal_labs,
         "vital_names": [vital.name for vital in record.vitals],
+        "vital_values": vital_values,
+        "abnormal_vitals": abnormal_vitals,
         "medications": [med.name for med in record.medication_history],
+        "medication_details": medication_details,
+        "time_series_channels": [channel.name for channel in record.time_series],
     }
     if note_type == "radiology_report":
         facts.update(
@@ -193,6 +242,27 @@ def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:
             }
         )
     return facts
+
+
+def _vital_abnormality(name: str, value: float) -> str | None:
+    normalized = name.lower().replace("_", " ")
+    if normalized in {"hr", "heart rate"}:
+        if value > 100:
+            return "high"
+        if value < 50:
+            return "low"
+    if normalized in {"sbp", "systolic bp", "systolic blood pressure"}:
+        if value < 90:
+            return "low"
+        if value > 180:
+            return "high"
+    if normalized in {"spo2", "oxygen saturation"} and value < 94:
+        return "low"
+    if normalized in {"temperature", "temp"} and value >= 38:
+        return "high"
+    if normalized in {"respiratory rate", "rr"} and value > 22:
+        return "high"
+    return None
 
 
 def _radiology_review_text(record: SyntheticRecord) -> str:
