@@ -11,6 +11,7 @@ from casecrawler.models.synthetic import (
     Provenance,
     SyntheticPatient,
     SyntheticRecord,
+    ValidationReport,
 )
 from casecrawler.storage.dataset_store import DatasetStore
 
@@ -57,6 +58,46 @@ def test_dataset_api_lists_and_exports_records(tmp_path, monkeypatch):
     assert exported.status_code == 200
     first_line = exported.text.strip().splitlines()[0]
     assert json.loads(first_line)["dataset_id"] == dataset_id
+
+
+def test_dataset_api_export_blocks_unready_dataset_without_override(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = DatasetStore()
+    store.save_record(
+        SyntheticRecord(
+            record_id="rec-blocked",
+            dataset_id="ds-blocked",
+            topic="sepsis",
+            complexity=ComplexityProfile.MODERATE,
+            modalities=[Modality.CLINICAL_TEXT],
+            patient=SyntheticPatient(patient_id="pat-1", age=64, sex="male"),
+            encounters=[],
+            provenance=Provenance(generator="unit-test", created_at="2026-01-01T00:00:00"),
+            validation=ValidationReport(
+                schema_score=1.0,
+                clinical_consistency_score=1.0,
+                privacy_score=1.0,
+                utility_score=1.0,
+                approved=True,
+            ),
+        )
+    )
+    client = TestClient(app)
+
+    blocked = client.get(
+        "/api/datasets/ds-blocked/export",
+        params={"export_format": "sft_jsonl"},
+    )
+    allowed = client.get(
+        "/api/datasets/ds-blocked/export",
+        params={"export_format": "sft_jsonl", "allow_blocked": "true"},
+    )
+
+    assert blocked.status_code == 409
+    assert "not ready for fine-tuning export" in blocked.json()["detail"]
+    assert "clinical_text.missing_artifacts" in blocked.json()["detail"]
+    assert allowed.status_code == 200
+    assert json.loads(allowed.text.strip())["record_id"] == "rec-blocked"
 
 
 def test_dataset_api_lists_and_saves_human_reviews(tmp_path, monkeypatch):

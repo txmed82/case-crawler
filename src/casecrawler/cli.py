@@ -563,16 +563,39 @@ def reviews_mark(
     default="sft_jsonl",
 )
 @click.option("--dataset-id", default=None, help="Dataset id filter")
-def export_dataset(output: str, export_format: str, dataset_id: str | None) -> None:
+@click.option(
+    "--allow-blocked",
+    is_flag=True,
+    help="Export even when dataset quality gates report blockers.",
+)
+def export_dataset(
+    output: str,
+    export_format: str,
+    dataset_id: str | None,
+    allow_blocked: bool,
+) -> None:
     """Export synthetic datasets to fine-tuning files."""
     from casecrawler.export.fine_tuning import export_parquet_dataset, export_record
     from casecrawler.models.dataset import ExportFormat
     from casecrawler.storage.dataset_store import DatasetStore
+    from casecrawler.validation.quality import build_dataset_quality_report
 
     store = DatasetStore()
     if dataset_id and not store.dataset_exists(dataset_id):
         raise click.ClickException(f"Dataset {dataset_id} not found.")
-    records = store.iter_records(dataset_id=dataset_id)
+    records = list(store.iter_records(dataset_id=dataset_id))
+    if dataset_id and not allow_blocked:
+        report = build_dataset_quality_report(
+            dataset_id,
+            records,
+            effective_approved=store.effective_approved,
+        )
+        if not report.export_ready:
+            raise click.ClickException(
+                "Dataset is not ready for fine-tuning export. "
+                f"Blockers: {report.issue_counts_by_field}. "
+                "Use --allow-blocked to export anyway."
+            )
     if ExportFormat(export_format) == ExportFormat.PARQUET:
         try:
             record_count = export_parquet_dataset(records, output)
