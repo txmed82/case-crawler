@@ -89,6 +89,8 @@ Optional backends are intentionally lazy:
 
 - `casecrawler[hf]` for Hugging Face helpers
 - `casecrawler[imaging]` for diffusers/image validation backends
+- `BiomedCLIPImageValidator` scores generated image/report alignment when `casecrawler[imaging]` dependencies are installed
+- `MedGemmaImageTextValidator` can use gated MedGemma multimodal models through `casecrawler[hf]` plus imaging dependencies for report/image consistency checks
 - `casecrawler[parquet]` for parquet exports
 - Existing OpenAI, Anthropic, OpenRouter, and Ollama providers remain available for model-backed generation
 - `synthetic.clinical_text_backend: llm` routes clinical document drafting through the configured LLM provider while the default deterministic backend remains no-key

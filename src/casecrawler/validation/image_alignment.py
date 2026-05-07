@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable
+from typing import Any
 
 from casecrawler.integrations.huggingface import require_package
 from casecrawler.models.synthetic import ImagingAsset
@@ -131,3 +133,83 @@ class BiomedCLIPImageValidator:
 
         self._scorer = _score
         return _score
+
+
+class MedGemmaImageTextValidator:
+    def __init__(
+        self,
+        analyzer: Callable[[str, str], str | float | dict[str, Any]] | None = None,
+        model_id: str = "google/medgemma-4b-it",
+    ) -> None:
+        self._analyzer = analyzer
+        self._model_id = model_id
+
+    def score(self, asset: ImagingAsset) -> float:
+        if not asset.file_path:
+            return 0.0
+        analyzer = self._analyzer or self._load_analyzer()
+        return _coerce_alignment_score(analyzer(asset.file_path, asset.report_text))
+
+    def _load_analyzer(self):
+        transformers = require_package("transformers", "hf")
+        pil = require_package("PIL", "imaging")
+        pipe = transformers.pipeline(
+            "image-text-to-text",
+            model=self._model_id,
+        )
+
+        def _analyze(image_path: str, report_text: str) -> str:
+            prompt = (
+                "You are validating synthetic medical image training data. "
+                "Compare the image to this radiology report and return only JSON "
+                'with a numeric "score" from 0 to 1 and a short "rationale". '
+                f"Report: {report_text}"
+            )
+            result = pipe(images=pil.Image.open(image_path), text=prompt)
+            if isinstance(result, list) and result:
+                first = result[0]
+                if isinstance(first, dict):
+                    return str(
+                        first.get("generated_text")
+                        or first.get("text")
+                        or first.get("answer")
+                        or ""
+                    )
+            return str(result)
+
+        self._analyzer = _analyze
+        return _analyze
+
+
+def _coerce_alignment_score(value: str | float | dict[str, Any]) -> float:
+    if isinstance(value, (int, float)):
+        return _clamp_score(float(value))
+    if isinstance(value, dict):
+        return _safe_float_score(value.get("score", 0.0))
+    try:
+        parsed = json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        match = re.search(
+            r"\b(?:score|alignment)\b[^0-9]*(0(?:\.\d+)?|1(?:\.0+)?)",
+            str(value),
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return 0.0
+        return _clamp_score(float(match.group(1)))
+    if isinstance(parsed, dict):
+        return _safe_float_score(parsed.get("score", 0.0))
+    if isinstance(parsed, (int, float)):
+        return _clamp_score(float(parsed))
+    return 0.0
+
+
+def _safe_float_score(value: Any) -> float:
+    try:
+        return _clamp_score(float(value))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _clamp_score(score: float) -> float:
+    return max(0.0, min(1.0, score))
