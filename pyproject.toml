@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "casecrawler"
 version = "0.1.0"
-description = "Medical knowledge ingestion engine for clinical case generation"
+description = "Synthetic healthcare data generation engine for AI training and evaluation"
 license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
@@ -35,6 +35,7 @@ all-llm = ["anthropic>=0.40", "openai>=1.50"]
 hf = ["huggingface_hub>=0.28", "datasets>=3.0", "transformers>=4.45"]
 imaging = ["diffusers>=0.31", "torch>=2.4", "pillow>=10.0", "open-clip-torch>=2.26"]
 parquet = ["pyarrow>=17.0", "pandas>=2.2"]
+synthea = []
 
 [project.scripts]
 casecrawler = "casecrawler.cli:cli"

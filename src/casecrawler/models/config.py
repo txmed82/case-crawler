@@ -60,6 +60,8 @@ class SyntheticConfig(BaseModel):
     ]
     validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
     imaging_backend: str = "placeholder"
+    synthea_executable: str | None = None
+    image_output_dir: str = "./data/images"
     export_formats: list[ExportFormat] = [ExportFormat.SFT_JSONL]
     max_api_generation_count: int = Field(default=100, ge=1)
     max_api_returned_records: int = Field(default=25, ge=0)

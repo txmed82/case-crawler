@@ -30,10 +30,15 @@ synthetic:
     - clinical_text
     - labs
     - vitals
+    - time_series
   validation_threshold: 0.8
   imaging_backend: "placeholder"
+  synthea_executable: null
+  image_output_dir: "./data/images"
   export_formats:
     - sft_jsonl
+    - chat_jsonl
+    - multimodal_jsonl
 
 api:
   host: "0.0.0.0"

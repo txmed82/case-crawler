@@ -1,13 +1,23 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+import json
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from casecrawler.config import get_config
+from casecrawler.export.fine_tuning import export_record
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
-from casecrawler.models.dataset import GenerationRequest
+from casecrawler.models.dataset import ExportFormat, GenerationRequest
 from casecrawler.storage.dataset_store import DatasetStore
 
 router = APIRouter()
+
+
+@router.get("/datasets")
+def list_datasets(limit: int = Query(100, ge=1, le=1000)):
+    store = DatasetStore()
+    return {"datasets": [manifest.model_dump() for manifest in store.list_manifests(limit=limit)]}
 
 
 @router.post("/datasets/generate")
@@ -33,3 +43,50 @@ async def generate_dataset(req: GenerationRequest):
         "total_records": len(result["records"]),
         "records": [record.model_dump() for record in returned_records],
     }
+
+
+@router.get("/datasets/{dataset_id}")
+def get_dataset(dataset_id: str, limit: int = Query(100, ge=1, le=1000)):
+    store = DatasetStore()
+    try:
+        manifest = store.get_manifest(dataset_id)
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail="dataset not found") from err
+    records = store.list_records(dataset_id=dataset_id, limit=limit)
+    return {
+        "manifest": manifest.model_dump(),
+        "records": [record.model_dump() for record in records],
+    }
+
+
+@router.get("/datasets/{dataset_id}/export")
+def export_dataset(
+    dataset_id: str,
+    export_format: ExportFormat = ExportFormat.SFT_JSONL,
+):
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+
+    def _iter_jsonl():
+        record_count = 0
+        byte_count = 0
+        try:
+            for record in store.iter_records(dataset_id=dataset_id):
+                line = json.dumps(export_record(record, export_format), sort_keys=True)
+                record_count += 1
+                byte_count += len(line.encode("utf-8")) + 1
+                yield line + "\n"
+        finally:
+            store.save_export_manifest(
+                dataset_id=dataset_id,
+                export_format=export_format,
+                file_path=(
+                    f"api://datasets/{dataset_id}/export?"
+                    f"export_format={export_format.value}"
+                ),
+                record_count=record_count,
+                metadata={"transport": "api", "jsonl_bytes": byte_count},
+            )
+
+    return StreamingResponse(_iter_jsonl(), media_type="application/x-ndjson")

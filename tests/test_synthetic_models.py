@@ -7,6 +7,7 @@ from casecrawler.models.synthetic import (
     ComplexityProfile,
     Encounter,
     LabObservation,
+    MedicationStatement,
     Modality,
     Provenance,
     SyntheticPatient,
@@ -64,6 +65,17 @@ def test_synthetic_record_with_text_labs_and_vitals():
                 effective_time="2026-05-06T08:05:00",
             )
         ],
+        medication_history=[
+            MedicationStatement(
+                name="Furosemide",
+                rxnorm="4603",
+                dose="40 mg",
+                route="oral",
+                frequency="daily",
+                status="active",
+                start="2026-04-01",
+            )
+        ],
         documents=[
             ClinicalDocument(
                 document_id="doc-1",
@@ -90,6 +102,7 @@ def test_synthetic_record_with_text_labs_and_vitals():
     assert record.record_id == "rec-1"
     assert record.complexity == ComplexityProfile.MODERATE
     assert record.labs[0].flag == "H"
+    assert record.medication_history[0].name == "Furosemide"
     assert record.validation.approved is True
 
 

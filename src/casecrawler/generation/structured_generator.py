@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from uuid import NAMESPACE_URL, uuid5
 
@@ -9,6 +10,7 @@ from casecrawler.models.synthetic import (
     Code,
     Encounter,
     LabObservation,
+    MedicationStatement,
     Provenance,
     SyntheticPatient,
     SyntheticRecord,
@@ -76,6 +78,7 @@ class StructuredGenerator:
                 VitalObservation(name="SBP", value=92, unit="mmHg", effective_time=now),
                 VitalObservation(name="SpO2", value=94, unit="%", effective_time=now),
             ],
+            medication_history=_medications_for_topic(req.topic, now[:10]),
             provenance=Provenance(generator="structured-generator", created_at=now),
         )
 
@@ -105,5 +108,50 @@ def _stable_record_seed(req: GenerationRequest, index: int) -> str:
             canonical_constraints["base_time"]
         )
     constraints = json.dumps(canonical_constraints, sort_keys=True, default=str)
-    modalities = ",".join(modality.value for modality in req.modalities)
+    modalities = ",".join(sorted(modality.value for modality in req.modalities))
     return f"{req.topic}:{req.complexity.value}:{modalities}:{constraints}:{index}"
+
+
+def _medications_for_topic(topic: str, start: str) -> list[MedicationStatement]:
+    normalized = re.sub(r"\s+", " ", topic.lower().replace("-", " ").replace("_", " "))
+    medications = []
+    if any(
+        term in normalized
+        for term in ["pain", "fever", "headache", "sepsis", "pneumonia", "infection"]
+    ):
+        medications.append(
+            MedicationStatement(
+                name="Acetaminophen",
+                rxnorm="161",
+                dose="650 mg",
+                route="oral",
+                frequency="every 6 hours as needed",
+                status="active",
+                start=start,
+            )
+        )
+    if any(term in normalized for term in ["sepsis", "pneumonia", "infection"]):
+        medications.append(
+            MedicationStatement(
+                name="Ceftriaxone",
+                rxnorm="2193",
+                dose="1 g",
+                route="IV",
+                frequency="daily",
+                status="active",
+                start=start,
+            )
+        )
+    if any(term in normalized for term in ["heart failure", "edema", "pulmonary edema"]):
+        medications.append(
+            MedicationStatement(
+                name="Furosemide",
+                rxnorm="4603",
+                dose="40 mg",
+                route="IV",
+                frequency="once",
+                status="active",
+                start=start,
+            )
+        )
+    return medications

@@ -201,6 +201,7 @@ export interface DatasetGenerateRequest {
   topic: string;
   count?: number;
   complexity?: "simple" | "moderate" | "complex" | "rare";
+  modalities?: SyntheticModality[];
 }
 
 export interface DatasetGenerateResponse {
@@ -209,6 +210,82 @@ export interface DatasetGenerateResponse {
   approved: number;
   total_records: number;
   records: Record<string, unknown>[];
+}
+
+export type SyntheticModality =
+  | "structured_ehr"
+  | "clinical_text"
+  | "labs"
+  | "vitals"
+  | "time_series"
+  | "imaging";
+
+export type ExportFormat =
+  | "raw_jsonl"
+  | "sft_jsonl"
+  | "chat_jsonl"
+  | "multimodal_jsonl"
+  | "rl_jsonl"
+  | "fhir_ndjson"
+  | "parquet";
+
+export interface DatasetManifest {
+  dataset_id: string;
+  name: string;
+  topic: string;
+  requested_count: number;
+  generated_count: number;
+  approved_count: number;
+  modalities: SyntheticModality[];
+  export_formats: ExportFormat[];
+  created_at: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface ClinicalDocument {
+  document_id: string;
+  note_type: string;
+  author_role: string;
+  timestamp: string;
+  clean_text: string;
+  messy_text?: string | null;
+  extracted_facts: Record<string, unknown>;
+}
+
+export interface SyntheticRecordPreview {
+  record_id: string;
+  dataset_id: string;
+  topic: string;
+  complexity: string;
+  modalities: SyntheticModality[];
+  patient: {
+    patient_id: string;
+    age: number;
+    sex: string;
+    demographics: Record<string, unknown>;
+    social_history: Record<string, unknown>;
+  };
+  labs: { name: string; value: number | string; unit: string; flag?: string | null }[];
+  vitals: { name: string; value: number; unit: string }[];
+  documents: ClinicalDocument[];
+  imaging: { image_id: string; modality: string; body_region: string; file_path?: string | null }[];
+  validation?: {
+    schema_score: number;
+    clinical_consistency_score: number;
+    privacy_score: number;
+    utility_score: number;
+    modality_alignment_score?: number | null;
+    approved: boolean;
+  } | null;
+}
+
+export interface DatasetListResponse {
+  datasets: DatasetManifest[];
+}
+
+export interface DatasetDetailResponse {
+  manifest: DatasetManifest;
+  records: SyntheticRecordPreview[];
 }
 
 async function readApiError(resp: Response): Promise<string> {
@@ -238,4 +315,24 @@ export async function startDatasetGenerate(
   });
   if (!resp.ok) throw new Error(`Failed to generate dataset: ${await readApiError(resp)}`);
   return resp.json();
+}
+
+export async function fetchDatasets(limit = 100): Promise<DatasetListResponse> {
+  const resp = await fetch(`${BASE}/datasets?limit=${limit}`);
+  if (!resp.ok) throw new Error(`Failed to fetch datasets: ${await readApiError(resp)}`);
+  return resp.json();
+}
+
+export async function fetchDataset(datasetId: string, limit = 25): Promise<DatasetDetailResponse> {
+  const resp = await fetch(`${BASE}/datasets/${datasetId}?limit=${limit}`);
+  if (!resp.ok) throw new Error(`Failed to fetch dataset: ${await readApiError(resp)}`);
+  return resp.json();
+}
+
+export function datasetExportUrl(
+  datasetId: string,
+  exportFormat: ExportFormat = "sft_jsonl"
+): string {
+  const qs = new URLSearchParams({ export_format: exportFormat });
+  return `${BASE}/datasets/${datasetId}/export?${qs}`;
 }
