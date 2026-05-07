@@ -63,6 +63,41 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     assert "Bundle" in (tmp_path / "synthetic.fhir.ndjson").read_text()
 
 
+def test_dataset_cli_generates_modalities_and_cohort_constraints(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generate = runner.invoke(
+        cli,
+        [
+            "generate-dataset",
+            "pulmonary embolism",
+            "--count",
+            "2",
+            "--modalities",
+            "structured_ehr,imaging,time_series",
+            "--age-min",
+            "50",
+            "--age-max",
+            "51",
+            "--sexes",
+            "female,male",
+            "--base-time",
+            "2026-02-03T04:05:06",
+        ],
+    )
+    match = re.search(r"Dataset: (ds-[0-9a-f-]+)", generate.output)
+    assert generate.exit_code == 0
+    assert match, f"Failed to find dataset id in output: {generate.output}"
+    records = DatasetStore().list_records(dataset_id=match.group(1), limit=10)
+
+    assert sorted(record.patient.age for record in records) == [50, 51]
+    assert sorted(record.patient.sex for record in records) == ["female", "male"]
+    assert Modality.IMAGING in records[0].modalities
+    assert records[0].imaging[0].modality == "CTA"
+    assert records[0].time_series
+
+
 def test_dataset_cli_benchmark_against_reference_dataset(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

@@ -106,6 +106,10 @@ casecrawler config
 # Synthetic healthcare dataset generation
 casecrawler generate-dataset "sepsis" --count 25
 casecrawler generate-dataset "heart failure exacerbation" --count 100 --complexity complex
+casecrawler generate-dataset "pulmonary embolism" \
+  --count 50 \
+  --modalities structured_ehr,clinical_text,labs,vitals,time_series,imaging \
+  --age-min 45 --age-max 85 --sexes female,male
 casecrawler reference-datasets
 casecrawler import-reference-dataset asclepius --dataset-id ds-asclepius-ref --limit 100
 casecrawler benchmark-dataset --dataset-id <dataset_id> --reference-dataset-id ds-asclepius-ref
