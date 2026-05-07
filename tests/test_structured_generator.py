@@ -74,3 +74,46 @@ def test_structured_generator_adds_furosemide_for_heart_failure_topic_variant():
     record = StructuredGenerator().generate("ds-one", req, 0)
 
     assert any(medication.name == "Furosemide" for medication in record.medication_history)
+
+
+def test_structured_generator_applies_age_and_sex_cohort_constraints():
+    req = GenerationRequest(
+        topic="sepsis",
+        cohort_constraints={
+            "age_min": 70,
+            "age_max": 72,
+            "sexes": ["female", "male", "other"],
+        },
+    )
+    generator = StructuredGenerator()
+
+    records = [generator.generate("ds-one", req, index) for index in range(4)]
+
+    assert [record.patient.age for record in records] == [70, 71, 72, 70]
+    assert [record.patient.sex for record in records] == [
+        "female",
+        "male",
+        "other",
+        "female",
+    ]
+    assert records[0].metadata["cohort_constraints"]["age_min"] == 70
+
+
+def test_structured_generator_rejects_invalid_age_constraints():
+    req = GenerationRequest(
+        topic="sepsis",
+        cohort_constraints={"age_min": 90, "age_max": 70},
+    )
+
+    with pytest.raises(ValueError, match="age_min must be <= age_max"):
+        StructuredGenerator().generate("ds-one", req, 0)
+
+
+def test_structured_generator_rejects_empty_sex_constraint():
+    req = GenerationRequest(
+        topic="sepsis",
+        cohort_constraints={"sexes": []},
+    )
+
+    with pytest.raises(ValueError, match="sexes must contain at least one value"):
+        StructuredGenerator().generate("ds-one", req, 0)

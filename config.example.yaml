@@ -33,6 +33,8 @@ synthetic:
     - time_series
   validation_threshold: 0.8
   clinical_text_backend: "deterministic" # deterministic or llm
+  # Per-request cohort_constraints can include:
+  # age_min, age_max, sexes, sex_cycle, and base_time.
   imaging_backend: "placeholder"
   imaging_model_profile: null
   diffusers_model_id: "stabilityai/stable-diffusion-2-1"
