@@ -70,15 +70,38 @@ def _slug(value: str) -> str:
 
 
 _LABEL_TERMS: dict[str, tuple[str, ...]] = {
+    "Appendicitis": (
+        "appendicitis",
+        "dilated appendix",
+        "appendiceal wall thickening",
+    ),
     "Atelectasis": ("atelectasis", "volume loss", "linear opacity"),
     "Cardiomegaly": ("cardiomegaly", "enlarged heart", "enlarged cardiac silhouette"),
     "Consolidation": ("consolidation", "airspace disease"),
+    "Fat stranding": (
+        "fat stranding",
+        "inflammatory stranding",
+        "perinephric stranding",
+    ),
     "Fracture": ("fracture",),
+    "Hyperinflation": ("hyperinflation", "hyperinflated lungs"),
+    "No acute intracranial hemorrhage": (
+        "no acute intracranial hemorrhage",
+        "no acute hemorrhage",
+    ),
     "Opacity": ("opacity", "infiltrate"),
+    "Perinephric stranding": ("perinephric stranding",),
+    "Peripancreatic inflammation": (
+        "peripancreatic inflammation",
+        "peripancreatic edema",
+        "pancreatitis",
+    ),
     "Pleural effusion": ("pleural effusion", "effusion"),
+    "Postictal seizure evaluation": ("postictal", "seizure evaluation"),
     "Pneumonia": ("pneumonia",),
     "Pneumothorax": ("pneumothorax",),
     "Pulmonary edema": ("pulmonary edema", "interstitial edema", "edema"),
+    "Pyelonephritis": ("pyelonephritis", "striated nephrogram"),
 }
 
 IMAGING_TEMPLATES: dict[str, ImagingTemplate] = {

@@ -178,10 +178,54 @@ def _topic_imaging_spec(topic: str) -> tuple[str, str, str]:
     normalized = topic.lower().replace("-", " ").replace("_", " ")
     if "heart failure" in normalized or "edema" in normalized:
         return "XR", "chest", "pulmonary edema cardiomegaly small pleural effusion"
+    if (
+        "asthma" in normalized
+        or "status asthmaticus" in normalized
+        or "bronchospasm" in normalized
+    ):
+        return "XR", "chest", "hyperinflation bronchial wall thickening asthma"
     if "pneumonia" in normalized:
         return "XR", "chest", "right lower lobe opacity pneumonia"
     if "pulmonary embolism" in normalized or "pulmonary embolus" in normalized:
         return "CTA", "chest", "pulmonary arterial filling defect pulmonary embolism"
+    if "pancreatitis" in normalized or "epigastric pain" in normalized:
+        return (
+            "CT",
+            "abdomen",
+            "acute pancreatitis peripancreatic inflammation fat stranding",
+        )
+    if (
+        "appendicitis" in normalized
+        or "right lower quadrant" in normalized
+        or "rlq pain" in normalized
+    ):
+        return (
+            "CT",
+            "abdomen",
+            "dilated appendix appendiceal wall thickening fat stranding",
+        )
+    if (
+        "pyelonephritis" in normalized
+        or "flank pain" in normalized
+        or "urinary tract infection" in normalized
+    ):
+        return (
+            "CT",
+            "abdomen",
+            "striated nephrogram perinephric stranding pyelonephritis",
+        )
+    if "meningitis" in normalized or "photophobia" in normalized:
+        return "CT", "head", "noncontrast head CT no acute hemorrhage meningitis screen"
+    if (
+        "seizure" in normalized
+        or "status epilepticus" in normalized
+        or "postictal" in normalized
+    ):
+        return (
+            "CT",
+            "head",
+            "noncontrast head CT no acute hemorrhage postictal seizure evaluation",
+        )
     if "sepsis" in normalized or "infection" in normalized:
         return "XR", "chest", "portable chest x-ray possible lower lobe opacity"
     if "stroke" in normalized:
