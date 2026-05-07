@@ -2,7 +2,7 @@ import pytest
 
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.dataset import GenerationRequest
-from casecrawler.models.synthetic import ImagingAsset, Modality
+from casecrawler.models.synthetic import Code, ImagingAsset, Modality
 from casecrawler.validation.synthetic_validator import SyntheticValidator
 
 
@@ -32,6 +32,13 @@ class FakeImagingGenerator:
             prompt=prompt,
             file_path="fake.png",
             report_text=f"Synthetic XR image for {prompt}",
+            labels=[
+                Code(
+                    system="synthetic",
+                    code="pneumonia",
+                    display="Pneumonia",
+                )
+            ],
             generation_backend="diffusers:test",
         )
 
@@ -55,6 +62,26 @@ async def test_synthetic_pipeline_uses_configured_diffusers_backend(tmp_path):
 
     assert result["records"][0].imaging[0].generation_backend == "diffusers:test"
     assert imaging_generator.diffusers_prompts[0][0] == str(tmp_path)
+    assert "right lower lobe opacity" in imaging_generator.diffusers_prompts[0][1]
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_placeholder_imaging_uses_topic_aware_labels(tmp_path):
+    pipeline = SyntheticPipeline(
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(topic="heart failure", count=1, modalities=[Modality.IMAGING])
+    )
+
+    image = result["records"][0].imaging[0]
+
+    assert "pulmonary edema" in image.prompt
+    assert "Pulmonary edema" in image.report_text
+    assert any(label.display == "Pulmonary edema" for label in image.labels)
 
 
 @pytest.mark.asyncio
