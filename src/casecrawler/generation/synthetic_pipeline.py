@@ -51,7 +51,7 @@ class SyntheticPipeline:
             imaging_model_profile=config.synthetic.imaging_model_profile,
         )
         self._modality_planner = modality_planner or ModalityPlanner()
-        self._validator = validator or SyntheticValidator()
+        self._validator = validator
         self._image_output_dir = image_output_dir or config.synthetic.image_output_dir
         self._image_backend = image_backend or config.synthetic.imaging_backend
 
@@ -82,7 +82,7 @@ class SyntheticPipeline:
                 record = record.model_copy(update={"imaging": [*record.imaging, *images]})
             if Modality.CLINICAL_TEXT in plan.modalities:
                 record = await self._text_generator.add_documents_async(record)
-            validation = self._validator.validate(record)
+            validation = self._validator_for(req).validate(record)
             record = record.model_copy(update={"validation": validation})
             records.append(record)
             if validation.approved:
@@ -94,6 +94,11 @@ class SyntheticPipeline:
             "plan": plan,
             "records": records,
         }
+
+    def _validator_for(self, req: GenerationRequest) -> SyntheticValidator:
+        if self._validator is not None:
+            return self._validator
+        return SyntheticValidator(threshold=req.validation_threshold)
 
     def _generate_image_asset(self, request: ImagingRequest):
         if self._image_backend == "diffusers":

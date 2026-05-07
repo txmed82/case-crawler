@@ -80,6 +80,39 @@ async def test_synthetic_pipeline_uses_configured_diffusers_backend(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_synthetic_pipeline_honors_request_validation_threshold(tmp_path):
+    pipeline = SyntheticPipeline(
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    relaxed = await pipeline.generate(
+        GenerationRequest(
+            topic="pneumonia",
+            count=1,
+            modalities=[Modality.IMAGING],
+            validation_threshold=0.3,
+        )
+    )
+    strict = await pipeline.generate(
+        GenerationRequest(
+            topic="pneumonia",
+            count=1,
+            modalities=[Modality.IMAGING],
+            validation_threshold=0.8,
+        )
+    )
+
+    assert relaxed["records"][0].validation.modality_alignment_score < 0.8
+    assert relaxed["approved"] == 1
+    assert strict["approved"] == 0
+    assert any(
+        issue.field == "imaging.alignment"
+        for issue in strict["records"][0].validation.issues
+    )
+
+
+@pytest.mark.asyncio
 async def test_synthetic_pipeline_placeholder_imaging_uses_topic_aware_labels(tmp_path):
     pipeline = SyntheticPipeline(
         validator=SyntheticValidator(),
