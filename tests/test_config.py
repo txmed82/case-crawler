@@ -13,6 +13,7 @@ def test_load_default_config():
     assert config.synthetic.imaging_model_profile is None
     assert config.synthetic.diffusers_model_id == "stabilityai/stable-diffusion-2-1"
     assert config.synthetic.time_series_backend == "deterministic"
+    assert not hasattr(config, "generation")
 
 
 def test_load_config_from_yaml(tmp_path):
