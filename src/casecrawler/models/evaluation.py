@@ -13,9 +13,16 @@ class CohortProfile(BaseModel):
     sex_counts: dict[str, int] = Field(default_factory=dict)
     mean_document_chars: float | None = None
     note_type_counts: dict[str, int] = Field(default_factory=dict)
+    document_author_role_counts: dict[str, int] = Field(default_factory=dict)
+    messy_document_rate: float | None = None
     lab_name_counts: dict[str, int] = Field(default_factory=dict)
+    lab_flag_counts: dict[str, int] = Field(default_factory=dict)
+    lab_numeric_summaries: dict[str, dict[str, float | int]] = Field(default_factory=dict)
     vital_name_counts: dict[str, int] = Field(default_factory=dict)
+    vital_numeric_summaries: dict[str, dict[str, float | int]] = Field(default_factory=dict)
     medication_name_counts: dict[str, int] = Field(default_factory=dict)
+    medication_route_counts: dict[str, int] = Field(default_factory=dict)
+    medication_status_counts: dict[str, int] = Field(default_factory=dict)
     time_series_channel_counts: dict[str, int] = Field(default_factory=dict)
     mean_time_series_points: float | None = None
     mean_time_series_duration_hours: float | None = None

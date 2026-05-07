@@ -54,19 +54,62 @@ class DatasetBenchmark:
                 set(reference_profile.note_type_counts),
             ),
             _jaccard_metric(
+                "document_author_role_overlap",
+                set(generated_profile.document_author_role_counts),
+                set(reference_profile.document_author_role_counts),
+            ),
+            _distribution_metric(
+                "document_author_role_distribution",
+                generated_profile.document_author_role_counts,
+                reference_profile.document_author_role_counts,
+            ),
+            _closeness_metric(
+                "messy_document_rate",
+                generated_profile.messy_document_rate,
+                reference_profile.messy_document_rate,
+                tolerance=0.5,
+            ),
+            _jaccard_metric(
                 "lab_name_overlap",
                 set(generated_profile.lab_name_counts),
                 set(reference_profile.lab_name_counts),
+            ),
+            _distribution_metric(
+                "lab_flag_distribution",
+                generated_profile.lab_flag_counts,
+                reference_profile.lab_flag_counts,
+            ),
+            *_numeric_summary_metrics(
+                prefix="lab_value_mean",
+                generated_summaries=generated_profile.lab_numeric_summaries,
+                reference_summaries=reference_profile.lab_numeric_summaries,
+                tolerance=50.0,
             ),
             _jaccard_metric(
                 "vital_name_overlap",
                 set(generated_profile.vital_name_counts),
                 set(reference_profile.vital_name_counts),
             ),
+            *_numeric_summary_metrics(
+                prefix="vital_value_mean",
+                generated_summaries=generated_profile.vital_numeric_summaries,
+                reference_summaries=reference_profile.vital_numeric_summaries,
+                tolerance=25.0,
+            ),
             _jaccard_metric(
                 "medication_name_overlap",
                 set(generated_profile.medication_name_counts),
                 set(reference_profile.medication_name_counts),
+            ),
+            _distribution_metric(
+                "medication_route_distribution",
+                generated_profile.medication_route_counts,
+                reference_profile.medication_route_counts,
+            ),
+            _distribution_metric(
+                "medication_status_distribution",
+                generated_profile.medication_status_counts,
+                reference_profile.medication_status_counts,
             ),
             _jaccard_metric(
                 "time_series_channel_overlap",
@@ -142,9 +185,13 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     modality_counts: Counter[str] = Counter()
     sex_counts: Counter[str] = Counter()
     note_type_counts: Counter[str] = Counter()
+    document_author_role_counts: Counter[str] = Counter()
     lab_name_counts: Counter[str] = Counter()
+    lab_flag_counts: Counter[str] = Counter()
     vital_name_counts: Counter[str] = Counter()
     medication_name_counts: Counter[str] = Counter()
+    medication_route_counts: Counter[str] = Counter()
+    medication_status_counts: Counter[str] = Counter()
     time_series_channel_counts: Counter[str] = Counter()
     imaging_modality_counts: Counter[str] = Counter()
     imaging_body_region_counts: Counter[str] = Counter()
@@ -152,6 +199,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     imaging_label_pair_counts: Counter[str] = Counter()
     ages: list[int] = []
     document_lengths: list[int] = []
+    messy_document_values: list[int] = []
+    lab_numeric_values: dict[str, list[float]] = {}
+    vital_numeric_values: dict[str, list[float]] = {}
     time_series_point_counts: list[int] = []
     time_series_durations: list[float] = []
     approved_values: list[bool] = []
@@ -163,13 +213,27 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             modality_counts[modality.value] += 1
         for document in record.documents:
             note_type_counts[document.note_type] += 1
+            document_author_role_counts[document.author_role or "unknown"] += 1
             document_lengths.append(len(document.clean_text))
+            messy_document_values.append(1 if document.messy_text else 0)
         for lab in record.labs:
             lab_name_counts[lab.name] += 1
+            if lab.flag:
+                lab_flag_counts[lab.flag] += 1
+            if isinstance(lab.value, (int, float)):
+                lab_numeric_values.setdefault(_metric_key(lab.name), []).append(
+                    float(lab.value)
+                )
         for vital in record.vitals:
             vital_name_counts[vital.name] += 1
+            vital_numeric_values.setdefault(_metric_key(vital.name), []).append(
+                float(vital.value)
+            )
         for medication in record.medication_history:
             medication_name_counts[medication.name] += 1
+            if medication.route:
+                medication_route_counts[medication.route] += 1
+            medication_status_counts[medication.status or "unknown"] += 1
         for channel in record.time_series:
             time_series_channel_counts[channel.name] += 1
             time_series_point_counts.append(len(channel.points))
@@ -202,9 +266,16 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         sex_counts=dict(sorted(sex_counts.items())),
         mean_document_chars=_mean(document_lengths),
         note_type_counts=dict(sorted(note_type_counts.items())),
+        document_author_role_counts=dict(sorted(document_author_role_counts.items())),
+        messy_document_rate=_mean(messy_document_values),
         lab_name_counts=dict(sorted(lab_name_counts.items())),
+        lab_flag_counts=dict(sorted(lab_flag_counts.items())),
+        lab_numeric_summaries=_numeric_summaries(lab_numeric_values),
         vital_name_counts=dict(sorted(vital_name_counts.items())),
+        vital_numeric_summaries=_numeric_summaries(vital_numeric_values),
         medication_name_counts=dict(sorted(medication_name_counts.items())),
+        medication_route_counts=dict(sorted(medication_route_counts.items())),
+        medication_status_counts=dict(sorted(medication_status_counts.items())),
         time_series_channel_counts=dict(sorted(time_series_channel_counts.items())),
         mean_time_series_points=_mean(time_series_point_counts),
         mean_time_series_duration_hours=_mean_float(time_series_durations),
@@ -310,6 +381,28 @@ def _distribution_metric(
     )
 
 
+def _numeric_summary_metrics(
+    *,
+    prefix: str,
+    generated_summaries: dict[str, dict[str, float | int]],
+    reference_summaries: dict[str, dict[str, float | int]],
+    tolerance: float,
+) -> list[BenchmarkMetric]:
+    metrics: list[BenchmarkMetric] = []
+    for name in sorted(set(generated_summaries) | set(reference_summaries)):
+        generated = generated_summaries.get(name, {}).get("mean")
+        reference = reference_summaries.get(name, {}).get("mean")
+        metrics.append(
+            _closeness_metric(
+                f"{prefix}:{name}",
+                float(generated) if generated is not None else None,
+                float(reference) if reference is not None else None,
+                tolerance=tolerance,
+            )
+        )
+    return metrics
+
+
 def _warnings(
     generated_profile: CohortProfile,
     reference_profile: CohortProfile,
@@ -334,6 +427,20 @@ def _mean_float(values: list[float]) -> float | None:
     if not values:
         return None
     return sum(values) / len(values)
+
+
+def _numeric_summaries(values_by_name: dict[str, list[float]]) -> dict[str, dict[str, float | int]]:
+    summaries: dict[str, dict[str, float | int]] = {}
+    for name, values in sorted(values_by_name.items()):
+        if not values:
+            continue
+        summaries[name] = {
+            "count": len(values),
+            "max": round(max(values), 4),
+            "mean": round(sum(values) / len(values), 4),
+            "min": round(min(values), 4),
+        }
+    return summaries
 
 
 def _rounded(value: float | None) -> float | None:
@@ -364,4 +471,8 @@ def _parse_datetime(value: str) -> datetime | None:
 
 def _imaging_label_key(display: str, code: str) -> str:
     value = display or code.replace("_", " ")
+    return " ".join(value.lower().replace("_", " ").split())
+
+
+def _metric_key(value: str) -> str:
     return " ".join(value.lower().replace("_", " ").split())
