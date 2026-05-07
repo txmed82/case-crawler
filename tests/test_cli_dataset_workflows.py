@@ -183,6 +183,9 @@ def test_dataset_cli_imports_hf_reference_dataset(tmp_path, monkeypatch):
 
     assert listed.exit_code == 0
     assert "asclepius" in listed.output
+    assert "augmented_clinical_notes" in listed.output
+    assert "clinical_notes_to_fhir" in listed.output
+    assert "radiology_report_consistency" in listed.output
     assert imported.exit_code == 0
     assert "Imported 1 reference record(s)" in imported.output
     assert store.dataset_exists("ds-hf-reference")

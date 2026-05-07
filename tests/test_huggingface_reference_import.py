@@ -22,6 +22,27 @@ def test_reference_dataset_catalog_includes_asclepius_license():
     assert asclepius.license == "cc-by-nc-sa-4.0"
 
 
+def test_reference_dataset_catalog_includes_clinical_note_fhir_and_radiology_benchmarks():
+    catalog = {key: spec for key, spec in REFERENCE_DATASETS.items()}
+
+    assert catalog["augmented_clinical_notes"].repo_id == "AGBonnet/augmented-clinical-notes"
+    assert catalog["augmented_clinical_notes"].note_field == "full_note"
+    assert catalog["augmented_clinical_notes"].answer_field == "summary"
+    assert catalog["augmented_clinical_notes"].license == "mit"
+    assert catalog["clinical_notes_to_fhir"].repo_id == "ai-galileo/clinical-notes-to-fhir"
+    assert catalog["clinical_notes_to_fhir"].note_field == "note"
+    assert catalog["clinical_notes_to_fhir"].answer_field == "fhir_bundle"
+    assert catalog["clinical_notes_to_fhir"].license == "apache-2.0"
+    assert (
+        catalog["radiology_report_consistency"].repo_id
+        == "ClarusC64/image-report-consistency-radiology-v01"
+    )
+    assert catalog["radiology_report_consistency"].note_field == "report_excerpt"
+    assert catalog["radiology_report_consistency"].question_field == "imaging_findings"
+    assert catalog["radiology_report_consistency"].answer_field == "expected_decision"
+    assert catalog["radiology_report_consistency"].license == "mit"
+
+
 def test_asclepius_row_maps_to_synthetic_record():
     row = {
         "patient_id": 42,
@@ -47,6 +68,64 @@ def test_asclepius_row_maps_to_synthetic_record():
     assert record.metadata["reference_split"] == "validation"
     assert record.provenance.source_refs[0]["split"] == "validation"
     assert record.modalities == [Modality.CLINICAL_TEXT]
+
+
+def test_fhir_reference_row_preserves_bundle_and_validation_fields():
+    row = {
+        "exampleId": "10004",
+        "difficulty": "easy",
+        "scenario": "Annual check-up with diabetes family history.",
+        "note": "Patient: Jane Doe, 48-year-old female. HbA1c ordered.",
+        "fhir_bundle": '{"resourceType":"Bundle","type":"collection"}',
+        "valid": True,
+        "validation_errors": None,
+    }
+
+    record = reference_row_to_record(
+        row,
+        dataset_id="ds-fhir",
+        spec=REFERENCE_DATASETS["clinical_notes_to_fhir"],
+    )
+
+    assert record.patient.age == 48
+    assert record.patient.sex == "female"
+    assert record.documents[0].extracted_facts["instruction"] == (
+        "Annual check-up with diabetes family history."
+    )
+    assert record.documents[0].extracted_facts["answer"] == (
+        '{"resourceType":"Bundle","type":"collection"}'
+    )
+    assert record.topic == "easy"
+    assert record.metadata["reference_dataset"] == "ai-galileo/clinical-notes-to-fhir"
+
+
+def test_radiology_consistency_reference_row_maps_image_evidence_to_instruction():
+    row = {
+        "case_id": "rad-1",
+        "modality": "XR",
+        "study": "chest radiograph",
+        "imaging_findings": "Small left pleural effusion without pneumothorax.",
+        "report_excerpt": "The report says no pleural effusion.",
+        "consistency_issue": "contradiction",
+        "expected_decision": "INCONSISTENT",
+        "expected_rationale_bullets": "effusion present|report denies effusion",
+    }
+
+    record = reference_row_to_record(
+        row,
+        dataset_id="ds-rad",
+        spec=REFERENCE_DATASETS["radiology_report_consistency"],
+    )
+
+    assert record.documents[0].clean_text == "The report says no pleural effusion."
+    assert record.documents[0].extracted_facts["instruction"] == (
+        "Small left pleural effusion without pneumothorax."
+    )
+    assert record.documents[0].extracted_facts["answer"] == "INCONSISTENT"
+    assert record.topic == "contradiction"
+    assert record.metadata["reference_dataset"] == (
+        "ClarusC64/image-report-consistency-radiology-v01"
+    )
 
 
 def test_import_reference_rows_honors_limit_and_stable_ids():

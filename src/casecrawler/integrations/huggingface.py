@@ -61,6 +61,48 @@ REFERENCE_DATASETS: dict[str, HuggingFaceReferenceDataset] = {
         patient_id_field=None,
         description="Fully synthetic inpatient trajectories for progress note generation benchmarking.",
     ),
+    "augmented_clinical_notes": HuggingFaceReferenceDataset(
+        repo_id="AGBonnet/augmented-clinical-notes",
+        split="train",
+        license="mit",
+        note_field="full_note",
+        question_field="conversation",
+        answer_field="summary",
+        task_field=None,
+        patient_id_field="idx",
+        description=(
+            "Clinical note, synthetic dialogue, and structured patient-summary "
+            "triplets for clinical note generation and extraction benchmarking."
+        ),
+    ),
+    "clinical_notes_to_fhir": HuggingFaceReferenceDataset(
+        repo_id="ai-galileo/clinical-notes-to-fhir",
+        split="train",
+        license="apache-2.0",
+        note_field="note",
+        question_field="scenario",
+        answer_field="fhir_bundle",
+        task_field="difficulty",
+        patient_id_field="exampleId",
+        description=(
+            "Synthetic clinical-note-to-FHIR preference corpus with validation "
+            "signals for extraction and structured-output benchmarking."
+        ),
+    ),
+    "radiology_report_consistency": HuggingFaceReferenceDataset(
+        repo_id="ClarusC64/image-report-consistency-radiology-v01",
+        split="train",
+        license="mit",
+        note_field="report_excerpt",
+        question_field="imaging_findings",
+        answer_field="expected_decision",
+        task_field="consistency_issue",
+        patient_id_field="case_id",
+        description=(
+            "Synthetic radiology report-consistency evaluation rows for "
+            "image-evidence and report-language alignment benchmarking."
+        ),
+    ),
 }
 
 
