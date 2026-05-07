@@ -269,20 +269,68 @@ def serve() -> None:
 @click.argument("topic")
 @click.option("--count", default=1, type=int, help="Number of synthetic records to generate")
 @click.option(
+    "--modalities",
+    default=None,
+    help=(
+        "Comma-separated modalities: structured_ehr,clinical_text,labs,vitals,"
+        "time_series,imaging"
+    ),
+)
+@click.option(
     "--complexity",
     default="moderate",
     type=click.Choice(["simple", "moderate", "complex", "rare"]),
     help="Synthetic record complexity profile",
 )
-def generate_dataset(topic: str, count: int, complexity: str) -> None:
+@click.option("--age-min", default=None, type=int, help="Minimum generated patient age")
+@click.option("--age-max", default=None, type=int, help="Maximum generated patient age")
+@click.option("--sexes", default=None, help="Comma-separated sex cycle")
+@click.option("--base-time", default=None, help="ISO-8601 base timestamp")
+def generate_dataset(
+    topic: str,
+    count: int,
+    modalities: str | None,
+    complexity: str,
+    age_min: int | None,
+    age_max: int | None,
+    sexes: str | None,
+    base_time: str | None,
+) -> None:
     """Generate synthetic healthcare records for AI training."""
     from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
     from casecrawler.models.dataset import GenerationRequest
-    from casecrawler.models.synthetic import ComplexityProfile
+    from casecrawler.models.synthetic import ComplexityProfile, Modality
     from casecrawler.storage.dataset_store import DatasetStore
 
     complexity_profile = ComplexityProfile(complexity)
-    req = GenerationRequest(topic=topic, count=count, complexity=complexity_profile)
+    cohort_constraints = {}
+    if age_min is not None:
+        cohort_constraints["age_min"] = age_min
+    if age_max is not None:
+        cohort_constraints["age_max"] = age_max
+    if sexes:
+        cohort_constraints["sexes"] = [
+            value.strip() for value in sexes.split(",") if value.strip()
+        ]
+    if base_time:
+        cohort_constraints["base_time"] = base_time
+    try:
+        selected_modalities = (
+            [Modality(value.strip()) for value in modalities.split(",") if value.strip()]
+            if modalities
+            else None
+        )
+        req = GenerationRequest(
+            topic=topic,
+            count=count,
+            complexity=complexity_profile,
+            modalities=selected_modalities
+            if selected_modalities is not None
+            else GenerationRequest(topic=topic).modalities,
+            cohort_constraints=cohort_constraints,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
     result = asyncio.run(SyntheticPipeline().generate(req))
     store = DatasetStore()
     for record in result["records"]:
