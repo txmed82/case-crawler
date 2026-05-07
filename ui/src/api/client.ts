@@ -107,6 +107,7 @@ export interface DatasetGenerateRequest {
   count?: number;
   complexity?: "simple" | "moderate" | "complex" | "rare";
   modalities?: SyntheticModality[];
+  export_formats?: ExportFormat[];
   cohort_constraints?: Record<string, unknown>;
 }
 

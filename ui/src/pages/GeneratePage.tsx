@@ -7,6 +7,7 @@ import {
 } from "../api/client";
 import type {
   DatasetGenerateResponse,
+  ExportFormat,
   ReferenceDatasetCatalogItem,
   ReferenceDatasetImportResponse,
   SyntheaImportResponse,
@@ -20,6 +21,18 @@ const modalityOptions: { value: SyntheticModality; label: string }[] = [
   { value: "vitals", label: "Vitals" },
   { value: "time_series", label: "Time series" },
   { value: "imaging", label: "Imaging" },
+];
+
+const exportFormatOptions: { value: ExportFormat; label: string }[] = [
+  { value: "sft_jsonl", label: "SFT" },
+  { value: "chat_jsonl", label: "Chat" },
+  { value: "tool_call_jsonl", label: "Tool calls" },
+  { value: "multimodal_jsonl", label: "Multimodal" },
+  { value: "dpo_jsonl", label: "DPO" },
+  { value: "rl_jsonl", label: "RL" },
+  { value: "fhir_ndjson", label: "FHIR" },
+  { value: "parquet", label: "Parquet" },
+  { value: "raw_jsonl", label: "Raw" },
 ];
 
 const sexOptions = ["female", "male", "other"] as const;
@@ -40,6 +53,7 @@ export default function GeneratePage() {
     "labs",
     "vitals",
   ]);
+  const [exportFormats, setExportFormats] = useState<ExportFormat[]>(["sft_jsonl"]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<DatasetGenerateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +102,9 @@ export default function GeneratePage() {
   }, []);
 
   const handleGenerate = async () => {
-    if (!topic.trim() || modalities.length === 0 || isGenerating) return;
+    if (!topic.trim() || modalities.length === 0 || exportFormats.length === 0 || isGenerating) {
+      return;
+    }
     if (!Number.isInteger(count) || count < 1) {
       setError("Record count must be a positive integer.");
       return;
@@ -125,6 +141,7 @@ export default function GeneratePage() {
         complexity,
         count,
         modalities,
+        export_formats: exportFormats,
         ...(Object.keys(cohortConstraints).length > 0
           ? { cohort_constraints: cohortConstraints }
           : {}),
@@ -148,6 +165,14 @@ export default function GeneratePage() {
   const toggleSex = (sex: SexOption) => {
     setSexes((current) =>
       current.includes(sex) ? current.filter((item) => item !== sex) : [...current, sex]
+    );
+  };
+
+  const toggleExportFormat = (format: ExportFormat) => {
+    setExportFormats((current) =>
+      current.includes(format)
+        ? current.filter((item) => item !== format)
+        : [...current, format]
     );
   };
 
@@ -358,12 +383,35 @@ export default function GeneratePage() {
           })}
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-sm font-medium text-gray-700">Exports</span>
+          {exportFormatOptions.map((option) => {
+            const selected = exportFormats.includes(option.value);
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => toggleExportFormat(option.value)}
+                aria-pressed={selected}
+                className={`rounded-md border px-3 py-2 text-sm ${
+                  selected
+                    ? "border-gray-900 bg-gray-900 text-white"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+
         <div>
           <button
             onClick={handleGenerate}
             disabled={
               !topic.trim() ||
               modalities.length === 0 ||
+              exportFormats.length === 0 ||
               !Number.isInteger(count) ||
               count < 1 ||
               isGenerating
