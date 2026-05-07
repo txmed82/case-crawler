@@ -421,11 +421,31 @@ function QualityPanel({
             <Metric label="Approval" value={`${Math.round(quality.approval_rate * 100)}%`} />
             <Metric label="Blockers" value={quality.blocking_issue_count} />
           </div>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <Metric label="Documents" value={quality.artifact_counts.documents ?? 0} />
+            <Metric label="Labs" value={quality.artifact_counts.labs ?? 0} />
+            <Metric label="Series" value={quality.artifact_counts.time_series_channels ?? 0} />
+            <Metric label="Images" value={quality.artifact_counts.imaging_assets ?? 0} />
+          </div>
           {quality.recommendations.length > 0 && (
             <div className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800">
               {quality.recommendations.slice(0, 3).map((recommendation) => (
                 <p key={recommendation}>{recommendation}</p>
               ))}
+            </div>
+          )}
+          {Object.keys(quality.note_type_counts).length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(quality.note_type_counts)
+                .slice(0, 6)
+                .map(([noteType, count]) => (
+                  <span
+                    key={noteType}
+                    className="rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-700"
+                  >
+                    {noteType.replace("_", " ")}: {count}
+                  </span>
+                ))}
             </div>
           )}
           {Object.keys(quality.issue_counts_by_field).length > 0 && (
