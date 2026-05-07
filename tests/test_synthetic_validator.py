@@ -154,6 +154,32 @@ def test_validator_rejects_implausible_respiratory_rate_and_blood_pressure():
     assert any(issue.field == "vitals.DBP" for issue in report.issues)
 
 
+def test_validator_rejects_invalid_medication_history_entries():
+    bad = _record(
+        medication_history=[
+            MedicationStatement(
+                name="",
+                route="intravenous",
+                status="active",
+                start="2026-05-06",
+            ),
+            MedicationStatement(
+                name="Ceftriaxone",
+                route="telepathy",
+                status="dispensed-maybe",
+                start="2026-05-06",
+            ),
+        ]
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "medication_history.name" for issue in report.issues)
+    assert any(issue.field == "medication_history.route" for issue in report.issues)
+    assert any(issue.field == "medication_history.status" for issue in report.issues)
+
+
 def test_validator_rejects_phi_like_text():
     bad = _record(metadata={"free_text": "Call patient at 555-123-4567 tomorrow."})
 
