@@ -37,7 +37,7 @@ docker compose up
 
 The synthetic dataset path produces `SyntheticRecord` objects with:
 
-- Structured patient demographics and encounters
+- Structured patient demographics, encounters, diagnoses, and medication history
 - Diagnoses and procedure/code slots
 - Labs with units, reference ranges, flags, and timestamps
 - Vitals with timestamps
@@ -47,7 +47,7 @@ The synthetic dataset path produces `SyntheticRecord` objects with:
 - Provenance metadata
 - Validation reports with schema, clinical consistency, privacy, utility, and modality-alignment scores
 
-The legacy case-generation path still exists for backward compatibility, but new work should use `generate-dataset` and the dataset APIs.
+Older case-generation internals remain only for backward compatibility. New usage should use `generate-dataset`, dataset quality reports, benchmarks, and export profiles.
 
 ## Data Sources
 
@@ -132,10 +132,6 @@ casecrawler export-dataset --dataset-id <dataset_id> --format dpo_jsonl --output
 casecrawler export-dataset --dataset-id <dataset_id> --format rl_jsonl --output episodes.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format fhir_ndjson --output fhir.ndjson
 casecrawler export-dataset --dataset-id <dataset_id> --format parquet --output records.parquet
-
-# Legacy case generation remains available
-casecrawler generate "subarachnoid hemorrhage" --difficulty resident
-casecrawler cases export --output legacy_cases.jsonl
 ```
 
 Benchmark reports compare generated cohorts to stored reference datasets across
@@ -160,9 +156,6 @@ Start the server with `casecrawler serve` or `docker compose up`.
 | `/api/datasets/{dataset_id}/benchmark` | GET | Compare a generated dataset to a reference dataset |
 | `/api/datasets/{dataset_id}/quality` | GET | Summarize validation and fine-tuning export readiness |
 | `/api/datasets/{dataset_id}/export` | GET | Stream fine-tuning/export records |
-| `/api/generate` | POST | Legacy clinical case generation |
-| `/api/cases` | GET | Legacy case list/filter |
-| `/api/cases/export` | GET | Legacy case JSONL stream |
 
 ## Configuration
 
@@ -207,12 +200,6 @@ llm:
   provider: "anthropic"
   model: "claude-sonnet-4-6"
 
-generation:
-  max_retries: 3
-  review_threshold: 0.7
-  default_difficulty: "resident"
-  retriever_chunk_count: 25
-
 synthetic:
   clinical_text_backend: "deterministic" # or "llm"
   imaging_backend: "placeholder"
@@ -246,9 +233,9 @@ ruff check src tests
 src/casecrawler/
   sources/       # Public and paid medical source adapters
   pipeline/      # Chunking, tagging, embedding, Chroma storage
-  generation/    # Legacy cases plus synthetic dataset generators
+  generation/    # Synthetic dataset generators and backend adapters
   validation/    # Synthetic record validation
   storage/       # SQLite stores
-  export/        # Fine-tuning and legacy exporters
+  export/        # Fine-tuning and benchmark-ready export profiles
   api/           # FastAPI routes
 ```
