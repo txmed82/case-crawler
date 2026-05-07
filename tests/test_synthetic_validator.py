@@ -122,6 +122,38 @@ def test_validator_rejects_invalid_lab_reference_ranges_and_flag_direction():
     assert sum(issue.field == "labs.flag_direction" for issue in report.issues) == 2
 
 
+def test_validator_rejects_implausible_respiratory_rate_and_blood_pressure():
+    bad = _record(
+        vitals=[
+            VitalObservation(
+                name="Respiratory rate",
+                value=90,
+                unit="/min",
+                effective_time="2026-05-06T08:00:00",
+            ),
+            VitalObservation(
+                name="SBP",
+                value=310,
+                unit="mmHg",
+                effective_time="2026-05-06T08:01:00",
+            ),
+            VitalObservation(
+                name="DBP",
+                value=-5,
+                unit="mmHg",
+                effective_time="2026-05-06T08:02:00",
+            ),
+        ]
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "vitals.respiratory_rate" for issue in report.issues)
+    assert any(issue.field == "vitals.SBP" for issue in report.issues)
+    assert any(issue.field == "vitals.DBP" for issue in report.issues)
+
+
 def test_validator_rejects_phi_like_text():
     bad = _record(metadata={"free_text": "Call patient at 555-123-4567 tomorrow."})
 

@@ -206,6 +206,41 @@ def validate_vitals(record: SyntheticRecord) -> list[ValidationIssue]:
                     message="Temperature is outside a plausible clinical range.",
                 )
             )
+        if normalized_name in {"respiratory-rate", "rr"} and not 0 < vital.value < 80:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.VITALS,
+                    field="vitals.respiratory_rate",
+                    message="Respiratory rate is outside a plausible clinical range.",
+                )
+            )
+        if normalized_name in {
+            "sbp",
+            "systolic-bp",
+            "systolic-blood-pressure",
+        } and not 40 <= vital.value <= 300:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.VITALS,
+                    field="vitals.SBP",
+                    message="Systolic blood pressure is outside a plausible clinical range.",
+                )
+            )
+        if normalized_name in {
+            "dbp",
+            "diastolic-bp",
+            "diastolic-blood-pressure",
+        } and not 20 <= vital.value <= 180:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.VITALS,
+                    field="vitals.DBP",
+                    message="Diastolic blood pressure is outside a plausible clinical range.",
+                )
+            )
     return issues
 
 
