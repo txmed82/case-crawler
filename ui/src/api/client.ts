@@ -260,6 +260,15 @@ export interface DatasetCapabilitiesResponse {
     reference: string;
     notes: string;
   }>;
+  clinical_profiles: Array<{
+    key: string;
+    keywords: string[];
+    diagnosis_display: string;
+    diagnosis_code: string;
+    lab_names: string[];
+    vital_names: string[];
+    medication_names: string[];
+  }>;
   validators: Array<{
     key: string;
     requires: string[];

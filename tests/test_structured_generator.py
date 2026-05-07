@@ -1,6 +1,9 @@
 import pytest
 
-from casecrawler.generation.structured_generator import StructuredGenerator
+from casecrawler.generation.structured_generator import (
+    StructuredGenerator,
+    list_clinical_profile_catalog,
+)
 from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import Modality
 
@@ -89,6 +92,15 @@ def test_structured_generator_uses_topic_specific_profiles():
     assert _lab_value(stroke, "Glucose") >= 70
     assert any(medication.name == "Aspirin" for medication in stroke.medication_history)
     assert stroke.encounters[0].diagnoses[0].display == "ischemic stroke"
+
+
+def test_structured_generator_lists_clinical_profile_catalog():
+    catalog = {profile.key: profile for profile in list_clinical_profile_catalog()}
+
+    assert "sepsis" in catalog
+    assert catalog["sepsis"].keywords == ("sepsis", "infection")
+    assert "Lactate" in catalog["sepsis"].lab_names
+    assert "Ceftriaxone" in catalog["sepsis"].medication_names
 
 
 def test_structured_generator_uses_additional_common_clinical_profiles():

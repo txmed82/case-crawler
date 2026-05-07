@@ -81,6 +81,7 @@ def list_reference_catalog():
 @router.get("/datasets/capabilities")
 def list_dataset_capabilities():
     from casecrawler.generation.imaging_models import list_imaging_model_profiles
+    from casecrawler.generation.structured_generator import list_clinical_profile_catalog
     from casecrawler.generation.timeseries_models import list_time_series_model_profiles
 
     return {
@@ -113,6 +114,18 @@ def list_dataset_capabilities():
                 "notes": profile.notes,
             }
             for profile in list_time_series_model_profiles()
+        ],
+        "clinical_profiles": [
+            {
+                "key": profile.key,
+                "keywords": list(profile.keywords),
+                "diagnosis_display": profile.diagnosis_display,
+                "diagnosis_code": profile.diagnosis_code,
+                "lab_names": profile.lab_names,
+                "vital_names": profile.vital_names,
+                "medication_names": profile.medication_names,
+            }
+            for profile in list_clinical_profile_catalog()
         ],
         "validators": [
             {
