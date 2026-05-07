@@ -10,6 +10,7 @@ from casecrawler.models.synthetic import (
     Provenance,
     SyntheticPatient,
     SyntheticRecord,
+    ValidationReport,
 )
 from casecrawler.storage.dataset_store import DatasetStore
 
@@ -64,6 +65,59 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     assert fhir_exported.exit_code == 0
     assert "Exported" in fhir_exported.output
     assert "Bundle" in (tmp_path / "synthetic.fhir.ndjson").read_text()
+
+
+def test_dataset_cli_export_blocks_unready_dataset_without_override(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = DatasetStore()
+    store.save_record(
+        SyntheticRecord(
+            record_id="rec-blocked",
+            dataset_id="ds-blocked",
+            topic="sepsis",
+            complexity=ComplexityProfile.MODERATE,
+            modalities=[Modality.CLINICAL_TEXT],
+            patient=SyntheticPatient(patient_id="pat-1", age=64, sex="male"),
+            encounters=[],
+            provenance=Provenance(generator="unit-test", created_at="2026-01-01T00:00:00"),
+            validation=ValidationReport(
+                schema_score=1.0,
+                clinical_consistency_score=1.0,
+                privacy_score=1.0,
+                utility_score=1.0,
+                approved=True,
+            ),
+        )
+    )
+    runner = CliRunner()
+
+    blocked = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            "ds-blocked",
+            "--output",
+            "blocked.jsonl",
+        ],
+    )
+    allowed = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            "ds-blocked",
+            "--output",
+            "blocked.jsonl",
+            "--allow-blocked",
+        ],
+    )
+
+    assert blocked.exit_code != 0
+    assert "not ready for fine-tuning export" in blocked.output
+    assert "clinical_text.missing_artifacts" in blocked.output
+    assert allowed.exit_code == 0
+    assert (tmp_path / "blocked.jsonl").exists()
 
 
 def test_dataset_cli_generates_modalities_and_cohort_constraints(tmp_path, monkeypatch):

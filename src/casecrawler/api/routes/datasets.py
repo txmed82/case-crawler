@@ -325,16 +325,33 @@ def benchmark_dataset(
 def export_dataset(
     dataset_id: str,
     export_format: ExportFormat = ExportFormat.SFT_JSONL,
+    allow_blocked: bool = False,
 ):
     store = DatasetStore()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
+    records = list(store.iter_records(dataset_id=dataset_id))
+    if not allow_blocked:
+        report = build_dataset_quality_report(
+            dataset_id,
+            records,
+            effective_approved=store.effective_approved,
+        )
+        if not report.export_ready:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Dataset is not ready for fine-tuning export. "
+                    f"Blockers: {report.issue_counts_by_field}. "
+                    "Set allow_blocked=true to export anyway."
+                ),
+            )
 
     def _iter_jsonl():
         record_count = 0
         byte_count = 0
         try:
-            for record in store.iter_records(dataset_id=dataset_id):
+            for record in records:
                 line = json.dumps(export_record(record, export_format), sort_keys=True)
                 record_count += 1
                 byte_count += len(line.encode("utf-8")) + 1
