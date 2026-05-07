@@ -31,6 +31,7 @@ class SyntheticPipeline:
         self._time_series_generator = time_series_generator or TimeSeriesGenerator()
         self._imaging_generator = imaging_generator or ImagingGenerator(
             diffusers_model_id=config.synthetic.diffusers_model_id,
+            imaging_model_profile=config.synthetic.imaging_model_profile,
         )
         self._modality_planner = modality_planner or ModalityPlanner()
         self._validator = validator or SyntheticValidator()

@@ -141,6 +141,21 @@ def sources() -> None:
             click.echo(f"  \u2717 {s['name']:<18} (missing {missing})")
 
 
+@cli.command("imaging-models")
+def imaging_models() -> None:
+    """List built-in synthetic medical imaging model profiles."""
+    from casecrawler.generation.imaging_models import list_imaging_model_profiles
+
+    for profile in list_imaging_model_profiles():
+        click.echo(
+            f"{profile.name}: {profile.model_id} "
+            f"modality={profile.modality} region={profile.body_region} "
+            f"license={profile.license or 'unspecified'}"
+        )
+        if profile.notes:
+            click.echo(f"  {profile.notes}")
+
+
 @cli.command("config")
 def show_config() -> None:
     """Show current configuration."""

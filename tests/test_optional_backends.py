@@ -88,3 +88,22 @@ def test_diffusers_backend_requires_imaging_extra_when_not_injected(monkeypatch,
         assert "casecrawler[imaging]" in str(exc)
     else:
         raise AssertionError("Expected RuntimeError for missing imaging extra.")
+
+
+def test_diffusers_backend_uses_imaging_model_profile(tmp_path):
+    pipeline = FakeDiffusersPipeline()
+    generator = ImagingGenerator(
+        diffusers_pipeline=pipeline,
+        imaging_model_profile="cxr_pneumonia_dreambooth",
+    )
+
+    asset = generator.generate_diffusers(str(tmp_path), "right lower lobe infiltrate")
+
+    assert asset.generation_backend.startswith(
+        "diffusers:cxr_pneumonia_dreambooth:chimbiwide/cxr-pneumonia-dreambooth"
+    )
+    assert asset.modality == "XR"
+    assert asset.body_region == "chest"
+    assert "pneumonia infection" in pipeline.calls[0]["prompt"]
+    assert "right lower lobe infiltrate" in pipeline.calls[0]["prompt"]
+    assert "patient identifiers" in pipeline.calls[0]["negative_prompt"]
