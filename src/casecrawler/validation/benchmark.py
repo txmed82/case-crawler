@@ -9,6 +9,8 @@ from casecrawler.models.synthetic import Modality, SyntheticRecord
 
 ARTIFACT_DENSITY_KEYS = {
     "documents_per_record": "documents",
+    "encounters_per_record": "encounters",
+    "diagnoses_per_record": "diagnoses",
     "labs_per_record": "labs",
     "vitals_per_record": "vitals",
     "medications_per_record": "medications",
@@ -322,6 +324,10 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
 def _count_record_artifacts(record: SyntheticRecord, artifact_counts: Counter[str]) -> None:
     artifact_counts["documents"] += len(record.documents)
     artifact_counts["messy_documents"] += sum(1 for doc in record.documents if doc.messy_text)
+    artifact_counts["encounters"] += len(record.encounters)
+    artifact_counts["diagnoses"] += sum(
+        len(encounter.diagnoses) for encounter in record.encounters
+    )
     artifact_counts["labs"] += len(record.labs)
     artifact_counts["vitals"] += len(record.vitals)
     artifact_counts["medications"] += len(record.medication_history)
@@ -338,6 +344,9 @@ def _count_modality_artifact_coverage(
     modality_artifact_counts: Counter[str],
 ) -> None:
     checks = {
+        Modality.STRUCTURED_EHR: bool(record.encounters)
+        and any(encounter.diagnoses for encounter in record.encounters)
+        and bool(record.medication_history),
         Modality.CLINICAL_TEXT: bool(record.documents),
         Modality.LABS: bool(record.labs),
         Modality.VITALS: bool(record.vitals),

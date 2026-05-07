@@ -2,6 +2,7 @@ from casecrawler.models.synthetic import (
     ClinicalDocument,
     Code,
     ComplexityProfile,
+    Encounter,
     ImagingAsset,
     LabObservation,
     MedicationStatement,
@@ -39,13 +40,24 @@ def _record(
         complexity=ComplexityProfile.MODERATE,
         modalities=[
             Modality.CLINICAL_TEXT,
+            Modality.STRUCTURED_EHR,
             Modality.LABS,
             Modality.VITALS,
             Modality.TIME_SERIES,
             Modality.IMAGING,
         ],
         patient=SyntheticPatient(patient_id=f"pat-{record_id}", age=age, sex=sex),
-        encounters=[],
+        encounters=[
+            Encounter(
+                encounter_id=f"enc-{record_id}",
+                start="2026-01-01T00:00:00",
+                setting="emergency_department",
+                reason=topic,
+                diagnoses=[
+                    Code(system="synthetic", code=topic, display=topic),
+                ],
+            )
+        ],
         labs=[
             LabObservation(
                 name="WBC",
@@ -152,6 +164,8 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.document_author_role_counts == {"physician": 2}
     assert profile.messy_document_rate == 1.0
     assert profile.artifact_counts["documents"] == 2
+    assert profile.artifact_counts["encounters"] == 2
+    assert profile.artifact_counts["diagnoses"] == 2
     assert profile.artifact_counts["messy_documents"] == 2
     assert profile.artifact_counts["labs"] == 2
     assert profile.artifact_counts["vitals"] == 2
@@ -161,6 +175,8 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.artifact_counts["imaging_assets"] == 2
     assert profile.artifact_density == {
         "documents_per_record": 1.0,
+        "encounters_per_record": 1.0,
+        "diagnoses_per_record": 1.0,
         "labs_per_record": 1.0,
         "vitals_per_record": 1.0,
         "medications_per_record": 1.0,
@@ -171,6 +187,7 @@ def test_profile_records_summarizes_multimodal_cohort():
         "clinical_text": 1.0,
         "imaging": 1.0,
         "labs": 1.0,
+        "structured_ehr": 1.0,
         "time_series": 1.0,
         "vitals": 1.0,
     }
@@ -214,12 +231,15 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "document_author_role_distribution",
         "messy_document_rate",
         "artifact_density:documents_per_record",
+        "artifact_density:encounters_per_record",
+        "artifact_density:diagnoses_per_record",
         "artifact_density:labs_per_record",
         "artifact_density:vitals_per_record",
         "artifact_density:medications_per_record",
         "artifact_density:time_series_channels_per_record",
         "artifact_density:imaging_assets_per_record",
         "modality_artifact_coverage:clinical_text",
+        "modality_artifact_coverage:structured_ehr",
         "modality_artifact_coverage:labs",
         "modality_artifact_coverage:vitals",
         "modality_artifact_coverage:time_series",
@@ -397,6 +417,46 @@ def test_dataset_benchmark_flags_declared_modality_without_artifacts():
     assert density_metric.reference_value == 1.0
     assert density_metric.score == 0.0
     assert any("modality_artifact_coverage:imaging" in warning for warning in report.warnings)
+
+
+def test_dataset_benchmark_flags_declared_structured_ehr_without_artifacts():
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "modalities": [Modality.STRUCTURED_EHR],
+                "encounters": [],
+                "medication_history": [],
+            }
+        )
+    ]
+    reference = [_record("ref-1", "ds-ref")]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    coverage_metric = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "modality_artifact_coverage:structured_ehr"
+    )
+    encounter_density = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "artifact_density:encounters_per_record"
+    )
+    diagnosis_density = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "artifact_density:diagnoses_per_record"
+    )
+
+    assert report.generated_profile.artifact_counts["encounters"] == 0
+    assert report.generated_profile.artifact_counts["diagnoses"] == 0
+    assert report.generated_profile.modality_artifact_coverage["structured_ehr"] == 0.0
+    assert coverage_metric.generated_value == 0.0
+    assert coverage_metric.reference_value == 1.0
+    assert coverage_metric.score == 0.0
+    assert encounter_density.generated_value == 0.0
+    assert diagnosis_density.generated_value == 0.0
+    assert any("modality_artifact_coverage:structured_ehr" in warning for warning in report.warnings)
 
 
 def test_profile_records_rejects_mixed_dataset_records():
