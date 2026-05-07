@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from uuid import uuid4
 
 from casecrawler.config import get_config
@@ -12,6 +13,13 @@ from casecrawler.llm.factory import get_provider
 from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import Modality, SyntheticRecord
 from casecrawler.validation.synthetic_validator import SyntheticValidator
+
+
+@dataclass(frozen=True)
+class ImagingRequest:
+    prompt: str
+    modality: str
+    body_region: str
 
 
 class SyntheticPipeline:
@@ -67,8 +75,8 @@ class SyntheticPipeline:
                 )
             if Modality.IMAGING in plan.modalities:
                 images = [
-                    self._generate_image_asset(prompt=prompt)
-                    for prompt in _imaging_prompts_for_record(
+                    self._generate_image_asset(request)
+                    for request in _imaging_requests_for_record(
                         record,
                         plan.imaging_views or ["medical_image"],
                     )
@@ -87,16 +95,20 @@ class SyntheticPipeline:
             "records": records,
         }
 
-    def _generate_image_asset(self, prompt: str):
+    def _generate_image_asset(self, request: ImagingRequest):
         if self._image_backend == "diffusers":
             return self._imaging_generator.generate_diffusers(
                 output_dir=self._image_output_dir,
-                prompt=prompt,
+                prompt=request.prompt,
+                modality=request.modality,
+                body_region=request.body_region,
             )
         if self._image_backend == "placeholder":
             return self._imaging_generator.generate_placeholder(
                 output_dir=self._image_output_dir,
-                prompt=prompt,
+                prompt=request.prompt,
+                modality=request.modality,
+                body_region=request.body_region,
             )
         raise ValueError(f"Unknown synthetic imaging backend: {self._image_backend}")
 
@@ -131,41 +143,51 @@ def _text_generator_from_config(
     raise ValueError(f"Unknown synthetic clinical text backend: {backend}")
 
 
-def _imaging_prompts_for_record(
+def _imaging_requests_for_record(
     record: SyntheticRecord,
     views: list[str],
-) -> list[str]:
-    topic_prompt = _topic_imaging_prompt(record.topic)
+) -> list[ImagingRequest]:
+    modality, body_region, topic_prompt = _topic_imaging_spec(record.topic)
     diagnosis_terms = " ".join(
         diagnosis.display
         for encounter in record.encounters
         for diagnosis in encounter.diagnoses
     )
-    prompts = []
+    requests = []
     for view in views:
         normalized_view = view.replace("_", " ")
-        prompts.append(
-            " ".join(
-                part
-                for part in [
-                    normalized_view,
-                    topic_prompt,
-                    diagnosis_terms,
-                ]
-                if part
+        requests.append(
+            ImagingRequest(
+                prompt=" ".join(
+                    part
+                    for part in [
+                        normalized_view,
+                        topic_prompt,
+                        diagnosis_terms,
+                    ]
+                    if part
+                ),
+                modality=modality,
+                body_region=body_region,
             )
         )
-    return prompts
+    return requests
 
 
-def _topic_imaging_prompt(topic: str) -> str:
+def _topic_imaging_spec(topic: str) -> tuple[str, str, str]:
     normalized = topic.lower().replace("-", " ").replace("_", " ")
     if "heart failure" in normalized or "edema" in normalized:
-        return "pulmonary edema cardiomegaly small pleural effusion"
+        return "XR", "chest", "pulmonary edema cardiomegaly small pleural effusion"
     if "pneumonia" in normalized:
-        return "right lower lobe opacity pneumonia"
+        return "XR", "chest", "right lower lobe opacity pneumonia"
+    if "pulmonary embolism" in normalized or "pulmonary embolus" in normalized:
+        return "CTA", "chest", "pulmonary arterial filling defect pulmonary embolism"
     if "sepsis" in normalized or "infection" in normalized:
-        return "portable chest x-ray possible lower lobe opacity"
+        return "XR", "chest", "portable chest x-ray possible lower lobe opacity"
     if "stroke" in normalized:
-        return "noncontrast head CT no acute hemorrhage"
-    return topic
+        return "CT", "head", "noncontrast head CT no acute hemorrhage"
+    if "acute kidney injury" in normalized or "renal failure" in normalized:
+        return "US", "abdomen", "renal ultrasound hydronephrosis evaluation"
+    if "gi bleed" in normalized or "gastrointestinal bleed" in normalized:
+        return "CT", "abdomen", "contrast CT abdomen active gastrointestinal bleeding"
+    return "XR", "chest", topic
