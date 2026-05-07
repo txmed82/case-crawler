@@ -23,9 +23,16 @@ router = APIRouter()
 
 
 class ReferenceImportRequest(BaseModel):
-    reference_key: str = Field(min_length=1)
+    reference_key: str | None = Field(default=None, min_length=1)
     dataset_id: str = Field(min_length=1)
+    repo_id: str | None = Field(default=None, min_length=1)
     split: str | None = None
+    license: str | None = None
+    note_field: str = "note"
+    question_field: str | None = None
+    answer_field: str | None = None
+    task_field: str | None = None
+    patient_id_field: str | None = None
     limit: int | None = Field(default=None, ge=1)
 
 
@@ -152,35 +159,65 @@ def import_reference_dataset(req: ReferenceImportRequest):
     from casecrawler.integrations.huggingface import (
         REFERENCE_DATASETS,
         import_reference_rows,
+        load_huggingface_dataset,
         load_reference_dataset,
+        reference_dataset_spec,
     )
 
-    if req.reference_key not in REFERENCE_DATASETS:
+    if req.repo_id:
+        split = req.split or "train"
+        spec = reference_dataset_spec(
+            repo_id=req.repo_id,
+            split=split,
+            license=req.license or "unspecified",
+            note_field=req.note_field,
+            question_field=req.question_field,
+            answer_field=req.answer_field,
+            task_field=req.task_field,
+            patient_id_field=req.patient_id_field,
+            description="User-specified Hugging Face reference dataset.",
+        )
+        try:
+            rows = load_huggingface_dataset(req.repo_id, split=split, streaming=True)
+            records = import_reference_rows(
+                rows,
+                dataset_id=req.dataset_id,
+                split=split,
+                limit=req.limit,
+                spec=spec,
+            )
+        except RuntimeError as err:
+            raise HTTPException(status_code=422, detail=str(err)) from err
+        reference_key = req.reference_key or req.repo_id
+    elif req.reference_key not in REFERENCE_DATASETS:
         raise HTTPException(status_code=404, detail="reference dataset not found")
-    try:
-        rows = load_reference_dataset(
-            req.reference_key,
-            split=req.split,
-            streaming=True,
-        )
-        records = import_reference_rows(
-            rows,
-            dataset_id=req.dataset_id,
-            reference_key=req.reference_key,
-            split=req.split,
-            limit=req.limit,
-        )
-    except RuntimeError as err:
-        raise HTTPException(status_code=422, detail=str(err)) from err
+    else:
+        assert req.reference_key is not None
+        spec = REFERENCE_DATASETS[req.reference_key]
+        try:
+            rows = load_reference_dataset(
+                req.reference_key,
+                split=req.split,
+                streaming=True,
+            )
+            records = import_reference_rows(
+                rows,
+                dataset_id=req.dataset_id,
+                reference_key=req.reference_key,
+                split=req.split,
+                limit=req.limit,
+            )
+        except RuntimeError as err:
+            raise HTTPException(status_code=422, detail=str(err)) from err
+        reference_key = req.reference_key
 
     store = DatasetStore()
     for record in records:
         store.save_record(record)
-    spec = REFERENCE_DATASETS[req.reference_key]
     return {
         "dataset_id": req.dataset_id,
         "imported": len(records),
-        "reference_key": req.reference_key,
+        "reference_key": reference_key,
         "repo_id": spec.repo_id,
         "split": req.split or spec.split,
         "license": spec.license,

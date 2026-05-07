@@ -83,6 +83,41 @@ def load_reference_dataset(
     )
 
 
+def load_huggingface_dataset(
+    repo_id: str,
+    *,
+    split: str,
+    streaming: bool = True,
+):
+    datasets = require_package("datasets", "hf")
+    return datasets.load_dataset(repo_id, split=split, streaming=streaming)
+
+
+def reference_dataset_spec(
+    *,
+    repo_id: str,
+    split: str,
+    license: str,
+    note_field: str,
+    question_field: str | None = None,
+    answer_field: str | None = None,
+    task_field: str | None = None,
+    patient_id_field: str | None = None,
+    description: str = "",
+) -> HuggingFaceReferenceDataset:
+    return HuggingFaceReferenceDataset(
+        repo_id=repo_id,
+        split=split,
+        license=license,
+        note_field=note_field,
+        question_field=question_field,
+        answer_field=answer_field,
+        task_field=task_field,
+        patient_id_field=patient_id_field,
+        description=description,
+    )
+
+
 def import_reference_rows(
     rows: Iterable[dict],
     *,
@@ -90,9 +125,10 @@ def import_reference_rows(
     reference_key: str = "asclepius",
     split: str | None = None,
     limit: int | None = None,
+    spec: HuggingFaceReferenceDataset | None = None,
 ) -> list[SyntheticRecord]:
-    spec = REFERENCE_DATASETS[reference_key]
-    effective_split = split or spec.split
+    resolved_spec = spec or REFERENCE_DATASETS[reference_key]
+    effective_split = split or resolved_spec.split
     records: list[SyntheticRecord] = []
     for index, row in enumerate(rows):
         if limit is not None and index >= limit:
@@ -101,7 +137,7 @@ def import_reference_rows(
             reference_row_to_record(
                 row,
                 dataset_id=dataset_id,
-                spec=spec,
+                spec=resolved_spec,
                 split=effective_split,
             )
         )

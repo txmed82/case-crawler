@@ -114,6 +114,14 @@ casecrawler generate-dataset "pulmonary embolism" \
   --age-min 45 --age-max 85 --sexes female,male
 casecrawler reference-datasets
 casecrawler import-reference-dataset asclepius --dataset-id ds-asclepius-ref --limit 100
+casecrawler import-reference-dataset \
+  --repo-id org/custom-synthetic-notes \
+  --dataset-id ds-custom-ref \
+  --note-field clinical_note \
+  --question-field prompt \
+  --answer-field completion \
+  --split eval \
+  --limit 100
 casecrawler benchmark-dataset --dataset-id <dataset_id> --reference-dataset-id ds-asclepius-ref
 casecrawler export-dataset --dataset-id <dataset_id> --format sft_jsonl --output train.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format tool_call_jsonl --output tools.jsonl

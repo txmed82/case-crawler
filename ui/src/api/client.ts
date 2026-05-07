@@ -226,9 +226,16 @@ export interface ReferenceDatasetCatalogResponse {
 }
 
 export interface ReferenceDatasetImportRequest {
-  reference_key: string;
+  reference_key?: string;
   dataset_id: string;
+  repo_id?: string;
   split?: string;
+  license?: string;
+  note_field?: string;
+  question_field?: string;
+  answer_field?: string;
+  task_field?: string;
+  patient_id_field?: string;
   limit?: number;
 }
 
