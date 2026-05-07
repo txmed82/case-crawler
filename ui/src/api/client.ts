@@ -153,6 +153,17 @@ export interface ReferenceDatasetImportResponse {
   license: string;
 }
 
+export interface SyntheaImportRequest {
+  path: string;
+  dataset_id: string;
+}
+
+export interface SyntheaImportResponse {
+  dataset_id: string;
+  imported: number;
+  source: string;
+}
+
 export interface DatasetCapabilitiesResponse {
   modalities: SyntheticModality[];
   complexity_profiles: Array<"simple" | "moderate" | "complex" | "rare">;
@@ -382,6 +393,18 @@ export async function importReferenceDataset(
     body: JSON.stringify(req),
   });
   if (!resp.ok) throw new Error(`Failed to import reference dataset: ${await readApiError(resp)}`);
+  return resp.json();
+}
+
+export async function importSyntheaFhir(
+  req: SyntheaImportRequest
+): Promise<SyntheaImportResponse> {
+  const resp = await fetch(`${BASE}/datasets/synthea-import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!resp.ok) throw new Error(`Failed to import Synthea FHIR: ${await readApiError(resp)}`);
   return resp.json();
 }
 
