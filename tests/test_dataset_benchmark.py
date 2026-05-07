@@ -1,12 +1,15 @@
 from casecrawler.models.synthetic import (
     ClinicalDocument,
     ComplexityProfile,
+    ImagingAsset,
     LabObservation,
     MedicationStatement,
     Modality,
     Provenance,
     SyntheticPatient,
     SyntheticRecord,
+    TimeSeriesChannel,
+    TimeSeriesPoint,
     ValidationReport,
     VitalObservation,
 )
@@ -33,7 +36,13 @@ def _record(
         dataset_id=dataset_id,
         topic=topic,
         complexity=ComplexityProfile.MODERATE,
-        modalities=[Modality.CLINICAL_TEXT, Modality.LABS, Modality.VITALS],
+        modalities=[
+            Modality.CLINICAL_TEXT,
+            Modality.LABS,
+            Modality.VITALS,
+            Modality.TIME_SERIES,
+            Modality.IMAGING,
+        ],
         patient=SyntheticPatient(patient_id=f"pat-{record_id}", age=age, sex=sex),
         encounters=[],
         labs=[
@@ -57,6 +66,32 @@ def _record(
         ],
         medication_history=[
             MedicationStatement(name="Ceftriaxone", status="active")
+        ],
+        time_series=[
+            TimeSeriesChannel(
+                name="heart_rate",
+                unit="/min",
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-01-01T00:00:00",
+                        values={"value": 100},
+                    ),
+                    TimeSeriesPoint(
+                        timestamp="2026-01-01T06:00:00",
+                        values={"value": 105},
+                    ),
+                ],
+            )
+        ],
+        imaging=[
+            ImagingAsset(
+                image_id=f"img-{record_id}",
+                modality="XR",
+                body_region="chest",
+                prompt="portable chest x-ray",
+                report_text="No focal opacity.",
+                generation_backend="placeholder",
+            )
         ],
         documents=[
             ClinicalDocument(
@@ -89,6 +124,10 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.mean_age == 65
     assert profile.sex_counts == {"female": 1, "male": 1}
     assert profile.lab_name_counts == {"WBC": 2}
+    assert profile.time_series_channel_counts == {"heart_rate": 2}
+    assert profile.mean_time_series_points == 2
+    assert profile.mean_time_series_duration_hours == 6
+    assert profile.imaging_modality_counts == {"XR": 2}
     assert profile.approved_rate == 1.0
 
 
@@ -113,11 +152,18 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "lab_name_overlap",
         "vital_name_overlap",
         "medication_name_overlap",
+        "time_series_channel_overlap",
+        "mean_time_series_duration_hours",
+        "imaging_modality_overlap",
     }
 
 
 def test_dataset_benchmark_flags_modality_mismatch():
-    generated = [_record("rec-1", "ds-gen")]
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={"modalities": [Modality.CLINICAL_TEXT]}
+        )
+    ]
     reference = [
         _record("ref-1", "ds-ref").model_copy(update={"modalities": [Modality.IMAGING]})
     ]

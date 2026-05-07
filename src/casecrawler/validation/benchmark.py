@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime
 
 from casecrawler.models.evaluation import BenchmarkMetric, BenchmarkReport, CohortProfile
 from casecrawler.models.synthetic import SyntheticRecord
@@ -67,6 +68,33 @@ class DatasetBenchmark:
                 set(generated_profile.medication_name_counts),
                 set(reference_profile.medication_name_counts),
             ),
+            _jaccard_metric(
+                "time_series_channel_overlap",
+                set(generated_profile.time_series_channel_counts),
+                set(reference_profile.time_series_channel_counts),
+            ),
+            _closeness_metric(
+                "mean_time_series_points",
+                generated_profile.mean_time_series_points,
+                reference_profile.mean_time_series_points,
+                tolerance=12.0,
+            ),
+            _closeness_metric(
+                "mean_time_series_duration_hours",
+                generated_profile.mean_time_series_duration_hours,
+                reference_profile.mean_time_series_duration_hours,
+                tolerance=48.0,
+            ),
+            _jaccard_metric(
+                "imaging_modality_overlap",
+                set(generated_profile.imaging_modality_counts),
+                set(reference_profile.imaging_modality_counts),
+            ),
+            _jaccard_metric(
+                "imaging_body_region_overlap",
+                set(generated_profile.imaging_body_region_counts),
+                set(reference_profile.imaging_body_region_counts),
+            ),
             _closeness_metric(
                 "approved_rate",
                 generated_profile.approved_rate,
@@ -102,8 +130,13 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     lab_name_counts: Counter[str] = Counter()
     vital_name_counts: Counter[str] = Counter()
     medication_name_counts: Counter[str] = Counter()
+    time_series_channel_counts: Counter[str] = Counter()
+    imaging_modality_counts: Counter[str] = Counter()
+    imaging_body_region_counts: Counter[str] = Counter()
     ages: list[int] = []
     document_lengths: list[int] = []
+    time_series_point_counts: list[int] = []
+    time_series_durations: list[float] = []
     approved_values: list[bool] = []
 
     for record in records:
@@ -120,6 +153,15 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             vital_name_counts[vital.name] += 1
         for medication in record.medication_history:
             medication_name_counts[medication.name] += 1
+        for channel in record.time_series:
+            time_series_channel_counts[channel.name] += 1
+            time_series_point_counts.append(len(channel.points))
+            duration = _channel_duration_hours(channel)
+            if duration is not None:
+                time_series_durations.append(duration)
+        for asset in record.imaging:
+            imaging_modality_counts[asset.modality] += 1
+            imaging_body_region_counts[asset.body_region] += 1
         if record.validation is not None:
             approved_values.append(record.validation.approved)
 
@@ -134,6 +176,11 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         lab_name_counts=dict(sorted(lab_name_counts.items())),
         vital_name_counts=dict(sorted(vital_name_counts.items())),
         medication_name_counts=dict(sorted(medication_name_counts.items())),
+        time_series_channel_counts=dict(sorted(time_series_channel_counts.items())),
+        mean_time_series_points=_mean(time_series_point_counts),
+        mean_time_series_duration_hours=_mean_float(time_series_durations),
+        imaging_modality_counts=dict(sorted(imaging_modality_counts.items())),
+        imaging_body_region_counts=dict(sorted(imaging_body_region_counts.items())),
         approved_rate=_mean([int(value) for value in approved_values])
         if approved_values
         else None,
@@ -252,7 +299,30 @@ def _mean(values: list[int]) -> float | None:
     return sum(values) / len(values)
 
 
+def _mean_float(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
 def _rounded(value: float | None) -> float | None:
     if value is None:
         return None
     return round(value, 4)
+
+
+def _channel_duration_hours(channel) -> float | None:
+    if len(channel.points) < 2:
+        return None
+    timestamps = [_parse_datetime(point.timestamp) for point in channel.points]
+    valid_timestamps = [timestamp for timestamp in timestamps if timestamp is not None]
+    if len(valid_timestamps) < 2:
+        return None
+    return (max(valid_timestamps) - min(valid_timestamps)).total_seconds() / 3600
+
+
+def _parse_datetime(value: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
