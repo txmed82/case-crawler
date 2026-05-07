@@ -4,7 +4,17 @@ from collections import Counter
 from datetime import datetime, timezone
 
 from casecrawler.models.evaluation import BenchmarkMetric, BenchmarkReport, CohortProfile
-from casecrawler.models.synthetic import SyntheticRecord
+from casecrawler.models.synthetic import Modality, SyntheticRecord
+
+
+ARTIFACT_DENSITY_KEYS = {
+    "documents_per_record": "documents",
+    "labs_per_record": "labs",
+    "vitals_per_record": "vitals",
+    "medications_per_record": "medications",
+    "time_series_channels_per_record": "time_series_channels",
+    "imaging_assets_per_record": "imaging_assets",
+}
 
 
 class DatasetBenchmark:
@@ -68,6 +78,14 @@ class DatasetBenchmark:
                 generated_profile.messy_document_rate,
                 reference_profile.messy_document_rate,
                 tolerance=0.5,
+            ),
+            *_density_metrics(
+                generated_profile.artifact_density,
+                reference_profile.artifact_density,
+            ),
+            *_coverage_metrics(
+                generated_profile.modality_artifact_coverage,
+                reference_profile.modality_artifact_coverage,
             ),
             _jaccard_metric(
                 "lab_name_overlap",
@@ -186,6 +204,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     sex_counts: Counter[str] = Counter()
     note_type_counts: Counter[str] = Counter()
     document_author_role_counts: Counter[str] = Counter()
+    artifact_counts: Counter[str] = Counter()
     lab_name_counts: Counter[str] = Counter()
     lab_flag_counts: Counter[str] = Counter()
     vital_name_counts: Counter[str] = Counter()
@@ -205,12 +224,17 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     time_series_point_counts: list[int] = []
     time_series_durations: list[float] = []
     approved_values: list[bool] = []
+    modality_declared_counts: Counter[str] = Counter()
+    modality_artifact_counts: Counter[str] = Counter()
 
     for record in records:
         ages.append(record.patient.age)
         sex_counts[record.patient.sex or "unknown"] += 1
         for modality in record.modalities:
             modality_counts[modality.value] += 1
+            modality_declared_counts[modality.value] += 1
+        _count_record_artifacts(record, artifact_counts)
+        _count_modality_artifact_coverage(record, modality_artifact_counts)
         for document in record.documents:
             note_type_counts[document.note_type] += 1
             document_author_role_counts[document.author_role or "unknown"] += 1
@@ -268,6 +292,12 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         note_type_counts=dict(sorted(note_type_counts.items())),
         document_author_role_counts=dict(sorted(document_author_role_counts.items())),
         messy_document_rate=_mean(messy_document_values),
+        artifact_counts=dict(sorted(artifact_counts.items())),
+        artifact_density=_artifact_density(artifact_counts, len(records)),
+        modality_artifact_coverage=_modality_artifact_coverage(
+            modality_declared_counts,
+            modality_artifact_counts,
+        ),
         lab_name_counts=dict(sorted(lab_name_counts.items())),
         lab_flag_counts=dict(sorted(lab_flag_counts.items())),
         lab_numeric_summaries=_numeric_summaries(lab_numeric_values),
@@ -287,6 +317,56 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         if approved_values
         else None,
     )
+
+
+def _count_record_artifacts(record: SyntheticRecord, artifact_counts: Counter[str]) -> None:
+    artifact_counts["documents"] += len(record.documents)
+    artifact_counts["messy_documents"] += sum(1 for doc in record.documents if doc.messy_text)
+    artifact_counts["labs"] += len(record.labs)
+    artifact_counts["vitals"] += len(record.vitals)
+    artifact_counts["medications"] += len(record.medication_history)
+    artifact_counts["time_series_channels"] += len(record.time_series)
+    artifact_counts["time_series_points"] += sum(
+        len(channel.points) for channel in record.time_series
+    )
+    artifact_counts["imaging_assets"] += len(record.imaging)
+    artifact_counts["imaging_labels"] += sum(len(asset.labels) for asset in record.imaging)
+
+
+def _count_modality_artifact_coverage(
+    record: SyntheticRecord,
+    modality_artifact_counts: Counter[str],
+) -> None:
+    checks = {
+        Modality.CLINICAL_TEXT: bool(record.documents),
+        Modality.LABS: bool(record.labs),
+        Modality.VITALS: bool(record.vitals),
+        Modality.TIME_SERIES: bool(record.time_series),
+        Modality.IMAGING: bool(record.imaging),
+    }
+    for modality in record.modalities:
+        if checks.get(modality) is True:
+            modality_artifact_counts[modality.value] += 1
+
+
+def _artifact_density(artifact_counts: Counter[str], record_count: int) -> dict[str, float]:
+    if record_count == 0:
+        return {}
+    return {
+        density_key: round(artifact_counts.get(artifact_key, 0) / record_count, 4)
+        for density_key, artifact_key in sorted(ARTIFACT_DENSITY_KEYS.items())
+    }
+
+
+def _modality_artifact_coverage(
+    declared_counts: Counter[str],
+    artifact_counts: Counter[str],
+) -> dict[str, float]:
+    return {
+        modality: round(artifact_counts.get(modality, 0) / declared, 4)
+        for modality, declared in sorted(declared_counts.items())
+        if declared > 0
+    }
 
 
 def _ratio_metric(name: str, generated: int, reference: int) -> BenchmarkMetric:
@@ -401,6 +481,36 @@ def _numeric_summary_metrics(
             )
         )
     return metrics
+
+
+def _density_metrics(
+    generated_density: dict[str, float],
+    reference_density: dict[str, float],
+) -> list[BenchmarkMetric]:
+    return [
+        _closeness_metric(
+            f"artifact_density:{key}",
+            generated_density.get(key),
+            reference_density.get(key),
+            tolerance=max(reference_density.get(key, 0), 1.0),
+        )
+        for key in sorted(set(generated_density) | set(reference_density))
+    ]
+
+
+def _coverage_metrics(
+    generated_coverage: dict[str, float],
+    reference_coverage: dict[str, float],
+) -> list[BenchmarkMetric]:
+    return [
+        _closeness_metric(
+            f"modality_artifact_coverage:{key}",
+            generated_coverage.get(key),
+            reference_coverage.get(key),
+            tolerance=1.0,
+        )
+        for key in sorted(set(generated_coverage) | set(reference_coverage))
+    ]
 
 
 def _warnings(

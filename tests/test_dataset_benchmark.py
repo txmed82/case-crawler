@@ -151,6 +151,29 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.medication_status_counts == {"active": 2}
     assert profile.document_author_role_counts == {"physician": 2}
     assert profile.messy_document_rate == 1.0
+    assert profile.artifact_counts["documents"] == 2
+    assert profile.artifact_counts["messy_documents"] == 2
+    assert profile.artifact_counts["labs"] == 2
+    assert profile.artifact_counts["vitals"] == 2
+    assert profile.artifact_counts["medications"] == 2
+    assert profile.artifact_counts["time_series_channels"] == 2
+    assert profile.artifact_counts["time_series_points"] == 4
+    assert profile.artifact_counts["imaging_assets"] == 2
+    assert profile.artifact_density == {
+        "documents_per_record": 1.0,
+        "labs_per_record": 1.0,
+        "vitals_per_record": 1.0,
+        "medications_per_record": 1.0,
+        "time_series_channels_per_record": 1.0,
+        "imaging_assets_per_record": 1.0,
+    }
+    assert profile.modality_artifact_coverage == {
+        "clinical_text": 1.0,
+        "imaging": 1.0,
+        "labs": 1.0,
+        "time_series": 1.0,
+        "vitals": 1.0,
+    }
     assert profile.time_series_channel_counts == {"heart_rate": 2}
     assert profile.mean_time_series_points == 2
     assert profile.mean_time_series_duration_hours == 6
@@ -190,6 +213,17 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "document_author_role_overlap",
         "document_author_role_distribution",
         "messy_document_rate",
+        "artifact_density:documents_per_record",
+        "artifact_density:labs_per_record",
+        "artifact_density:vitals_per_record",
+        "artifact_density:medications_per_record",
+        "artifact_density:time_series_channels_per_record",
+        "artifact_density:imaging_assets_per_record",
+        "modality_artifact_coverage:clinical_text",
+        "modality_artifact_coverage:labs",
+        "modality_artifact_coverage:vitals",
+        "modality_artifact_coverage:time_series",
+        "modality_artifact_coverage:imaging",
         "time_series_channel_overlap",
         "mean_time_series_points",
         "mean_time_series_duration_hours",
@@ -329,6 +363,40 @@ def test_dataset_benchmark_flags_modality_mismatch():
 
     assert modality_metric.score == 0.0
     assert any("modality_overlap" in warning for warning in report.warnings)
+
+
+def test_dataset_benchmark_flags_declared_modality_without_artifacts():
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "modalities": [Modality.CLINICAL_TEXT, Modality.IMAGING],
+                "imaging": [],
+            }
+        )
+    ]
+    reference = [_record("ref-1", "ds-ref")]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    coverage_metric = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "modality_artifact_coverage:imaging"
+    )
+    density_metric = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "artifact_density:imaging_assets_per_record"
+    )
+
+    assert report.generated_profile.artifact_counts["imaging_assets"] == 0
+    assert report.generated_profile.modality_artifact_coverage["imaging"] == 0.0
+    assert coverage_metric.generated_value == 0.0
+    assert coverage_metric.reference_value == 1.0
+    assert coverage_metric.score == 0.0
+    assert density_metric.generated_value == 0.0
+    assert density_metric.reference_value == 1.0
+    assert density_metric.score == 0.0
+    assert any("modality_artifact_coverage:imaging" in warning for warning in report.warnings)
 
 
 def test_profile_records_rejects_mixed_dataset_records():
