@@ -1,12 +1,28 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { datasetExportUrl, fetchDataset, fetchDatasets } from "../api/client";
-import type { DatasetManifest, ExportFormat, SyntheticRecordPreview } from "../api/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  datasetExportUrl,
+  fetchDataset,
+  fetchDatasetCard,
+  fetchDatasetReviewQueue,
+  fetchDatasets,
+  saveRecordReview,
+} from "../api/client";
+import type {
+  DatasetManifest,
+  ExportFormat,
+  HumanReviewStatus,
+  ReviewQueueItem,
+  SyntheticRecordPreview,
+} from "../api/client";
 
 export default function CasesPage() {
   const [topicFilter, setTopicFilter] = useState("");
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("sft_jsonl");
+  const [includeReviewed, setIncludeReviewed] = useState(false);
+  const [cardKind, setCardKind] = useState<"dataset" | "model">("dataset");
+  const queryClient = useQueryClient();
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["datasets"],
@@ -29,6 +45,43 @@ export default function CasesPage() {
     enabled: Boolean(activeDatasetId),
   });
   const exportFormats = detail?.manifest.export_formats ?? ["sft_jsonl"];
+  const {
+    data: reviewQueue,
+    isLoading: isReviewLoading,
+    error: reviewError,
+  } = useQuery({
+    queryKey: ["dataset-reviews", activeDatasetId, includeReviewed],
+    queryFn: () => fetchDatasetReviewQueue(activeDatasetId as string, includeReviewed, 100),
+    enabled: Boolean(activeDatasetId),
+  });
+  const {
+    data: cardText,
+    isLoading: isCardLoading,
+    error: cardError,
+  } = useQuery({
+    queryKey: ["dataset-card", activeDatasetId, cardKind],
+    queryFn: () => fetchDatasetCard(activeDatasetId as string, cardKind),
+    enabled: Boolean(activeDatasetId),
+  });
+  const reviewMutation = useMutation({
+    mutationFn: ({
+      recordId,
+      status,
+    }: {
+      recordId: string;
+      status: HumanReviewStatus;
+    }) =>
+      saveRecordReview(recordId, {
+        status,
+        reviewer: "workbench",
+        notes: [`Marked ${status} in dataset workbench.`],
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dataset-reviews", activeDatasetId] });
+      queryClient.invalidateQueries({ queryKey: ["dataset", activeDatasetId] });
+      queryClient.invalidateQueries({ queryKey: ["datasets"] });
+    },
+  });
 
   useEffect(() => {
     if (detail && !detail.manifest.export_formats.includes(exportFormat)) {
@@ -54,7 +107,7 @@ export default function CasesPage() {
       />
 
       {isLoading && <p className="text-sm text-gray-500">Loading...</p>}
-      {error && (
+      {Boolean(error) && (
         <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-4">
           <p className="text-sm text-red-700">
             {error instanceof Error ? error.message : "Failed to load datasets."}
@@ -156,6 +209,28 @@ export default function CasesPage() {
                   </div>
                 </div>
 
+                <section className="grid gap-4 xl:grid-cols-[minmax(320px,0.9fr)_1.1fr]">
+                  <ReviewQueuePanel
+                    items={reviewQueue?.records ?? []}
+                    isLoading={isReviewLoading}
+                    error={reviewError}
+                    includeReviewed={includeReviewed}
+                    onIncludeReviewedChange={setIncludeReviewed}
+                    onMark={(recordId, status) => reviewMutation.mutate({ recordId, status })}
+                    pendingRecordId={
+                      reviewMutation.isPending ? reviewMutation.variables?.recordId : null
+                    }
+                    mutationError={reviewMutation.error}
+                  />
+                  <CardPanel
+                    cardKind={cardKind}
+                    onCardKindChange={setCardKind}
+                    cardText={cardText ?? ""}
+                    isLoading={isCardLoading}
+                    error={cardError}
+                  />
+                </section>
+
                 <div className="space-y-3">
                   {detail.records.map((record) => (
                     <RecordPreview key={record.record_id} record={record} />
@@ -170,6 +245,179 @@ export default function CasesPage() {
             )}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewQueuePanel({
+  items,
+  isLoading,
+  error,
+  includeReviewed,
+  onIncludeReviewedChange,
+  onMark,
+  pendingRecordId,
+  mutationError,
+}: {
+  items: ReviewQueueItem[];
+  isLoading: boolean;
+  error: unknown;
+  includeReviewed: boolean;
+  onIncludeReviewedChange: (value: boolean) => void;
+  onMark: (recordId: string, status: HumanReviewStatus) => void;
+  pendingRecordId: string | null;
+  mutationError: unknown;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Human review queue</p>
+          <p className="text-xs text-gray-500">{items.length} record(s)</p>
+        </div>
+        <label className="flex items-center gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={includeReviewed}
+            onChange={(event) => onIncludeReviewedChange(event.target.checked)}
+            className="h-4 w-4 rounded border-gray-300"
+          />
+          Include reviewed
+        </label>
+      </div>
+      {isLoading && <p className="mt-3 text-sm text-gray-500">Loading review queue...</p>}
+      {Boolean(error) && (
+        <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error instanceof Error ? error.message : "Failed to load review queue."}
+        </p>
+      )}
+      {Boolean(mutationError) && (
+        <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {mutationError instanceof Error ? mutationError.message : "Failed to save review."}
+        </p>
+      )}
+      <div className="mt-3 max-h-96 space-y-2 overflow-auto pr-1">
+        {items.map((item) => (
+          <ReviewQueueRow
+            key={item.record_id}
+            item={item}
+            isPending={pendingRecordId === item.record_id}
+            onMark={onMark}
+          />
+        ))}
+        {!isLoading && items.length === 0 && (
+          <p className="rounded-md bg-gray-50 p-3 text-sm text-gray-500">
+            No records currently require human review.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReviewQueueRow({
+  item,
+  isPending,
+  onMark,
+}: {
+  item: ReviewQueueItem;
+  isPending: boolean;
+  onMark: (recordId: string, status: HumanReviewStatus) => void;
+}) {
+  const status = item.human_review?.status ?? "pending";
+  return (
+    <div className="rounded-md border border-gray-200 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium text-gray-900">{item.record_id}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            {item.complexity} | validation{" "}
+            {item.validation_approved === null || item.validation_approved === undefined
+              ? "unknown"
+              : item.validation_approved
+                ? "approved"
+                : "blocked"}{" "}
+            | issues {item.issue_count}
+          </p>
+        </div>
+        <span className={reviewStatusClass(status)}>{status.replace("_", " ")}</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => onMark(item.record_id, "approved")}
+          className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+        >
+          Approve
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => onMark(item.record_id, "needs_revision")}
+          className="rounded-md bg-yellow-500 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+        >
+          Revise
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => onMark(item.record_id, "rejected")}
+          className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+        >
+          Reject
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CardPanel({
+  cardKind,
+  onCardKindChange,
+  cardText,
+  isLoading,
+  error,
+}: {
+  cardKind: "dataset" | "model";
+  onCardKindChange: (kind: "dataset" | "model") => void;
+  cardText: string;
+  isLoading: boolean;
+  error: unknown;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Generated cards</p>
+          <p className="text-xs text-gray-500">Dataset and model documentation</p>
+        </div>
+        <div className="flex rounded-md border border-gray-300 p-1">
+          {(["dataset", "model"] as const).map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => onCardKindChange(kind)}
+              className={`rounded px-3 py-1 text-xs font-medium ${
+                cardKind === kind ? "bg-gray-900 text-white" : "text-gray-600"
+              }`}
+            >
+              {kind === "dataset" ? "Dataset" : "Model"}
+            </button>
+          ))}
+        </div>
+      </div>
+      {isLoading && <p className="mt-3 text-sm text-gray-500">Loading card...</p>}
+      {Boolean(error) && (
+        <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error instanceof Error ? error.message : "Failed to load card."}
+        </p>
+      )}
+      {!isLoading && !error && (
+        <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-md bg-gray-950 p-3 text-xs leading-relaxed text-gray-100">
+          {cardText || "No card content available."}
+        </pre>
       )}
     </div>
   );
@@ -221,6 +469,14 @@ function Metric({ label, value }: { label: string; value: number | string }) {
       <p className="mt-1 text-xl font-semibold text-gray-900">{value}</p>
     </div>
   );
+}
+
+function reviewStatusClass(status: HumanReviewStatus) {
+  const base = "rounded-md px-2 py-1 text-xs font-medium";
+  if (status === "approved") return `${base} bg-green-50 text-green-700`;
+  if (status === "rejected") return `${base} bg-red-50 text-red-700`;
+  if (status === "needs_revision") return `${base} bg-yellow-50 text-yellow-700`;
+  return `${base} bg-gray-100 text-gray-700`;
 }
 
 function RecordPreview({ record }: { record: SyntheticRecordPreview }) {

@@ -202,6 +202,7 @@ export interface DatasetGenerateRequest {
   count?: number;
   complexity?: "simple" | "moderate" | "complex" | "rare";
   modalities?: SyntheticModality[];
+  cohort_constraints?: Record<string, unknown>;
 }
 
 export interface DatasetGenerateResponse {
@@ -224,7 +225,9 @@ export type ExportFormat =
   | "raw_jsonl"
   | "sft_jsonl"
   | "chat_jsonl"
+  | "tool_call_jsonl"
   | "multimodal_jsonl"
+  | "dpo_jsonl"
   | "rl_jsonl"
   | "fhir_ndjson"
   | "parquet";
@@ -288,6 +291,44 @@ export interface DatasetDetailResponse {
   records: SyntheticRecordPreview[];
 }
 
+export type HumanReviewStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "needs_revision";
+
+export interface HumanReviewDecision {
+  status: HumanReviewStatus;
+  reviewer?: string;
+  notes?: string[];
+  reviewed_at?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ReviewQueueItem {
+  record_id: string;
+  dataset_id: string;
+  topic: string;
+  complexity: string;
+  modalities: SyntheticModality[];
+  validation_approved?: boolean | null;
+  human_review?: HumanReviewDecision | null;
+  issue_count: number;
+  blocking_issue_count: number;
+}
+
+export interface ReviewQueueResponse {
+  dataset_id: string;
+  records: ReviewQueueItem[];
+}
+
+export interface ReviewSaveResponse {
+  record_id: string;
+  dataset_id: string;
+  human_review: HumanReviewDecision;
+  effective_approved: boolean;
+}
+
 async function readApiError(resp: Response): Promise<string> {
   try {
     const body = await resp.json();
@@ -327,6 +368,43 @@ export async function fetchDataset(datasetId: string, limit = 25): Promise<Datas
   const resp = await fetch(`${BASE}/datasets/${datasetId}?limit=${limit}`);
   if (!resp.ok) throw new Error(`Failed to fetch dataset: ${await readApiError(resp)}`);
   return resp.json();
+}
+
+export async function fetchDatasetReviewQueue(
+  datasetId: string,
+  includeReviewed = false,
+  limit = 100
+): Promise<ReviewQueueResponse> {
+  const qs = new URLSearchParams({
+    include_reviewed: String(includeReviewed),
+    limit: String(limit),
+  });
+  const resp = await fetch(`${BASE}/datasets/${datasetId}/reviews?${qs}`);
+  if (!resp.ok) throw new Error(`Failed to fetch review queue: ${await readApiError(resp)}`);
+  return resp.json();
+}
+
+export async function saveRecordReview(
+  recordId: string,
+  decision: HumanReviewDecision
+): Promise<ReviewSaveResponse> {
+  const resp = await fetch(`${BASE}/records/${recordId}/review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(decision),
+  });
+  if (!resp.ok) throw new Error(`Failed to save review: ${await readApiError(resp)}`);
+  return resp.json();
+}
+
+export async function fetchDatasetCard(
+  datasetId: string,
+  kind: "dataset" | "model" = "dataset"
+): Promise<string> {
+  const qs = new URLSearchParams({ kind });
+  const resp = await fetch(`${BASE}/datasets/${datasetId}/card?${qs}`);
+  if (!resp.ok) throw new Error(`Failed to fetch ${kind} card: ${await readApiError(resp)}`);
+  return resp.text();
 }
 
 export function datasetExportUrl(
