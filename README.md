@@ -123,6 +123,7 @@ casecrawler import-reference-dataset \
   --split eval \
   --limit 100
 casecrawler benchmark-dataset --dataset-id <dataset_id> --reference-dataset-id ds-asclepius-ref
+casecrawler datasets quality <dataset_id>
 casecrawler export-dataset --dataset-id <dataset_id> --format sft_jsonl --output train.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format tool_call_jsonl --output tools.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format dpo_jsonl --output preference.jsonl
@@ -150,6 +151,7 @@ Start the server with `casecrawler serve` or `docker compose up`.
 | `/api/datasets/reference-catalog` | GET | List registered Hugging Face reference datasets |
 | `/api/datasets/reference-import` | POST | Import registered reference datasets into local storage |
 | `/api/datasets/{dataset_id}/benchmark` | GET | Compare a generated dataset to a reference dataset |
+| `/api/datasets/{dataset_id}/quality` | GET | Summarize validation and fine-tuning export readiness |
 | `/api/datasets/{dataset_id}/export` | GET | Stream fine-tuning/export records |
 | `/api/generate` | POST | Legacy clinical case generation |
 | `/api/cases` | GET | Legacy case list/filter |

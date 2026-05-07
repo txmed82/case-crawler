@@ -415,6 +415,19 @@ export interface BenchmarkReport {
   warnings: string[];
 }
 
+export interface DatasetQualityReport {
+  dataset_id: string;
+  record_count: number;
+  approved_count: number;
+  approval_rate: number;
+  export_ready: boolean;
+  modality_counts: Record<string, number>;
+  blocking_issue_count: number;
+  warning_issue_count: number;
+  issue_counts_by_field: Record<string, number>;
+  recommendations: string[];
+}
+
 async function readApiError(resp: Response): Promise<string> {
   try {
     const body = await resp.json();
@@ -524,6 +537,12 @@ export async function fetchDatasetBenchmark(
   const qs = new URLSearchParams({ reference_dataset_id: referenceDatasetId });
   const resp = await fetch(`${BASE}/datasets/${datasetId}/benchmark?${qs}`);
   if (!resp.ok) throw new Error(`Failed to benchmark dataset: ${await readApiError(resp)}`);
+  return resp.json();
+}
+
+export async function fetchDatasetQuality(datasetId: string): Promise<DatasetQualityReport> {
+  const resp = await fetch(`${BASE}/datasets/${datasetId}/quality`);
+  if (!resp.ok) throw new Error(`Failed to fetch dataset quality: ${await readApiError(resp)}`);
   return resp.json();
 }
 

@@ -427,6 +427,25 @@ def datasets_show(dataset_id: str) -> None:
     click.echo(manifest.model_dump_json(indent=2))
 
 
+@datasets_group.command("quality")
+@click.argument("dataset_id")
+def datasets_quality(dataset_id: str) -> None:
+    """Show dataset fine-tuning export readiness."""
+    from casecrawler.storage.dataset_store import DatasetStore
+    from casecrawler.validation.quality import build_dataset_quality_report
+
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise click.ClickException(f"Dataset {dataset_id} not found.")
+    records = list(store.iter_records(dataset_id=dataset_id))
+    report = build_dataset_quality_report(
+        dataset_id,
+        records,
+        effective_approved=store.effective_approved,
+    )
+    click.echo(report.model_dump_json(indent=2))
+
+
 @cli.command("validate")
 @click.option("--dataset-id", default=None, help="Dataset id prefix or exact id")
 def validate_dataset(dataset_id: str | None) -> None:
