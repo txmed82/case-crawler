@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import importlib
 import re
 from hashlib import sha256
@@ -9,11 +10,16 @@ from uuid import NAMESPACE_URL, uuid5
 
 from casecrawler.models.synthetic import (
     ClinicalDocument,
+    Code,
     ComplexityProfile,
+    ImagingAsset,
+    LabObservation,
+    MedicationStatement,
     Modality,
     Provenance,
     SyntheticPatient,
     SyntheticRecord,
+    VitalObservation,
 )
 
 
@@ -210,9 +216,17 @@ def reference_row_to_record(
     patient_sex = _extract_sex(note)
     record_id = f"hf-{uuid5(NAMESPACE_URL, stable_seed)}"
     patient_id = f"pat-{uuid5(NAMESPACE_URL, stable_seed + ':patient')}"
+    labs, vitals, medications = _fhir_artifacts(answer)
+    imaging = _radiology_artifacts(row, spec, stable_seed, report_text=note)
+    modalities = _reference_modalities(
+        labs=labs,
+        vitals=vitals,
+        medications=medications,
+        imaging=imaging,
+    )
     document = ClinicalDocument(
         document_id=f"doc-{uuid5(NAMESPACE_URL, stable_seed + ':document')}",
-        note_type=_note_type(note),
+        note_type=_note_type(note, spec=spec),
         author_role="synthetic_reference",
         timestamp="2026-01-01T00:00:00",
         clean_text=note,
@@ -229,7 +243,7 @@ def reference_row_to_record(
         dataset_id=dataset_id,
         topic=task or "synthetic clinical note",
         complexity=ComplexityProfile.MODERATE,
-        modalities=[Modality.CLINICAL_TEXT],
+        modalities=modalities,
         patient=SyntheticPatient(
             patient_id=patient_id,
             age=patient_age,
@@ -237,7 +251,11 @@ def reference_row_to_record(
             demographics={"source_patient_id": patient_source_id},
         ),
         encounters=[],
+        labs=labs,
+        vitals=vitals,
+        medication_history=medications,
         documents=[document],
+        imaging=imaging,
         provenance=Provenance(
             generator="huggingface-reference-import",
             model=None,
@@ -288,7 +306,28 @@ def _extract_sex(note: str) -> str:
     return "unknown"
 
 
-def _note_type(note: str) -> str:
+def _reference_modalities(
+    *,
+    labs: list[LabObservation],
+    vitals: list[VitalObservation],
+    medications: list[MedicationStatement],
+    imaging: list[ImagingAsset],
+) -> list[Modality]:
+    modalities = [Modality.CLINICAL_TEXT]
+    if labs or vitals or medications:
+        modalities.insert(0, Modality.STRUCTURED_EHR)
+    if labs:
+        modalities.append(Modality.LABS)
+    if vitals:
+        modalities.append(Modality.VITALS)
+    if imaging:
+        modalities.append(Modality.IMAGING)
+    return modalities
+
+
+def _note_type(note: str, *, spec: HuggingFaceReferenceDataset | None = None) -> str:
+    if spec and spec.repo_id == "ClarusC64/image-report-consistency-radiology-v01":
+        return "radiology_report"
     prefix = note[:80].lower()
     if "discharge summary" in prefix:
         return "discharge_summary"
@@ -312,3 +351,226 @@ def _source_fields(row: dict, spec: HuggingFaceReferenceDataset) -> dict:
 
 def _is_source_field_value(value) -> bool:
     return value is None or isinstance(value, (str, int, float, bool, list, dict))
+
+
+def _fhir_artifacts(
+    fhir_text: str,
+) -> tuple[list[LabObservation], list[VitalObservation], list[MedicationStatement]]:
+    if not fhir_text:
+        return [], [], []
+    try:
+        parsed = json.loads(fhir_text)
+    except json.JSONDecodeError:
+        return [], [], []
+    resources = _fhir_resources(parsed)
+    labs: list[LabObservation] = []
+    vitals: list[VitalObservation] = []
+    medications: list[MedicationStatement] = []
+    for resource in resources:
+        resource_type = resource.get("resourceType")
+        if resource_type == "Observation" and isinstance(resource.get("valueQuantity"), dict):
+            if _is_fhir_vital_observation(resource):
+                vital = _fhir_observation_to_vital(resource)
+                if vital is not None:
+                    vitals.append(vital)
+            else:
+                lab = _fhir_observation_to_lab(resource)
+                if lab is not None:
+                    labs.append(lab)
+        elif resource_type == "MedicationStatement":
+            medication = _fhir_medication_statement(resource)
+            if medication is not None:
+                medications.append(medication)
+    return labs, vitals, medications
+
+
+def _fhir_resources(parsed) -> list[dict]:
+    if not isinstance(parsed, dict):
+        return []
+    if parsed.get("resourceType") == "Bundle":
+        resources: list[dict] = []
+        for entry in parsed.get("entry", []):
+            if isinstance(entry, dict) and isinstance(entry.get("resource"), dict):
+                resources.append(entry["resource"])
+        return resources
+    return [parsed]
+
+
+def _is_fhir_vital_observation(resource: dict) -> bool:
+    for category in resource.get("category", []):
+        if not isinstance(category, dict):
+            continue
+        for coding in category.get("coding", []):
+            if isinstance(coding, dict) and coding.get("code") == "vital-signs":
+                return True
+    return False
+
+
+def _fhir_observation_to_lab(resource: dict) -> LabObservation | None:
+    quantity = resource.get("valueQuantity")
+    if not isinstance(quantity, dict) or "value" not in quantity:
+        return None
+    low, high = _fhir_reference_range(resource, quantity.get("unit", ""))
+    return LabObservation(
+        name=_fhir_code_text(resource) or resource.get("id") or "Observation",
+        loinc=_fhir_loinc(resource),
+        value=quantity["value"],
+        unit=_coerce_text(quantity.get("unit")),
+        reference_low=low,
+        reference_high=high,
+        flag=_lab_flag(quantity["value"], low, high),
+        effective_time=_coerce_text(resource.get("effectiveDateTime")) or "2026-01-01T00:00:00",
+    )
+
+
+def _fhir_observation_to_vital(resource: dict) -> VitalObservation | None:
+    quantity = resource.get("valueQuantity")
+    if not isinstance(quantity, dict) or not isinstance(quantity.get("value"), (int, float)):
+        return None
+    return VitalObservation(
+        name=_fhir_code_text(resource) or resource.get("id") or "Vital sign",
+        value=float(quantity["value"]),
+        unit=_coerce_text(quantity.get("unit")),
+        effective_time=_coerce_text(resource.get("effectiveDateTime")) or "2026-01-01T00:00:00",
+    )
+
+
+def _fhir_medication_statement(resource: dict) -> MedicationStatement | None:
+    name = _coerce_text(
+        resource.get("medicationCodeableConcept", {}).get("text")
+        if isinstance(resource.get("medicationCodeableConcept"), dict)
+        else resource.get("medication")
+    )
+    if not name:
+        return None
+    dosage = next(
+        (item for item in resource.get("dosage", []) if isinstance(item, dict)),
+        {},
+    )
+    route = ""
+    if isinstance(dosage.get("route"), dict):
+        route = _coerce_text(dosage["route"].get("text"))
+    return MedicationStatement(
+        name=name,
+        dose=_coerce_text(dosage.get("text")) or None,
+        route=route or None,
+        status=_coerce_text(resource.get("status")) or "unknown",
+    )
+
+
+def _fhir_code_text(resource: dict) -> str:
+    code = resource.get("code")
+    if not isinstance(code, dict):
+        return ""
+    return _coerce_text(code.get("text")) or _coerce_text(
+        next(
+            (
+                coding.get("display")
+                for coding in code.get("coding", [])
+                if isinstance(coding, dict) and coding.get("display")
+            ),
+            "",
+        )
+    )
+
+
+def _fhir_loinc(resource: dict) -> str | None:
+    code = resource.get("code")
+    if not isinstance(code, dict):
+        return None
+    for coding in code.get("coding", []):
+        if not isinstance(coding, dict):
+            continue
+        if "loinc.org" in _coerce_text(coding.get("system")).lower():
+            return _coerce_text(coding.get("code")) or None
+    return None
+
+
+def _fhir_reference_range(
+    resource: dict,
+    unit: str,
+) -> tuple[float | None, float | None]:
+    ranges = resource.get("referenceRange")
+    if not isinstance(ranges, list) or not ranges:
+        return None, None
+    first = ranges[0] if isinstance(ranges[0], dict) else {}
+    low = first.get("low", {})
+    high = first.get("high", {})
+    return _quantity_value(low, unit), _quantity_value(high, unit)
+
+
+def _quantity_value(quantity, unit: str) -> float | None:
+    if not isinstance(quantity, dict):
+        return None
+    value = quantity.get("value")
+    if not isinstance(value, (int, float)):
+        return None
+    quantity_unit = _coerce_text(quantity.get("unit"))
+    if quantity_unit and unit and quantity_unit != unit:
+        return None
+    return float(value)
+
+
+def _lab_flag(value, low: float | None, high: float | None) -> str | None:
+    if not isinstance(value, (int, float)):
+        return None
+    if low is not None and value < low:
+        return "L"
+    if high is not None and value > high:
+        return "H"
+    return None
+
+
+def _radiology_artifacts(
+    row: dict,
+    spec: HuggingFaceReferenceDataset,
+    stable_seed: str,
+    *,
+    report_text: str,
+) -> list[ImagingAsset]:
+    if spec.repo_id != "ClarusC64/image-report-consistency-radiology-v01":
+        return []
+    findings = _coerce_text(row.get("imaging_findings"))
+    study = _coerce_text(row.get("study"))
+    labels = _radiology_labels(findings)
+    return [
+        ImagingAsset(
+            image_id=f"img-{uuid5(NAMESPACE_URL, stable_seed + ':image')}",
+            modality=_coerce_text(row.get("modality")) or "unknown",
+            body_region=_body_region(study or findings),
+            prompt=findings or study or report_text,
+            report_text=report_text,
+            labels=labels,
+            generation_backend="huggingface-reference",
+        )
+    ]
+
+
+def _radiology_labels(findings: str) -> list[Code]:
+    lowered = findings.lower()
+    candidates = {
+        "pleural_effusion": "Pleural effusion",
+        "pneumothorax": "Pneumothorax",
+        "pneumonia": "Pneumonia",
+        "opacity": "Opacity",
+        "edema": "Pulmonary edema",
+        "atelectasis": "Atelectasis",
+        "fracture": "Fracture",
+        "appendicitis": "Appendicitis",
+    }
+    labels: list[Code] = []
+    for code, display in candidates.items():
+        terms = {code.replace("_", " "), display.lower()}
+        if code == "edema":
+            terms.add("pulmonary edema")
+        if any(term in lowered for term in terms):
+            labels.append(Code(system="huggingface-reference", code=code, display=display))
+    return labels
+
+
+def _body_region(text: str) -> str:
+    lowered = text.lower()
+    for region in ["chest", "abdomen", "pelvis", "head", "brain", "spine"]:
+        if region in lowered:
+            return region
+    return "unknown"
