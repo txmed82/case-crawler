@@ -1,5 +1,6 @@
 from casecrawler.models.synthetic import (
     ClinicalDocument,
+    Code,
     Encounter,
     ImagingAsset,
     ComplexityProfile,
@@ -144,6 +145,37 @@ def test_validator_rejects_low_image_alignment():
 
     assert report.approved is False
     assert any(issue.field == "imaging.alignment" for issue in report.issues)
+
+
+def test_validator_rejects_inconsistent_radiology_labels():
+    record = _record(
+        modalities=[Modality.IMAGING],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="XR",
+                body_region="chest",
+                prompt="portable chest x-ray pulmonary edema",
+                file_path="xray.png",
+                report_text="Portable chest radiograph without pneumothorax.",
+                labels=[
+                    Code(
+                        system="synthetic",
+                        code="pneumothorax",
+                        display="Pneumothorax",
+                    )
+                ],
+                generation_backend="unit-test",
+            )
+        ],
+    )
+
+    report = SyntheticValidator(
+        image_alignment_validator=FakeImageAlignmentValidator(0.9)
+    ).validate(record)
+
+    assert report.approved is False
+    assert any(issue.field == "imaging.img-1.labels" for issue in report.issues)
 
 
 def test_validator_scans_nested_record_fields_for_phi():

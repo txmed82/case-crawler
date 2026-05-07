@@ -29,6 +29,72 @@ class ImageAlignmentValidator:
         }
 
 
+def validate_radiology_label_consistency(asset: ImagingAsset) -> list[str]:
+    """Check that radiology labels are supported by prompt/report text."""
+    evidence_text = f"{asset.prompt} {asset.report_text}"
+    issues = []
+    for label in asset.labels:
+        label_terms = _label_terms(label.display, label.code)
+        if not label_terms:
+            continue
+        if not any(_contains_term(evidence_text, term) for term in label_terms):
+            issues.append(
+                f"Radiology label {label.display!r} is not supported by prompt/report text."
+            )
+            continue
+        negated_terms = [
+            term
+            for term in label_terms
+            if _contains_negated_term(asset.report_text, term)
+        ]
+        if negated_terms:
+            issues.append(
+                f"Radiology label {label.display!r} is negated in report text."
+            )
+    return issues
+
+
+def _label_terms(display: str, code: str) -> set[str]:
+    terms = {display.lower(), code.replace("_", " ").lower()}
+    terms.update(_RADIOLOGY_SYNONYMS.get(display.lower(), set()))
+    terms.update(_RADIOLOGY_SYNONYMS.get(code.replace("_", " ").lower(), set()))
+    return {term for term in terms if term}
+
+
+def _contains_term(text: str, term: str) -> bool:
+    return re.search(rf"\b{re.escape(term)}\b", text.lower()) is not None
+
+
+def _contains_negated_term(text: str, term: str) -> bool:
+    lowered = text.lower()
+    return any(
+        re.search(rf"\b{negation}\s+(?:\w+\s+){{0,3}}{re.escape(term)}\b", lowered)
+        for negation in _NEGATION_TERMS
+    )
+
+
+_NEGATION_TERMS = {
+    "absent",
+    "negative for",
+    "no",
+    "without",
+}
+
+_RADIOLOGY_SYNONYMS: dict[str, set[str]] = {
+    "atelectasis": {"volume loss", "linear opacity"},
+    "cardiomegaly": {"enlarged cardiac silhouette", "enlarged heart"},
+    "consolidation": {"airspace opacity", "airspace disease"},
+    "edema": {"pulmonary edema", "interstitial edema"},
+    "effusion": {"pleural effusion"},
+    "fracture": {"osseous fracture"},
+    "opacity": {"opacification", "airspace opacity"},
+    "pleural effusion": {"effusion"},
+    "pneumonia": {"consolidation", "airspace opacity"},
+    "pneumothorax": {"pleural air"},
+    "pulmonary edema": {"edema", "interstitial edema"},
+}
+
+
 class BiomedCLIPImageValidator:
     def __init__(
         self,
