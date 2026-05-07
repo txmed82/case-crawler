@@ -46,6 +46,15 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     assert documents_by_type["ed_note"].extracted_facts["topic"] == "pneumonia"
     assert "WBC" in documents_by_type["ed_note"].extracted_facts["lab_names"]
     assert "Ceftriaxone" in documents_by_type["ed_note"].extracted_facts["medications"]
+    assert documents_by_type["ed_note"].extracted_facts["lab_values"][0]["name"] == "WBC"
+    assert documents_by_type["ed_note"].extracted_facts["vital_values"][0]["name"] == "HR"
+    assert any(
+        vital["name"] == "SpO2"
+        for vital in documents_by_type["ed_note"].extracted_facts["abnormal_vitals"]
+    )
+    assert documents_by_type["ed_note"].extracted_facts["medication_details"][0][
+        "route"
+    ] == "IV"
 
 
 def test_text_generator_radiology_report_reflects_imaging_assets():
