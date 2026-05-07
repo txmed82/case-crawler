@@ -168,6 +168,77 @@ def timeseries_models() -> None:
         click.echo(f"  {profile.notes}")
 
 
+@cli.command("reference-datasets")
+def reference_datasets() -> None:
+    """List configured Hugging Face reference datasets for benchmarking."""
+    from casecrawler.integrations.huggingface import REFERENCE_DATASETS
+
+    for key, spec in REFERENCE_DATASETS.items():
+        click.echo(
+            f"{key}: {spec.repo_id} split={spec.split} "
+            f"license={spec.license}"
+        )
+        if spec.description:
+            click.echo(f"  {spec.description}")
+
+
+@cli.command("import-reference-dataset")
+@click.argument("reference_key")
+@click.option("--dataset-id", required=True, help="Dataset id for imported reference records")
+@click.option("--split", default=None, help="Override the configured dataset split")
+@click.option("--limit", default=100, type=int, help="Maximum reference rows to import")
+@click.option(
+    "--no-streaming",
+    is_flag=True,
+    help="Use non-streaming Hugging Face dataset loading",
+)
+def import_reference_dataset(
+    reference_key: str,
+    dataset_id: str,
+    split: str | None,
+    limit: int,
+    no_streaming: bool,
+) -> None:
+    """Import a Hugging Face reference dataset into the local dataset store."""
+    from casecrawler.integrations.huggingface import (
+        REFERENCE_DATASETS,
+        import_reference_rows,
+        load_reference_dataset,
+    )
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    if reference_key not in REFERENCE_DATASETS:
+        choices = ", ".join(sorted(REFERENCE_DATASETS))
+        raise click.ClickException(
+            f"Unknown reference dataset {reference_key!r}. Choose from: {choices}"
+        )
+    if limit < 1:
+        raise click.ClickException("limit must be at least 1.")
+    try:
+        rows = load_reference_dataset(
+            reference_key,
+            split=split,
+            streaming=not no_streaming,
+        )
+        records = import_reference_rows(
+            rows,
+            dataset_id=dataset_id,
+            reference_key=reference_key,
+            split=split,
+            limit=limit,
+        )
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    store = DatasetStore()
+    for record in records:
+        store.save_record(record)
+    click.echo(
+        f"Imported {len(records)} reference record(s) from {reference_key} "
+        f"into {dataset_id}"
+    )
+
+
 @cli.command("config")
 def show_config() -> None:
     """Show current configuration."""

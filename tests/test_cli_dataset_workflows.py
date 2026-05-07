@@ -104,6 +104,53 @@ def test_dataset_cli_benchmark_against_reference_dataset(tmp_path, monkeypatch):
     assert (tmp_path / "benchmark.json").exists()
 
 
+def test_dataset_cli_imports_hf_reference_dataset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    def fake_load_reference_dataset(key, *, split=None, streaming=True):
+        assert key == "asclepius"
+        assert split == "validation"
+        assert streaming is True
+        return [
+            {
+                "patient_id": "ref-1",
+                "note": "Progress Note: 60-year-old male with sepsis.",
+                "question": "Summarize.",
+                "answer": "Sepsis.",
+                "task": "Summarization",
+            }
+        ]
+
+    monkeypatch.setattr(
+        "casecrawler.integrations.huggingface.load_reference_dataset",
+        fake_load_reference_dataset,
+    )
+
+    listed = runner.invoke(cli, ["reference-datasets"])
+    imported = runner.invoke(
+        cli,
+        [
+            "import-reference-dataset",
+            "asclepius",
+            "--dataset-id",
+            "ds-hf-reference",
+            "--split",
+            "validation",
+            "--limit",
+            "1",
+        ],
+    )
+    store = DatasetStore()
+
+    assert listed.exit_code == 0
+    assert "asclepius" in listed.output
+    assert imported.exit_code == 0
+    assert "Imported 1 reference record(s)" in imported.output
+    assert store.dataset_exists("ds-hf-reference")
+    assert store.get_manifest("ds-hf-reference").metadata["record_ids"]
+
+
 def test_dataset_cli_benchmark_reports_missing_reference_cleanly(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

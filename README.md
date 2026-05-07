@@ -106,6 +106,9 @@ casecrawler config
 # Synthetic healthcare dataset generation
 casecrawler generate-dataset "sepsis" --count 25
 casecrawler generate-dataset "heart failure exacerbation" --count 100 --complexity complex
+casecrawler reference-datasets
+casecrawler import-reference-dataset asclepius --dataset-id ds-asclepius-ref --limit 100
+casecrawler benchmark-dataset --dataset-id <dataset_id> --reference-dataset-id ds-asclepius-ref
 casecrawler export-dataset --dataset-id <dataset_id> --format sft_jsonl --output train.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format tool_call_jsonl --output tools.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format dpo_jsonl --output preference.jsonl
