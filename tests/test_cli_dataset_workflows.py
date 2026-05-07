@@ -358,6 +358,75 @@ def test_dataset_cli_imports_synthea_fhir_directory(tmp_path, monkeypatch):
     assert record.labs[0].name == "Lactate"
 
 
+def test_dataset_cli_runs_synthea_and_imports_output(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    output_dir = tmp_path / "synthea-output"
+    output_dir.mkdir()
+
+    def fake_run_and_import(self, *, executable, output_dir, dataset_id, population):
+        assert executable == "/opt/synthea/run_synthea"
+        assert population == 2
+        return [
+            SyntheticRecord(
+                record_id="synthea-pat-1",
+                dataset_id=dataset_id,
+                topic="synthea import",
+                complexity=ComplexityProfile.MODERATE,
+                modalities=[Modality.STRUCTURED_EHR],
+                patient=SyntheticPatient(patient_id="pat-1", age=50, sex="female"),
+                encounters=[],
+                provenance=Provenance(
+                    generator="synthea-fhir-import",
+                    created_at="2026-01-01T00:00:00",
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "casecrawler.integrations.synthea.SyntheaAdapter.run_and_import",
+        fake_run_and_import,
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "run-synthea",
+            "--dataset-id",
+            "ds-synthea",
+            "--output-dir",
+            str(output_dir),
+            "--population",
+            "2",
+            "--synthea-executable",
+            "/opt/synthea/run_synthea",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Ran Synthea and imported 1 record(s) into ds-synthea" in result.output
+    assert DatasetStore().get_record("synthea-pat-1").patient.patient_id == "pat-1"
+
+
+def test_dataset_cli_run_synthea_requires_executable(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "run-synthea",
+            "--dataset-id",
+            "ds-synthea",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Provide --synthea-executable" in result.output
+
+
 def test_dataset_cli_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
