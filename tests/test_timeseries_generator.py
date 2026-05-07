@@ -35,7 +35,7 @@ def test_timeseries_generator_adds_longitudinal_channels():
 def test_timeseries_generator_adds_numeric_lab_trajectories():
     req = GenerationRequest(
         topic="acute pancreatitis",
-        modalities=[Modality.TIME_SERIES],
+        modalities=[Modality.TIME_SERIES, Modality.LABS],
         cohort_constraints={"base_time": "2026-01-01T00:00:00"},
     )
     record = StructuredGenerator().generate("ds-1", req, 0)

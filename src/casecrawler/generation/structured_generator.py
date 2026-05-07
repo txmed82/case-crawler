@@ -69,6 +69,9 @@ class StructuredGenerator:
                 )
             ],
         )
+        include_labs = _includes_modality(req, "labs")
+        include_vitals = _includes_modality(req, "vitals")
+        include_medications = _includes_modality(req, "structured_ehr")
         return SyntheticRecord(
             record_id=f"rec-{uuid5(NAMESPACE_URL, f'{stable_prefix}:record')}",
             dataset_id=dataset_id,
@@ -77,12 +80,24 @@ class StructuredGenerator:
             modalities=req.modalities,
             patient=patient,
             encounters=[encounter],
-            labs=[_lab_observation(lab, now, index) for lab in profile.labs],
-            vitals=[_vital_observation(vital, now, index) for vital in profile.vitals],
+            labs=[
+                _lab_observation(lab, now, index)
+                for lab in profile.labs
+            ]
+            if include_labs
+            else [],
+            vitals=[
+                _vital_observation(vital, now, index)
+                for vital in profile.vitals
+            ]
+            if include_vitals
+            else [],
             medication_history=[
                 _medication_statement(medication, now[:10])
                 for medication in profile.medications
-            ],
+            ]
+            if include_medications
+            else [],
             provenance=Provenance(generator="structured-generator", created_at=now),
             metadata={
                 "cohort_constraints": _metadata_cohort_constraints(
@@ -91,6 +106,10 @@ class StructuredGenerator:
                 "clinical_profile": profile.diagnosis_code,
             },
         )
+
+
+def _includes_modality(req: GenerationRequest, modality_value: str) -> bool:
+    return any(modality.value == modality_value for modality in req.modalities)
 
 
 def _normalize_base_time(value) -> str:

@@ -113,6 +113,32 @@ async def test_synthetic_pipeline_honors_request_validation_threshold(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_synthetic_pipeline_keeps_unrequested_modalities_empty(tmp_path):
+    pipeline = SyntheticPipeline(
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="sepsis",
+            count=1,
+            modalities=[Modality.IMAGING],
+            validation_threshold=0.3,
+        )
+    )
+    record = result["records"][0]
+
+    assert record.modalities == [Modality.IMAGING]
+    assert record.labs == []
+    assert record.vitals == []
+    assert record.medication_history == []
+    assert record.documents == []
+    assert record.time_series == []
+    assert record.imaging
+
+
+@pytest.mark.asyncio
 async def test_synthetic_pipeline_placeholder_imaging_uses_topic_aware_labels(tmp_path):
     pipeline = SyntheticPipeline(
         validator=SyntheticValidator(),
