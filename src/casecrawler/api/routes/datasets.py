@@ -37,6 +37,11 @@ class ReferenceImportRequest(BaseModel):
     limit: int | None = Field(default=None, ge=1)
 
 
+class SyntheaImportRequest(BaseModel):
+    path: str = Field(min_length=1)
+    dataset_id: str = Field(min_length=1)
+
+
 @router.get("/datasets")
 def list_datasets(limit: int = Query(100, ge=1, le=1000)):
     store = DatasetStore()
@@ -222,6 +227,28 @@ def import_reference_dataset(req: ReferenceImportRequest):
         "repo_id": spec.repo_id,
         "split": req.split or spec.split,
         "license": spec.license,
+    }
+
+
+@router.post("/datasets/synthea-import")
+def import_synthea_fhir(req: SyntheaImportRequest):
+    from json import JSONDecodeError
+
+    from casecrawler.integrations.synthea import SyntheaAdapter
+
+    try:
+        records = SyntheaAdapter().import_fhir_path(req.path, dataset_id=req.dataset_id)
+    except (OSError, JSONDecodeError) as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+    if not records:
+        raise HTTPException(status_code=404, detail="no Synthea FHIR JSON bundles found")
+    store = DatasetStore()
+    for record in records:
+        store.save_record(record)
+    return {
+        "dataset_id": req.dataset_id,
+        "imported": len(records),
+        "source": "synthea_fhir",
     }
 
 
