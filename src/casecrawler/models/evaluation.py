@@ -48,6 +48,9 @@ class BenchmarkReport(BaseModel):
     generated_dataset_id: str
     reference_dataset_id: str
     overall_score: float
+    passed: bool = False
+    failing_metrics: list[str] = Field(default_factory=list)
+    thresholds: dict[str, float] = Field(default_factory=dict)
     generated_profile: CohortProfile
     reference_profile: CohortProfile
     metrics: list[BenchmarkMetric]
