@@ -12,6 +12,9 @@ from casecrawler.models.synthetic import (
 )
 
 
+EXTERNAL_TIME_SERIES_TIMEOUT_SECONDS = 120.0
+
+
 class ExternalTimeSeriesRunner(Protocol):
     def __call__(self, command: list[str], payload: str) -> str: ...
 
@@ -22,6 +25,8 @@ class TimeSeriesGenerator:
         external_command: list[str] | None = None,
         external_runner: ExternalTimeSeriesRunner | None = None,
     ) -> None:
+        if external_command is not None and not external_command:
+            raise ValueError("external_command must not be empty when provided.")
         self._external_command = external_command
         self._external_runner = external_runner or _run_external_command
 
@@ -33,7 +38,7 @@ class TimeSeriesGenerator:
     ) -> SyntheticRecord:
         if record.time_series:
             return record
-        if self._external_command:
+        if self._external_command is not None:
             return self._add_external_time_series(record, channels=channels, points=points)
 
         start = datetime.fromisoformat(record.provenance.created_at.replace("Z", "+00:00"))
@@ -134,11 +139,27 @@ def _drift(name: str, offset: int) -> float:
 
 
 def _run_external_command(command: list[str], payload: str) -> str:
-    result = subprocess.run(
-        command,
-        input=payload,
-        capture_output=True,
-        check=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            input=payload,
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=EXTERNAL_TIME_SERIES_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "External time-series backend timed out after "
+            f"{EXTERNAL_TIME_SERIES_TIMEOUT_SECONDS:.0f}s: {command!r}."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "External time-series backend failed with exit code "
+            f"{exc.returncode}: {command!r}. stdout={exc.stdout!r} stderr={exc.stderr!r}"
+        ) from exc
+    except OSError as exc:
+        raise RuntimeError(
+            f"External time-series backend could not be executed: {command!r}."
+        ) from exc
     return result.stdout
