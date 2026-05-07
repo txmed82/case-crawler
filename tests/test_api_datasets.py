@@ -394,6 +394,74 @@ def test_dataset_api_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     assert record.documents[0].extracted_facts["instruction"] == "Extract diagnosis."
 
 
+def test_dataset_api_imports_synthea_fhir_directory(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    bundle_dir = tmp_path / "synthea"
+    bundle_dir.mkdir()
+    bundle = {
+        "resourceType": "Bundle",
+        "entry": [
+            {
+                "resource": {
+                    "resourceType": "Patient",
+                    "id": "pat-1",
+                    "gender": "female",
+                    "birthDate": "1970-01-01",
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Encounter",
+                    "id": "enc-1",
+                    "period": {"start": "2026-01-01T00:00:00"},
+                    "reasonCode": [{"text": "sepsis"}],
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Observation",
+                    "code": {"text": "Lactate"},
+                    "valueQuantity": {"value": 3.4, "unit": "mmol/L"},
+                    "effectiveDateTime": "2026-01-01T01:00:00",
+                }
+            },
+        ],
+    }
+    (bundle_dir / "patient.json").write_text(json.dumps(bundle))
+
+    response = client.post(
+        "/api/datasets/synthea-import",
+        json={"path": str(bundle_dir), "dataset_id": "ds-synthea"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "dataset_id": "ds-synthea",
+        "imported": 1,
+        "source": "synthea_fhir",
+    }
+    stored = client.get("/api/datasets/ds-synthea")
+    assert stored.status_code == 200
+    assert stored.json()["records"][0]["patient"]["patient_id"] == "pat-1"
+    assert stored.json()["records"][0]["labs"][0]["name"] == "Lactate"
+
+
+def test_dataset_api_reports_empty_synthea_import_directory(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+
+    response = client.post(
+        "/api/datasets/synthea-import",
+        json={"path": str(empty_dir), "dataset_id": "ds-synthea"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "no Synthea FHIR JSON bundles found"
+
+
 def test_dataset_api_reports_unknown_hf_reference_dataset(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)
