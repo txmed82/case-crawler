@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import subprocess
 from datetime import datetime, timedelta
 from typing import Protocol
@@ -49,11 +50,13 @@ class TimeSeriesGenerator:
             "spo2": _first_vital(record, "SpO2", 96.0),
             "lactate": _first_lab(record, "Lactate", 1.4),
         }
+        lab_channels = _numeric_lab_channels(record)
         units = {
             "heart_rate": "/min",
             "systolic_bp": "mmHg",
             "spo2": "%",
             "lactate": "mmol/L",
+            **{name: unit for name, (_, unit, _) in lab_channels.items()},
         }
         waveform_specs = {
             "ecg_lead_ii": {"unit": "mV", "sampling_rate_hz": 125.0, "minimum_points": 125},
@@ -61,7 +64,11 @@ class TimeSeriesGenerator:
         }
 
         generated_channels = []
-        selected_channels = channels if channels else [*base_values, *waveform_specs]
+        selected_channels = channels if channels else [
+            *base_values,
+            *lab_channels,
+            *waveform_specs,
+        ]
         for name in selected_channels:
             if name in waveform_specs:
                 generated_channels.append(
@@ -76,12 +83,23 @@ class TimeSeriesGenerator:
                 )
                 continue
             if name not in base_values:
-                continue
-            base = base_values[name]
+                lab_channel = lab_channels.get(name)
+                if lab_channel is None:
+                    continue
+                base, _unit, lab_target = lab_channel
+                is_lab_channel = True
+            else:
+                base = base_values[name]
+                lab_target = base
+                is_lab_channel = False
             series_points = []
             for offset in range(points):
                 timestamp = (start + timedelta(hours=offset)).isoformat()
-                drift = _drift(name, offset)
+                drift = (
+                    _lab_drift(base, lab_target, offset, points)
+                    if is_lab_channel
+                    else _drift(name, offset)
+                )
                 series_points.append(
                     TimeSeriesPoint(
                         timestamp=timestamp,
@@ -153,6 +171,42 @@ def _drift(name: str, offset: int) -> float:
     if name == "spo2":
         return 0.4 * offset
     return 0.0
+
+
+def _numeric_lab_channels(record: SyntheticRecord) -> dict[str, tuple[float, str, float]]:
+    channels: dict[str, tuple[float, str, float]] = {}
+    for lab in record.labs:
+        if not isinstance(lab.value, (int, float)):
+            continue
+        channel_name = f"lab_{_slug(lab.name)}"
+        if channel_name in channels:
+            continue
+        target = _lab_target(float(lab.value), lab.reference_low, lab.reference_high)
+        channels[channel_name] = (float(lab.value), lab.unit, target)
+    return channels
+
+
+def _lab_target(
+    value: float,
+    reference_low: float | None,
+    reference_high: float | None,
+) -> float:
+    if reference_low is not None and value < reference_low:
+        return reference_low
+    if reference_high is not None and value > reference_high:
+        return reference_high
+    return value
+
+
+def _lab_drift(base: float, target: float, offset: int, points: int) -> float:
+    if points <= 1:
+        return 0.0
+    progress = min(1.0, offset / (points - 1))
+    return (target - base) * 0.45 * progress
+
+
+def _slug(value: str) -> str:
+    return re.sub(r"\W+", "_", value.lower()).strip("_")
 
 
 def _waveform_channel(
