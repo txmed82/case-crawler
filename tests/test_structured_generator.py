@@ -68,6 +68,27 @@ def test_structured_generator_omits_medications_for_unrelated_topic():
     assert record.medication_history == []
 
 
+def test_structured_generator_uses_topic_specific_profiles():
+    generator = StructuredGenerator()
+
+    heart_failure = generator.generate("ds-one", GenerationRequest(topic="heart failure"), 0)
+    pneumonia = generator.generate("ds-one", GenerationRequest(topic="pneumonia"), 0)
+    dka = generator.generate("ds-one", GenerationRequest(topic="diabetic ketoacidosis"), 0)
+    stroke = generator.generate("ds-one", GenerationRequest(topic="ischemic stroke"), 0)
+
+    assert _lab_value(heart_failure, "BNP") > 500
+    assert _vital_value(heart_failure, "SpO2") < 94
+    assert any(medication.name == "Furosemide" for medication in heart_failure.medication_history)
+    assert pneumonia.encounters[0].diagnoses[0].display == "pneumonia"
+    assert any(medication.name == "Azithromycin" for medication in pneumonia.medication_history)
+    assert _lab_value(dka, "Glucose") > 250
+    assert _lab_value(dka, "Bicarbonate") < 18
+    assert any(medication.name == "Regular insulin" for medication in dka.medication_history)
+    assert _lab_value(stroke, "Glucose") >= 70
+    assert any(medication.name == "Aspirin" for medication in stroke.medication_history)
+    assert stroke.encounters[0].diagnoses[0].display == "ischemic stroke"
+
+
 def test_structured_generator_adds_furosemide_for_heart_failure_topic_variant():
     req = GenerationRequest(topic="heart-failure")
 
@@ -117,3 +138,11 @@ def test_structured_generator_rejects_empty_sex_constraint():
 
     with pytest.raises(ValueError, match="sexes must contain at least one value"):
         StructuredGenerator().generate("ds-one", req, 0)
+
+
+def _lab_value(record, name: str):
+    return next(lab.value for lab in record.labs if lab.name == name)
+
+
+def _vital_value(record, name: str):
+    return next(vital.value for vital in record.vitals if vital.name == name)
