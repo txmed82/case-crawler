@@ -519,6 +519,58 @@ def test_validator_rejects_implausible_waveform_channels():
     assert any(issue.field == "time_series.pleth.amplitude" for issue in report.issues)
 
 
+def test_validator_rejects_time_series_that_conflicts_with_structured_values():
+    bad = _record(
+        vitals=[
+            VitalObservation(
+                name="HR",
+                value=118,
+                unit="/min",
+                effective_time="2026-05-06T08:00:00",
+            )
+        ],
+        labs=[
+            LabObservation(
+                name="Lactate",
+                value=4.8,
+                unit="mmol/L",
+                reference_low=0.5,
+                reference_high=2.0,
+                flag="critical",
+                effective_time="2026-05-06T08:30:00",
+            )
+        ],
+        time_series=[
+            TimeSeriesChannel(
+                name="heart_rate",
+                unit="/min",
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T08:00:00",
+                        values={"value": 35},
+                    )
+                ],
+            ),
+            TimeSeriesChannel(
+                name="lab_lactate",
+                unit="mmol/L",
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T08:30:00",
+                        values={"value": 0.6},
+                    )
+                ],
+            ),
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "time_series.heart_rate.alignment" for issue in report.issues)
+    assert any(issue.field == "time_series.lab_lactate.alignment" for issue in report.issues)
+
+
 def test_validator_rejects_text_structured_lab_and_vital_contradictions():
     bad = _record(
         labs=[
