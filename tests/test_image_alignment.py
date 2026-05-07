@@ -1,7 +1,8 @@
-from casecrawler.models.synthetic import ImagingAsset
+from casecrawler.models.synthetic import Code, ImagingAsset
 from casecrawler.validation.image_alignment import (
     BiomedCLIPImageValidator,
     ImageAlignmentValidator,
+    validate_radiology_label_consistency,
 )
 
 
@@ -58,3 +59,61 @@ def test_biomedclip_validator_requires_imaging_extra(monkeypatch):
         assert "casecrawler[imaging]" in str(exc)
     else:
         raise AssertionError("Expected RuntimeError for missing imaging extra.")
+
+
+def test_radiology_label_consistency_accepts_supported_labels():
+    asset = _asset()
+    asset = asset.model_copy(
+        update={
+            "labels": [
+                Code(
+                    system="synthetic",
+                    code="pulmonary_edema",
+                    display="Pulmonary edema",
+                )
+            ]
+        }
+    )
+
+    issues = validate_radiology_label_consistency(asset)
+
+    assert issues == []
+
+
+def test_radiology_label_consistency_flags_missing_label_evidence():
+    asset = _asset().model_copy(
+        update={
+            "labels": [
+                Code(
+                    system="synthetic",
+                    code="pneumothorax",
+                    display="Pneumothorax",
+                )
+            ]
+        }
+    )
+
+    issues = validate_radiology_label_consistency(asset)
+
+    assert len(issues) == 1
+    assert "Pneumothorax" in issues[0]
+
+
+def test_radiology_label_consistency_flags_negated_label():
+    asset = _asset().model_copy(
+        update={
+            "report_text": "Portable chest radiograph without pneumothorax.",
+            "labels": [
+                Code(
+                    system="synthetic",
+                    code="pneumothorax",
+                    display="Pneumothorax",
+                )
+            ],
+        }
+    )
+
+    issues = validate_radiology_label_consistency(asset)
+
+    assert len(issues) == 1
+    assert "negated" in issues[0]

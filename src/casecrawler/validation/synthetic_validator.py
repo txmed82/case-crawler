@@ -7,7 +7,10 @@ from casecrawler.validation.clinical_rules import (
     validate_text_structured_contradictions,
     validate_vitals,
 )
-from casecrawler.validation.image_alignment import ImageAlignmentValidator
+from casecrawler.validation.image_alignment import (
+    ImageAlignmentValidator,
+    validate_radiology_label_consistency,
+)
 from casecrawler.validation.privacy import validate_privacy
 
 
@@ -38,6 +41,16 @@ class SyntheticValidator:
                     message="Image report text is weakly aligned with the image prompt.",
                 )
             )
+        for asset in record.imaging:
+            for message in validate_radiology_label_consistency(asset):
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.IMAGING,
+                        field=f"imaging.{asset.image_id}.labels",
+                        message=message,
+                    )
+                )
 
         clinical_error_count = sum(
             1
