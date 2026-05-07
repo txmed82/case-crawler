@@ -250,6 +250,44 @@ def test_validator_rejects_non_chronological_time_series():
     assert any(issue.field == "time_series.order" for issue in report.issues)
 
 
+def test_validator_rejects_implausible_waveform_channels():
+    bad = _record(
+        modalities=[Modality.TIME_SERIES],
+        time_series=[
+            TimeSeriesChannel(
+                name="ecg_lead_ii",
+                unit="mV",
+                sampling_rate_hz=2,
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T10:00:00",
+                        values={"millivolts": 8.5, "phase": 1.4},
+                    )
+                ],
+            ),
+            TimeSeriesChannel(
+                name="pleth",
+                unit="relative",
+                sampling_rate_hz=25,
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T10:00:00",
+                        values={"amplitude": -0.2, "phase": 0.1},
+                    )
+                ],
+            ),
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "time_series.sampling_rate_hz" for issue in report.issues)
+    assert any(issue.field == "time_series.ecg_lead_ii.millivolts" for issue in report.issues)
+    assert any(issue.field == "time_series.ecg_lead_ii.phase" for issue in report.issues)
+    assert any(issue.field == "time_series.pleth.amplitude" for issue in report.issues)
+
+
 def test_validator_rejects_text_structured_lab_and_vital_contradictions():
     bad = _record(
         labs=[

@@ -101,6 +101,25 @@ def validate_temporal_consistency(record: SyntheticRecord) -> list[ValidationIss
     return issues
 
 
+def validate_time_series_waveforms(record: SyntheticRecord) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    for channel in record.time_series:
+        if channel.sampling_rate_hz is not None and channel.sampling_rate_hz <= 0:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.TIME_SERIES,
+                    field="time_series.sampling_rate_hz",
+                    message=f"Time series channel {channel.name} has a non-positive sampling rate.",
+                )
+            )
+        if channel.name == "ecg_lead_ii":
+            issues.extend(_validate_ecg_channel(channel))
+        if channel.name == "pleth":
+            issues.extend(_validate_pleth_channel(channel))
+    return issues
+
+
 def validate_lab_flags(record: SyntheticRecord) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     for lab in record.labs:
@@ -231,3 +250,72 @@ def _parse_datetime(value: str | None) -> datetime | None:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _validate_ecg_channel(channel) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    if channel.sampling_rate_hz is None or not 50 <= channel.sampling_rate_hz <= 500:
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                modality=Modality.TIME_SERIES,
+                field="time_series.sampling_rate_hz",
+                message="ECG waveform sampling rate must be between 50 and 500 Hz.",
+            )
+        )
+    for point in channel.points:
+        millivolts = point.values.get("millivolts")
+        if isinstance(millivolts, int | float) and not -5 <= millivolts <= 5:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.TIME_SERIES,
+                    field="time_series.ecg_lead_ii.millivolts",
+                    message="ECG lead II millivolts are outside a plausible synthetic range.",
+                )
+            )
+            break
+    issues.extend(_validate_phase_values(channel, "time_series.ecg_lead_ii.phase"))
+    return issues
+
+
+def _validate_pleth_channel(channel) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    if channel.sampling_rate_hz is None or not 10 <= channel.sampling_rate_hz <= 250:
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                modality=Modality.TIME_SERIES,
+                field="time_series.sampling_rate_hz",
+                message="Pleth waveform sampling rate must be between 10 and 250 Hz.",
+            )
+        )
+    for point in channel.points:
+        amplitude = point.values.get("amplitude")
+        if isinstance(amplitude, int | float) and not 0 <= amplitude <= 2:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.TIME_SERIES,
+                    field="time_series.pleth.amplitude",
+                    message="Pleth amplitude is outside a plausible normalized range.",
+                )
+            )
+            break
+    issues.extend(_validate_phase_values(channel, "time_series.pleth.phase"))
+    return issues
+
+
+def _validate_phase_values(channel, field: str) -> list[ValidationIssue]:
+    for point in channel.points:
+        phase = point.values.get("phase")
+        if isinstance(phase, int | float) and not 0 <= phase <= 1:
+            return [
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.TIME_SERIES,
+                    field=field,
+                    message=f"Waveform phase for channel {channel.name} must be between 0 and 1.",
+                )
+            ]
+    return []
