@@ -16,6 +16,11 @@ class CohortProfile(BaseModel):
     lab_name_counts: dict[str, int] = Field(default_factory=dict)
     vital_name_counts: dict[str, int] = Field(default_factory=dict)
     medication_name_counts: dict[str, int] = Field(default_factory=dict)
+    time_series_channel_counts: dict[str, int] = Field(default_factory=dict)
+    mean_time_series_points: float | None = None
+    mean_time_series_duration_hours: float | None = None
+    imaging_modality_counts: dict[str, int] = Field(default_factory=dict)
+    imaging_body_region_counts: dict[str, int] = Field(default_factory=dict)
     approved_rate: float | None = None
 
 
