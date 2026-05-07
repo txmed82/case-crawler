@@ -178,6 +178,71 @@ def test_quality_report_requires_expected_clinical_document_types():
     assert any("expected clinical document types" in item for item in report.recommendations)
 
 
+def test_quality_report_requires_expected_clinical_document_author_roles():
+    record = _record("rec-1").model_copy(
+        update={
+            "modalities": [Modality.CLINICAL_TEXT, Modality.IMAGING],
+            "documents": [
+                ClinicalDocument(
+                    document_id="doc-ed",
+                    note_type="ed_note",
+                    author_role="nurse",
+                    timestamp="2026-01-01T00:00:00",
+                    clean_text="ED note.",
+                ),
+                ClinicalDocument(
+                    document_id="doc-progress",
+                    note_type="progress_note",
+                    author_role="nurse",
+                    timestamp="2026-01-01T00:00:00",
+                    clean_text="Progress note.",
+                ),
+                ClinicalDocument(
+                    document_id="doc-nursing",
+                    note_type="nursing_note",
+                    author_role="physician",
+                    timestamp="2026-01-01T00:00:00",
+                    clean_text="Nursing note.",
+                ),
+                ClinicalDocument(
+                    document_id="doc-discharge",
+                    note_type="discharge_summary",
+                    author_role="nurse",
+                    timestamp="2026-01-01T00:00:00",
+                    clean_text="Discharge summary.",
+                ),
+                ClinicalDocument(
+                    document_id="doc-rad",
+                    note_type="radiology_report",
+                    author_role="physician",
+                    timestamp="2026-01-01T00:00:00",
+                    clean_text="Radiology report.",
+                ),
+            ],
+            "imaging": [
+                ImagingAsset(
+                    image_id="img-1",
+                    modality="XR",
+                    body_region="chest",
+                    prompt="portable chest x-ray pneumonia",
+                    report_text="Pneumonia.",
+                    generation_backend="placeholder",
+                )
+            ],
+        }
+    )
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.export_ready is False
+    assert report.issue_counts_by_field["documents.ed_note.author_role"] == 1
+    assert report.issue_counts_by_field["documents.progress_note.author_role"] == 1
+    assert report.issue_counts_by_field["documents.nursing_note.author_role"] == 1
+    assert report.issue_counts_by_field["documents.discharge_summary.author_role"] == 1
+    assert report.issue_counts_by_field["documents.radiology_report.author_role"] == 1
+    assert any("expected clinical document author roles" in item for item in report.recommendations)
+
+
 def test_quality_report_summarizes_multimodal_training_artifacts():
     record = _record("rec-1").model_copy(
         update={

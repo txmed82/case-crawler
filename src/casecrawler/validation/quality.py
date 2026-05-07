@@ -36,6 +36,10 @@ def build_dataset_quality_report(
             record,
             issue_counts_by_field,
         )
+        blocking_issue_count += _count_mismatched_document_author_roles(
+            record,
+            issue_counts_by_field,
+        )
         if record.validation is None:
             issue_counts_by_field["validation.missing"] += 1
             blocking_issue_count += 1
@@ -150,6 +154,28 @@ def _count_missing_expected_documents(
     return missing
 
 
+def _count_mismatched_document_author_roles(
+    record: SyntheticRecord,
+    issue_counts_by_field: Counter[str],
+) -> int:
+    expected_roles = {
+        "ed_note": {"physician"},
+        "progress_note": {"physician"},
+        "nursing_note": {"nurse"},
+        "discharge_summary": {"physician"},
+        "radiology_report": {"radiologist"},
+    }
+    mismatches = 0
+    for document in record.documents:
+        expected = expected_roles.get(document.note_type)
+        if expected is None:
+            continue
+        if document.author_role.strip().lower() not in expected:
+            issue_counts_by_field[f"documents.{document.note_type}.author_role"] += 1
+            mismatches += 1
+    return mismatches
+
+
 def _is_waveform_channel(name: str, sampling_rate_hz: float | None) -> bool:
     if sampling_rate_hz:
         return True
@@ -178,6 +204,8 @@ def _recommendations(
         recommendations.append("Resolve missing modality artifacts before fine-tuning export.")
     if any(field.startswith("documents.") and field.endswith(".missing") for field in issue_counts_by_field):
         recommendations.append("Add expected clinical document types before fine-tuning export.")
+    if any(field.startswith("documents.") and field.endswith(".author_role") for field in issue_counts_by_field):
+        recommendations.append("Fix expected clinical document author roles before fine-tuning export.")
     if "clinical_text" not in modality_counts:
         recommendations.append("Add clinical text records for supervised fine-tuning tasks.")
     return recommendations
