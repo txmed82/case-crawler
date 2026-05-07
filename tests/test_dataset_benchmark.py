@@ -216,6 +216,9 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
     assert report.generated_dataset_id == "ds-gen"
     assert report.reference_dataset_id == "ds-ref"
     assert report.overall_score > 0.8
+    assert report.passed is True
+    assert report.failing_metrics == []
+    assert report.thresholds == {"min_overall_score": 0.75, "min_metric_score": 0.5}
     assert {metric.name for metric in report.metrics} >= {
         "modality_overlap",
         "mean_age",
@@ -382,6 +385,9 @@ def test_dataset_benchmark_flags_modality_mismatch():
     )
 
     assert modality_metric.score == 0.0
+    assert report.passed is False
+    assert "modality_overlap" in report.failing_metrics
+    assert any("Benchmark gate failed: modality_overlap" in warning for warning in report.warnings)
     assert any("modality_overlap" in warning for warning in report.warnings)
 
 
@@ -417,6 +423,27 @@ def test_dataset_benchmark_flags_declared_modality_without_artifacts():
     assert density_metric.reference_value == 1.0
     assert density_metric.score == 0.0
     assert any("modality_artifact_coverage:imaging" in warning for warning in report.warnings)
+
+
+def test_dataset_benchmark_supports_custom_pass_thresholds():
+    generated = [_record("rec-1", "ds-gen")]
+    reference = [_record("ref-1", "ds-ref")]
+
+    report = DatasetBenchmark(min_overall_score=1.0, min_metric_score=1.0).compare(
+        generated,
+        reference,
+    )
+
+    assert report.passed is True
+    assert report.failing_metrics == []
+    assert report.thresholds == {"min_overall_score": 1.0, "min_metric_score": 1.0}
+
+
+def test_dataset_benchmark_rejects_invalid_thresholds():
+    with pytest.raises(ValueError, match="min_overall_score"):
+        DatasetBenchmark(min_overall_score=1.1)
+    with pytest.raises(ValueError, match="min_metric_score"):
+        DatasetBenchmark(min_metric_score=-0.1)
 
 
 def test_dataset_benchmark_flags_declared_structured_ehr_without_artifacts():

@@ -20,6 +20,19 @@ ARTIFACT_DENSITY_KEYS = {
 
 
 class DatasetBenchmark:
+    def __init__(
+        self,
+        *,
+        min_overall_score: float = 0.75,
+        min_metric_score: float = 0.5,
+    ) -> None:
+        if not 0 <= min_overall_score <= 1:
+            raise ValueError("min_overall_score must be between 0 and 1.")
+        if not 0 <= min_metric_score <= 1:
+            raise ValueError("min_metric_score must be between 0 and 1.")
+        self._min_overall_score = min_overall_score
+        self._min_metric_score = min_metric_score
+
     def compare(
         self,
         generated_records: list[SyntheticRecord],
@@ -181,11 +194,33 @@ class DatasetBenchmark:
             ),
         ]
         overall = sum(metric.score for metric in metrics) / len(metrics)
+        rounded_overall = round(overall, 4)
+        failing_metrics = [
+            metric.name for metric in metrics if metric.score < self._min_metric_score
+        ]
+        passed = rounded_overall >= self._min_overall_score and not failing_metrics
         warnings = _warnings(generated_profile, reference_profile, metrics)
+        if rounded_overall < self._min_overall_score:
+            warnings.append(
+                "Overall benchmark score "
+                f"{rounded_overall:.2f} is below required "
+                f"{self._min_overall_score:.2f}."
+            )
+        for metric_name in failing_metrics:
+            warnings.append(
+                f"Benchmark gate failed: {metric_name} below "
+                f"{self._min_metric_score:.2f}."
+            )
         return BenchmarkReport(
             generated_dataset_id=generated_profile.dataset_id,
             reference_dataset_id=reference_profile.dataset_id,
-            overall_score=round(overall, 4),
+            overall_score=rounded_overall,
+            passed=passed,
+            failing_metrics=failing_metrics,
+            thresholds={
+                "min_overall_score": self._min_overall_score,
+                "min_metric_score": self._min_metric_score,
+            },
             generated_profile=generated_profile,
             reference_profile=reference_profile,
             metrics=metrics,
