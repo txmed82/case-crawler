@@ -125,6 +125,9 @@ async def test_text_generator_can_use_llm_provider_for_documents():
     assert updated.provenance.model == "fake-clinical-note-model"
     assert provider.prompt
     assert "pneumonia" in provider.prompt
+    assert "Medication history:" in provider.prompt
+    assert "Time series:" in provider.prompt
+    assert "Imaging:" in provider.prompt
 
 
 class FakeTextProvider:
