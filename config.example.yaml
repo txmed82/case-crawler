@@ -35,6 +35,9 @@ synthetic:
   imaging_backend: "placeholder"
   imaging_model_profile: null
   diffusers_model_id: "stabilityai/stable-diffusion-2-1"
+  time_series_backend: "deterministic"
+  time_series_model_profile: null
+  time_series_command: null
   synthea_executable: null
   image_output_dir: "./data/images"
   export_formats:

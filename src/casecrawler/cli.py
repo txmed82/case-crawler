@@ -156,6 +156,18 @@ def imaging_models() -> None:
             click.echo(f"  {profile.notes}")
 
 
+@cli.command("timeseries-models")
+def timeseries_models() -> None:
+    """List built-in EHR time-series model adapter profiles."""
+    from casecrawler.generation.timeseries_models import list_time_series_model_profiles
+
+    for profile in list_time_series_model_profiles():
+        click.echo(
+            f"{profile.name}: adapter={profile.adapter_type} reference={profile.reference}"
+        )
+        click.echo(f"  {profile.notes}")
+
+
 @cli.command("config")
 def show_config() -> None:
     """Show current configuration."""

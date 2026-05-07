@@ -45,6 +45,15 @@ def test_cli_imaging_models():
     assert "cxr_pneumonia_dreambooth" in result.output
 
 
+def test_cli_timeseries_models():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["timeseries-models"])
+
+    assert result.exit_code == 0
+    assert "timediff" in result.output
+    assert "rawmed" in result.output
+
+
 def test_cli_ingest(tmp_path):
     runner = CliRunner()
     fake_search = AsyncMock(return_value=[_fake_doc()])
