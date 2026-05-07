@@ -95,6 +95,21 @@ class DatasetBenchmark:
                 set(generated_profile.imaging_body_region_counts),
                 set(reference_profile.imaging_body_region_counts),
             ),
+            _jaccard_metric(
+                "imaging_label_overlap",
+                set(generated_profile.imaging_label_counts),
+                set(reference_profile.imaging_label_counts),
+            ),
+            _distribution_metric(
+                "imaging_label_distribution",
+                generated_profile.imaging_label_counts,
+                reference_profile.imaging_label_counts,
+            ),
+            _jaccard_metric(
+                "imaging_label_pair_overlap",
+                set(generated_profile.imaging_label_pair_counts),
+                set(reference_profile.imaging_label_pair_counts),
+            ),
             _closeness_metric(
                 "approved_rate",
                 generated_profile.approved_rate,
@@ -133,6 +148,8 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     time_series_channel_counts: Counter[str] = Counter()
     imaging_modality_counts: Counter[str] = Counter()
     imaging_body_region_counts: Counter[str] = Counter()
+    imaging_label_counts: Counter[str] = Counter()
+    imaging_label_pair_counts: Counter[str] = Counter()
     ages: list[int] = []
     document_lengths: list[int] = []
     time_series_point_counts: list[int] = []
@@ -162,6 +179,18 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         for asset in record.imaging:
             imaging_modality_counts[asset.modality] += 1
             imaging_body_region_counts[asset.body_region] += 1
+            asset_labels = sorted(
+                {
+                    _imaging_label_key(label.display, label.code)
+                    for label in asset.labels
+                    if label.display or label.code
+                }
+            )
+            for label in asset_labels:
+                imaging_label_counts[label] += 1
+            for index, left in enumerate(asset_labels):
+                for right in asset_labels[index + 1 :]:
+                    imaging_label_pair_counts[f"{left}|{right}"] += 1
         if record.validation is not None:
             approved_values.append(record.validation.approved)
 
@@ -181,6 +210,8 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         mean_time_series_duration_hours=_mean_float(time_series_durations),
         imaging_modality_counts=dict(sorted(imaging_modality_counts.items())),
         imaging_body_region_counts=dict(sorted(imaging_body_region_counts.items())),
+        imaging_label_counts=dict(sorted(imaging_label_counts.items())),
+        imaging_label_pair_counts=dict(sorted(imaging_label_pair_counts.items())),
         approved_rate=_mean([int(value) for value in approved_values])
         if approved_values
         else None,
@@ -329,3 +360,8 @@ def _parse_datetime(value: str) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _imaging_label_key(display: str, code: str) -> str:
+    value = display or code.replace("_", " ")
+    return " ".join(value.lower().replace("_", " ").split())
