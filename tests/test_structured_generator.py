@@ -98,9 +98,12 @@ def test_structured_generator_lists_clinical_profile_catalog():
     catalog = {profile.key: profile for profile in list_clinical_profile_catalog()}
 
     assert "sepsis" in catalog
+    assert "bacterial_meningitis" in catalog
+    assert "generalized_seizure" in catalog
     assert catalog["sepsis"].keywords == ("sepsis", "infection")
     assert "Lactate" in catalog["sepsis"].lab_names
     assert "Ceftriaxone" in catalog["sepsis"].medication_names
+    assert "CSF WBC" in catalog["bacterial_meningitis"].lab_names
 
 
 def test_structured_generator_uses_additional_common_clinical_profiles():
@@ -123,6 +126,30 @@ def test_structured_generator_uses_additional_common_clinical_profiles():
     assert any(medication.name == "Pantoprazole" for medication in gi_bleed.medication_history)
     assert _lab_value(aki, "Creatinine") > 1.5
     assert any(medication.name == "Normal saline" for medication in aki.medication_history)
+
+
+def test_structured_generator_uses_expanded_common_clinical_profiles():
+    generator = StructuredGenerator()
+
+    asthma = generator.generate("ds-one", GenerationRequest(topic="status asthmaticus"), 0)
+    pancreatitis = generator.generate("ds-one", GenerationRequest(topic="acute pancreatitis"), 0)
+    appendicitis = generator.generate("ds-one", GenerationRequest(topic="appendicitis"), 0)
+    pyelo = generator.generate("ds-one", GenerationRequest(topic="pyelonephritis"), 0)
+    meningitis = generator.generate("ds-one", GenerationRequest(topic="bacterial meningitis"), 0)
+    seizure = generator.generate("ds-one", GenerationRequest(topic="status epilepticus"), 0)
+
+    assert _vital_value(asthma, "Respiratory rate") >= 30
+    assert any(medication.name == "Magnesium sulfate" for medication in asthma.medication_history)
+    assert _lab_value(pancreatitis, "Lipase") > 500
+    assert any(medication.name == "Lactated Ringer's" for medication in pancreatitis.medication_history)
+    assert _lab_value(appendicitis, "CRP") > 10
+    assert any(medication.name == "Metronidazole" for medication in appendicitis.medication_history)
+    assert _lab_value(pyelo, "Urine WBC") > 5
+    assert any(medication.name == "Ceftriaxone" for medication in pyelo.medication_history)
+    assert _lab_value(meningitis, "CSF WBC") > 100
+    assert any(medication.name == "Vancomycin" for medication in meningitis.medication_history)
+    assert _lab_value(seizure, "Lactate") > 2
+    assert any(medication.name == "Lorazepam" for medication in seizure.medication_history)
 
 
 def test_structured_generator_adds_furosemide_for_heart_failure_topic_variant():

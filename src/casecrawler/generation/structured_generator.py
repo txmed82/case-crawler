@@ -531,4 +531,147 @@ _TOPIC_PROFILES: list[tuple[tuple[str, ...], ClinicalProfile]] = [
             ],
         ),
     ),
+    (
+        ("asthma", "status asthmaticus"),
+        ClinicalProfile(
+            diagnosis_display="asthma exacerbation",
+            diagnosis_code="asthma_exacerbation",
+            labs=[
+                _lab("pCO2", 48, "mmHg", reference_low=35, reference_high=45, flag="H", step=1),
+                _lab("Eosinophils", 0.7, "K/uL", reference_low=0, reference_high=0.5, flag="H", step=0.1),
+                _lab("Potassium", 3.4, "mmol/L", reference_low=3.5, reference_high=5.1, flag="L", step=-0.1),
+            ],
+            vitals=[
+                _vital("HR", 124, "/min", step=3),
+                _vital("SBP", 132, "mmHg", step=2),
+                _vital("SpO2", 89, "%", step=-1),
+                _vital("Respiratory rate", 34, "/min", step=1),
+            ],
+            medications=[
+                _med("Albuterol", rxnorm="435", dose="5 mg", route="nebulized", frequency="continuous"),
+                _med("Ipratropium", rxnorm="7213", dose="0.5 mg", route="nebulized", frequency="every 20 minutes"),
+                _med("Magnesium sulfate", rxnorm="6585", dose="2 g", route="IV", frequency="once"),
+                _med("Methylprednisolone", rxnorm="6902", dose="125 mg", route="IV", frequency="once"),
+            ],
+        ),
+    ),
+    (
+        ("pancreatitis", "epigastric pain"),
+        ClinicalProfile(
+            diagnosis_display="acute pancreatitis",
+            diagnosis_code="acute_pancreatitis",
+            labs=[
+                _lab("Lipase", 1240, "U/L", reference_low=0, reference_high=160, flag="H", step=80),
+                _lab("WBC", 14.1, "K/uL", reference_low=4.5, reference_high=11.0, flag="H", step=0.4),
+                _lab("Calcium", 8.1, "mg/dL", reference_low=8.5, reference_high=10.5, flag="L", step=-0.1),
+                _lab("BUN", 27, "mg/dL", reference_low=7, reference_high=20, flag="H", step=2),
+            ],
+            vitals=[
+                _vital("HR", 112, "/min", step=3),
+                _vital("SBP", 106, "mmHg", step=-2),
+                _vital("Temperature", 37.9, "C", step=0.1),
+                _vital("SpO2", 96, "%", step=0),
+            ],
+            medications=[
+                _med("Lactated Ringer's", dose="200 mL/hr", route="IV", frequency="continuous"),
+                _med("Hydromorphone", rxnorm="3423", dose="0.5 mg", route="IV", frequency="every 3 hours as needed"),
+                _med("Ondansetron", rxnorm="26225", dose="4 mg", route="IV", frequency="every 6 hours as needed"),
+            ],
+        ),
+    ),
+    (
+        ("appendicitis", "right lower quadrant", "rlq pain"),
+        ClinicalProfile(
+            diagnosis_display="acute appendicitis",
+            diagnosis_code="acute_appendicitis",
+            labs=[
+                _lab("WBC", 16.4, "K/uL", reference_low=4.5, reference_high=11.0, flag="H", step=0.4),
+                _lab("CRP", 72, "mg/L", reference_low=0, reference_high=10, flag="H", step=5),
+                _lab("Creatinine", 0.9, "mg/dL", reference_low=0.6, reference_high=1.3, step=0.0),
+            ],
+            vitals=[
+                _vital("HR", 106, "/min", step=2),
+                _vital("SBP", 122, "mmHg", step=1),
+                _vital("Temperature", 38.1, "C", step=0.1),
+                _vital("SpO2", 98, "%", step=0),
+            ],
+            medications=[
+                _med("Ceftriaxone", rxnorm="2193", dose="2 g", route="IV", frequency="once"),
+                _med("Metronidazole", rxnorm="6922", dose="500 mg", route="IV", frequency="every 8 hours"),
+                _med("Morphine", rxnorm="7052", dose="4 mg", route="IV", frequency="as needed"),
+            ],
+        ),
+    ),
+    (
+        ("pyelonephritis", "uti", "urinary tract infection", "flank pain"),
+        ClinicalProfile(
+            diagnosis_display="acute pyelonephritis",
+            diagnosis_code="acute_pyelonephritis",
+            labs=[
+                _lab("WBC", 14.7, "K/uL", reference_low=4.5, reference_high=11.0, flag="H", step=0.4),
+                _lab("Urine WBC", 80, "/HPF", reference_low=0, reference_high=5, flag="H", step=5),
+                _lab("Nitrite", 1, "positive", reference_low=0, reference_high=0, flag="H", step=0),
+                _lab("Creatinine", 1.2, "mg/dL", reference_low=0.6, reference_high=1.3, step=0.1),
+            ],
+            vitals=[
+                _vital("HR", 114, "/min", step=2),
+                _vital("SBP", 104, "mmHg", step=-2),
+                _vital("Temperature", 39.0, "C", step=0.1),
+                _vital("SpO2", 97, "%", step=0),
+            ],
+            medications=[
+                _med("Ceftriaxone", rxnorm="2193", dose="1 g", route="IV", frequency="daily"),
+                _med("Ketorolac", rxnorm="35827", dose="15 mg", route="IV", frequency="once"),
+                _med("Normal saline", dose="1 L", route="IV", frequency="bolus"),
+            ],
+        ),
+    ),
+    (
+        ("meningitis", "neck stiffness", "photophobia"),
+        ClinicalProfile(
+            diagnosis_display="bacterial meningitis",
+            diagnosis_code="bacterial_meningitis",
+            labs=[
+                _lab("WBC", 18.6, "K/uL", reference_low=4.5, reference_high=11.0, flag="H", step=0.5),
+                _lab("CSF WBC", 820, "cells/uL", reference_low=0, reference_high=5, flag="H", step=40),
+                _lab("CSF glucose", 32, "mg/dL", reference_low=40, reference_high=70, flag="L", step=-2),
+                _lab("CSF protein", 180, "mg/dL", reference_low=15, reference_high=45, flag="H", step=10),
+            ],
+            vitals=[
+                _vital("HR", 118, "/min", step=3),
+                _vital("SBP", 128, "mmHg", step=2),
+                _vital("Temperature", 39.4, "C", step=0.1),
+                _vital("SpO2", 96, "%", step=0),
+            ],
+            medications=[
+                _med("Ceftriaxone", rxnorm="2193", dose="2 g", route="IV", frequency="every 12 hours"),
+                _med("Vancomycin", rxnorm="11124", dose="15 mg/kg", route="IV", frequency="every 12 hours"),
+                _med("Dexamethasone", rxnorm="3264", dose="10 mg", route="IV", frequency="every 6 hours"),
+            ],
+        ),
+    ),
+    (
+        ("seizure", "status epilepticus", "postictal"),
+        ClinicalProfile(
+            diagnosis_display="generalized seizure",
+            diagnosis_code="generalized_seizure",
+            labs=[
+                _lab("Sodium", 128, "mmol/L", reference_low=135, reference_high=145, flag="L", step=-1),
+                _lab("Glucose", 68, "mg/dL", reference_low=70, reference_high=110, flag="L", step=-2),
+                _lab("Lactate", 5.6, "mmol/L", reference_low=0.5, reference_high=2.0, flag="H", step=0.3),
+                _lab("Creatine kinase", 680, "U/L", reference_low=30, reference_high=200, flag="H", step=60),
+            ],
+            vitals=[
+                _vital("HR", 128, "/min", step=3),
+                _vital("SBP", 146, "mmHg", step=2),
+                _vital("SpO2", 93, "%", step=-1),
+                _vital("Temperature", 37.6, "C", step=0.0),
+            ],
+            medications=[
+                _med("Lorazepam", rxnorm="6470", dose="2 mg", route="IV", frequency="once"),
+                _med("Levetiracetam", rxnorm="114477", dose="1500 mg", route="IV", frequency="once"),
+                _med("Dextrose 50%", dose="25 g", route="IV", frequency="as needed"),
+            ],
+        ),
+    ),
 ]
