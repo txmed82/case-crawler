@@ -80,7 +80,9 @@ class SyntheticPipeline:
                 output_dir=self._image_output_dir,
                 prompt=prompt,
             )
-        return self._imaging_generator.generate_placeholder(
-            output_dir=self._image_output_dir,
-            prompt=prompt,
-        )
+        if self._image_backend == "placeholder":
+            return self._imaging_generator.generate_placeholder(
+                output_dir=self._image_output_dir,
+                prompt=prompt,
+            )
+        raise ValueError(f"Unknown synthetic imaging backend: {self._image_backend}")

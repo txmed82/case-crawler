@@ -46,6 +46,35 @@ def test_diffusers_backend_uses_injected_pipeline(tmp_path):
     assert pipeline.calls[0]["negative_prompt"] == "real patient identifiers"
 
 
+def test_diffusers_backend_generates_unique_files(tmp_path):
+    pipeline = FakeDiffusersPipeline()
+    generator = ImagingGenerator(diffusers_pipeline=pipeline, diffusers_model_id="test/xray")
+
+    first = generator.generate_diffusers(str(tmp_path), "portable chest x-ray")
+    second = generator.generate_diffusers(str(tmp_path), "portable chest x-ray")
+
+    assert first.image_id != second.image_id
+    assert first.file_path != second.file_path
+
+
+def test_diffusers_backend_caches_loaded_pipeline(tmp_path):
+    class LoadingGenerator(ImagingGenerator):
+        def __init__(self):
+            super().__init__(diffusers_model_id="test/xray")
+            self.load_count = 0
+
+        def _load_diffusers_pipeline(self):
+            self.load_count += 1
+            return FakeDiffusersPipeline()
+
+    generator = LoadingGenerator()
+
+    generator.generate_diffusers(str(tmp_path), "portable chest x-ray")
+    generator.generate_diffusers(str(tmp_path), "portable chest x-ray")
+
+    assert generator.load_count == 1
+
+
 def test_diffusers_backend_requires_imaging_extra_when_not_injected(monkeypatch, tmp_path):
     def fake_require_package(import_name: str, extra: str):
         raise RuntimeError(f"Install casecrawler[{extra}] to use this backend.")

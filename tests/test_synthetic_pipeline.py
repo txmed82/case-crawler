@@ -55,3 +55,17 @@ async def test_synthetic_pipeline_uses_configured_diffusers_backend(tmp_path):
 
     assert result["records"][0].imaging[0].generation_backend == "diffusers:test"
     assert imaging_generator.diffusers_prompts[0][0] == str(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_rejects_unknown_image_backend(tmp_path):
+    pipeline = SyntheticPipeline(
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="unknown",
+    )
+
+    with pytest.raises(ValueError, match="Unknown synthetic imaging backend"):
+        await pipeline.generate(
+            GenerationRequest(topic="pneumonia", count=1, modalities=[Modality.IMAGING])
+        )

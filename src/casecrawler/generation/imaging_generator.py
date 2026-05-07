@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Protocol
-from uuid import NAMESPACE_URL, uuid5
+from uuid import uuid4
 
 from casecrawler.integrations.huggingface import require_package
 from casecrawler.models.synthetic import ImagingAsset
@@ -56,9 +56,11 @@ class ImagingGenerator:
     ) -> ImagingAsset:
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
-        image_id = f"img-{uuid5(NAMESPACE_URL, f'{self._diffusers_model_id}:{prompt}')}"
+        image_id = f"img-{uuid4()}"
         file_path = output_path / f"{image_id}.png"
-        pipeline = self._diffusers_pipeline or self._load_diffusers_pipeline()
+        if self._diffusers_pipeline is None:
+            self._diffusers_pipeline = self._load_diffusers_pipeline()
+        pipeline = self._diffusers_pipeline
         result = pipeline(prompt=prompt, negative_prompt=negative_prompt)
         if not getattr(result, "images", None):
             raise RuntimeError("Diffusers backend returned no images.")
