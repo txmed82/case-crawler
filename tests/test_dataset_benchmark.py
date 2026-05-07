@@ -66,7 +66,11 @@ def _record(
             )
         ],
         medication_history=[
-            MedicationStatement(name="Ceftriaxone", status="active")
+            MedicationStatement(
+                name="Ceftriaxone",
+                route="IV",
+                status="active",
+            )
         ],
         time_series=[
             TimeSeriesChannel(
@@ -105,6 +109,7 @@ def _record(
                 author_role="physician",
                 timestamp="2026-01-01T00:00:00",
                 clean_text="Synthetic clinical note with labs and vitals.",
+                messy_text="synthetic clinical note w/ labs + vitals",
             )
         ],
         provenance=Provenance(generator="unit-test", created_at="2026-01-01T00:00:00"),
@@ -129,6 +134,23 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.mean_age == 65
     assert profile.sex_counts == {"female": 1, "male": 1}
     assert profile.lab_name_counts == {"WBC": 2}
+    assert profile.lab_flag_counts == {"H": 2}
+    assert profile.lab_numeric_summaries["wbc"] == {
+        "count": 2,
+        "max": 12.0,
+        "mean": 12.0,
+        "min": 12.0,
+    }
+    assert profile.vital_numeric_summaries["hr"] == {
+        "count": 2,
+        "max": 110.0,
+        "mean": 110.0,
+        "min": 110.0,
+    }
+    assert profile.medication_route_counts == {"IV": 2}
+    assert profile.medication_status_counts == {"active": 2}
+    assert profile.document_author_role_counts == {"physician": 2}
+    assert profile.messy_document_rate == 1.0
     assert profile.time_series_channel_counts == {"heart_rate": 2}
     assert profile.mean_time_series_points == 2
     assert profile.mean_time_series_duration_hours == 6
@@ -158,8 +180,16 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "modality_overlap",
         "mean_age",
         "lab_name_overlap",
+        "lab_flag_distribution",
+        "lab_value_mean:wbc",
         "vital_name_overlap",
+        "vital_value_mean:hr",
         "medication_name_overlap",
+        "medication_route_distribution",
+        "medication_status_distribution",
+        "document_author_role_overlap",
+        "document_author_role_distribution",
+        "messy_document_rate",
         "time_series_channel_overlap",
         "mean_time_series_points",
         "mean_time_series_duration_hours",
@@ -234,6 +264,52 @@ def test_dataset_benchmark_compares_imaging_finding_labels():
     assert label_metric.details["reference_only"] == ["pleural effusion"]
     assert distribution_metric.score == 0.0
     assert any("imaging_label_overlap" in warning for warning in report.warnings)
+
+
+def test_dataset_benchmark_flags_numeric_lab_and_vital_drift():
+    generated = [_record("rec-1", "ds-gen")]
+    reference = [
+        _record("ref-1", "ds-ref").model_copy(
+            update={
+                "labs": [
+                    LabObservation(
+                        name="WBC",
+                        value=40.0,
+                        unit="K/uL",
+                        reference_low=4.5,
+                        reference_high=11.0,
+                        flag="H",
+                        effective_time="2026-01-01T00:00:00",
+                    )
+                ],
+                "vitals": [
+                    VitalObservation(
+                        name="HR",
+                        value=180,
+                        unit="/min",
+                        effective_time="2026-01-01T00:00:00",
+                    )
+                ],
+            }
+        )
+    ]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    lab_metric = next(
+        metric for metric in report.metrics if metric.name == "lab_value_mean:wbc"
+    )
+    vital_metric = next(
+        metric for metric in report.metrics if metric.name == "vital_value_mean:hr"
+    )
+
+    assert lab_metric.generated_value == 12.0
+    assert lab_metric.reference_value == 40.0
+    assert lab_metric.score < 0.5
+    assert vital_metric.generated_value == 110.0
+    assert vital_metric.reference_value == 180.0
+    assert vital_metric.score == 0.0
+    assert any("lab_value_mean:wbc" in warning for warning in report.warnings)
+    assert any("vital_value_mean:hr" in warning for warning in report.warnings)
 
 
 def test_dataset_benchmark_flags_modality_mismatch():
