@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { datasetExportUrl, fetchDataset, fetchDatasets } from "../api/client";
 import type { DatasetManifest, ExportFormat, SyntheticRecordPreview } from "../api/client";
@@ -8,7 +8,7 @@ export default function CasesPage() {
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("sft_jsonl");
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["datasets"],
     queryFn: () => fetchDatasets(100),
   });
@@ -17,11 +17,24 @@ export default function CasesPage() {
   );
   const activeDatasetId = selectedDatasetId ?? datasets[0]?.dataset_id ?? null;
 
-  const { data: detail, isLoading: isDetailLoading } = useQuery({
+  const {
+    data: detail,
+    isLoading: isDetailLoading,
+    isError: isDetailError,
+    error: detailError,
+    refetch: refetchDetail,
+  } = useQuery({
     queryKey: ["dataset", activeDatasetId],
     queryFn: () => fetchDataset(activeDatasetId as string, 25),
     enabled: Boolean(activeDatasetId),
   });
+  const exportFormats = detail?.manifest.export_formats ?? ["sft_jsonl"];
+
+  useEffect(() => {
+    if (detail && !detail.manifest.export_formats.includes(exportFormat)) {
+      setExportFormat(detail.manifest.export_formats[0] ?? "sft_jsonl");
+    }
+  }, [detail, exportFormat]);
 
   return (
     <div className="space-y-6">
@@ -41,7 +54,20 @@ export default function CasesPage() {
       />
 
       {isLoading && <p className="text-sm text-gray-500">Loading...</p>}
-      {error && <p className="text-sm text-red-600">Failed to load datasets.</p>}
+      {error && (
+        <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-sm text-red-700">
+            {error instanceof Error ? error.message : "Failed to load datasets."}
+          </p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="rounded-md border border-red-300 px-3 py-1 text-sm text-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {data && (
         <div className="grid gap-6 lg:grid-cols-[minmax(260px,320px)_1fr]">
@@ -64,6 +90,20 @@ export default function CasesPage() {
 
           <div className="space-y-4">
             {isDetailLoading && <p className="text-sm text-gray-500">Loading dataset preview...</p>}
+            {isDetailError && (
+              <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-4">
+                <p className="text-sm text-red-700">
+                  {detailError instanceof Error ? detailError.message : "Failed to load dataset preview."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => refetchDetail()}
+                  className="rounded-md border border-red-300 px-3 py-1 text-sm text-red-700"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
             {detail && (
               <>
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -78,10 +118,11 @@ export default function CasesPage() {
                         onChange={(event) => setExportFormat(event.target.value as ExportFormat)}
                         className="rounded-md border border-gray-300 px-3 py-2 text-sm"
                       >
-                        <option value="sft_jsonl">SFT JSONL</option>
-                        <option value="chat_jsonl">Chat JSONL</option>
-                        <option value="multimodal_jsonl">Multimodal JSONL</option>
-                        <option value="raw_jsonl">Raw JSONL</option>
+                        {exportFormats.map((format) => (
+                          <option key={format} value={format}>
+                            {format.replace("_", " ").toUpperCase()}
+                          </option>
+                        ))}
                       </select>
                       <a
                         href={datasetExportUrl(detail.manifest.dataset_id, exportFormat)}

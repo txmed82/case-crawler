@@ -27,6 +27,10 @@ export default function GeneratePage() {
 
   const handleGenerate = async () => {
     if (!topic.trim() || modalities.length === 0 || isGenerating) return;
+    if (!Number.isInteger(count) || count < 1) {
+      setError("Record count must be a positive integer.");
+      return;
+    }
     setResult(null);
     setError(null);
     setIsGenerating(true);
@@ -82,6 +86,7 @@ export default function GeneratePage() {
                 key={option.value}
                 type="button"
                 onClick={() => toggleModality(option.value)}
+                aria-pressed={selected}
                 className={`rounded-md border px-3 py-2 text-sm ${
                   selected
                     ? "border-blue-600 bg-blue-50 text-blue-700"
@@ -118,7 +123,13 @@ export default function GeneratePage() {
           />
           <button
             onClick={handleGenerate}
-            disabled={!topic.trim() || modalities.length === 0 || isGenerating}
+            disabled={
+              !topic.trim() ||
+              modalities.length === 0 ||
+              !Number.isInteger(count) ||
+              count < 1 ||
+              isGenerating
+            }
             className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
           >
             Generate
