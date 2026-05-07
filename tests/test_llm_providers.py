@@ -2,11 +2,17 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import BaseModel
 
 from casecrawler.llm.openai_provider import OpenAIProvider
-from casecrawler.llm.openrouter_provider import OpenRouterProvider
 from casecrawler.llm.ollama_provider import OllamaProvider
-from casecrawler.models.case import Patient
+from casecrawler.llm.openrouter_provider import OpenRouterProvider
+
+
+class StructuredPatient(BaseModel):
+    age: int
+    sex: str
+    demographics: str
 
 
 # --- OpenAI ---
@@ -47,7 +53,7 @@ async def test_openai_generate_structured(openai_provider):
         openai_provider._client.chat.completions, "create",
         new_callable=AsyncMock, return_value=mock_response,
     ):
-        result = await openai_provider.generate_structured("create patient", Patient)
+        result = await openai_provider.generate_structured("create patient", StructuredPatient)
         assert result.data.age == 42
 
 
@@ -97,5 +103,5 @@ async def test_ollama_generate_structured(ollama_provider, httpx_mock):
             "model": "llama3",
         },
     )
-    result = await ollama_provider.generate_structured("create patient", Patient)
+    result = await ollama_provider.generate_structured("create patient", StructuredPatient)
     assert result.data.age == 42
