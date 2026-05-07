@@ -2,9 +2,16 @@ import os
 from unittest.mock import patch
 
 import pytest
+from pydantic import BaseModel
 
 from casecrawler.llm.base import GenerationResult, StructuredGenerationResult
 from casecrawler.llm.factory import get_provider
+
+
+class StructuredPatient(BaseModel):
+    age: int
+    sex: str
+    demographics: str
 
 
 def test_generation_result():
@@ -14,9 +21,7 @@ def test_generation_result():
 
 
 def test_structured_generation_result():
-    from casecrawler.models.case import Patient
-
-    p = Patient(age=42, sex="female", demographics="Healthy")
+    p = StructuredPatient(age=42, sex="female", demographics="Healthy")
     r = StructuredGenerationResult(data=p, input_tokens=10, output_tokens=20, model="test")
     assert r.data.age == 42
 

@@ -1,9 +1,15 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import BaseModel
 
 from casecrawler.llm.anthropic_provider import AnthropicProvider
-from casecrawler.models.case import Patient
+
+
+class StructuredPatient(BaseModel):
+    age: int
+    sex: str
+    demographics: str
 
 
 @pytest.fixture
@@ -37,7 +43,7 @@ async def test_generate_structured(provider):
     mock_response.model = "claude-sonnet-4-6"
 
     with patch.object(provider._client.messages, "create", new_callable=AsyncMock, return_value=mock_response):
-        result = await provider.generate_structured("create a patient", Patient, system="system")
+        result = await provider.generate_structured("create a patient", StructuredPatient, system="system")
         assert result.data.age == 42
         assert result.data.sex == "female"
         assert result.input_tokens == 150
