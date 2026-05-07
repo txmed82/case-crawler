@@ -99,7 +99,9 @@ class FakeImageAlignmentValidator:
         return self._score
 
 
-def test_validator_records_modality_alignment_score_for_images():
+def test_validator_records_modality_alignment_score_for_images(tmp_path):
+    image_path = tmp_path / "xray.png"
+    image_path.write_bytes(b"synthetic image bytes")
     record = _record(
         modalities=[Modality.IMAGING],
         imaging=[
@@ -108,7 +110,7 @@ def test_validator_records_modality_alignment_score_for_images():
                 modality="XR",
                 body_region="chest",
                 prompt="portable chest x-ray pulmonary edema",
-                file_path="xray.png",
+                file_path=str(image_path),
                 report_text="portable chest x-ray pulmonary edema",
                 generation_backend="unit-test",
             )
@@ -145,6 +147,57 @@ def test_validator_rejects_low_image_alignment():
 
     assert report.approved is False
     assert any(issue.field == "imaging.alignment" for issue in report.issues)
+
+
+def test_validator_rejects_missing_generated_image_file():
+    record = _record(
+        modalities=[Modality.IMAGING],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="XR",
+                body_region="chest",
+                prompt="portable chest x-ray pulmonary edema",
+                file_path="missing-xray.png",
+                report_text="portable chest x-ray pulmonary edema",
+                generation_backend="diffusers:model",
+            )
+        ],
+    )
+
+    report = SyntheticValidator(
+        image_alignment_validator=FakeImageAlignmentValidator(0.9)
+    ).validate(record)
+
+    assert report.approved is False
+    assert any(issue.field == "imaging.img-1.file_path" for issue in report.issues)
+
+
+def test_validator_rejects_empty_or_unsupported_generated_image_file(tmp_path):
+    empty_image = tmp_path / "empty.gif"
+    empty_image.write_bytes(b"")
+    record = _record(
+        modalities=[Modality.IMAGING],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="XR",
+                body_region="chest",
+                prompt="portable chest x-ray pulmonary edema",
+                file_path=str(empty_image),
+                report_text="portable chest x-ray pulmonary edema",
+                generation_backend="diffusers:model",
+            )
+        ],
+    )
+
+    report = SyntheticValidator(
+        image_alignment_validator=FakeImageAlignmentValidator(0.9)
+    ).validate(record)
+
+    assert report.approved is False
+    assert any(issue.field == "imaging.img-1.file_size" for issue in report.issues)
+    assert any(issue.field == "imaging.img-1.file_format" for issue in report.issues)
 
 
 def test_validator_rejects_inconsistent_radiology_labels():
