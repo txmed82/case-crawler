@@ -22,6 +22,17 @@ class ImagingModelProfile:
             return finding_prompt
         return f"{self.prompt_prefix.strip()} {finding_prompt}".strip()
 
+    def is_compatible(self, modality: str, body_region: str) -> bool:
+        profile_modality = self.modality.lower()
+        profile_region = self.body_region.lower()
+        requested_modality = modality.lower()
+        requested_region = body_region.lower()
+        modality_ok = profile_modality in {"medical_image", "multimodal", "any"}
+        modality_ok = modality_ok or profile_modality == requested_modality
+        region_ok = profile_region in {"unspecified", "multiregion", "any"}
+        region_ok = region_ok or profile_region == requested_region
+        return modality_ok and region_ok
+
 
 IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
     "prompt2medimage": ImagingModelProfile(
@@ -41,6 +52,15 @@ IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
         prompt_prefix="frontal chest x-ray, radiology image:",
         license=None,
         notes="MIMIC-CXR fine-tune documented as better suited for x-ray editing.",
+    ),
+    "stable_diffusion_chest_xray": ImagingModelProfile(
+        name="stable_diffusion_chest_xray",
+        model_id="danyalmalik/stable-diffusion-chest-xray",
+        modality="XR",
+        body_region="chest",
+        prompt_prefix="synthetic frontal chest x-ray:",
+        license="creativeml-openrail-m",
+        notes="Open chest X-ray Stable Diffusion profile from Hugging Face.",
     ),
     "cxr_normal_dreambooth": ImagingModelProfile(
         name="cxr_normal_dreambooth",
