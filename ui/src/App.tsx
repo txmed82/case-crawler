@@ -5,7 +5,6 @@ import SearchPage from './pages/SearchPage';
 import SourcesPage from './pages/SourcesPage';
 import GeneratePage from './pages/GeneratePage';
 import CasesPage from './pages/CasesPage';
-import PlayCasePage from './pages/PlayCasePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,7 +38,7 @@ export default function App() {
                   <NavLink to="/search" className={navLinkClass}>Search</NavLink>
                   <NavLink to="/sources" className={navLinkClass}>Sources</NavLink>
                   <NavLink to="/generate" className={navLinkClass}>Generate Dataset</NavLink>
-                  <NavLink to="/cases" className={navLinkClass}>Datasets</NavLink>
+                  <NavLink to="/datasets" className={navLinkClass}>Datasets</NavLink>
                 </div>
               </div>
             </div>
@@ -51,8 +50,8 @@ export default function App() {
               <Route path="/search" element={<SearchPage />} />
               <Route path="/sources" element={<SourcesPage />} />
               <Route path="/generate" element={<GeneratePage />} />
+              <Route path="/datasets" element={<CasesPage />} />
               <Route path="/cases" element={<CasesPage />} />
-              <Route path="/play/:caseId" element={<PlayCasePage />} />
             </Routes>
           </main>
         </div>

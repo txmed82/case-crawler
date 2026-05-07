@@ -1,59 +1,232 @@
-// ui/src/pages/CasesPage.tsx
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchCases } from "../api/client";
+import { datasetExportUrl, fetchDataset, fetchDatasets } from "../api/client";
+import type { DatasetManifest, ExportFormat, SyntheticRecordPreview } from "../api/client";
 
 export default function CasesPage() {
   const [topicFilter, setTopicFilter] = useState("");
-  const [difficultyFilter, setDifficultyFilter] = useState("");
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("sft_jsonl");
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["cases", topicFilter, difficultyFilter],
-    queryFn: () => fetchCases({
-      topic: topicFilter || undefined,
-      difficulty: difficultyFilter || undefined,
-      limit: 50,
-    }),
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["datasets"],
+    queryFn: () => fetchDatasets(100),
+  });
+  const datasets = (data?.datasets ?? []).filter((dataset) =>
+    dataset.topic.toLowerCase().includes(topicFilter.trim().toLowerCase())
+  );
+  const activeDatasetId = selectedDatasetId ?? datasets[0]?.dataset_id ?? null;
+
+  const { data: detail, isLoading: isDetailLoading } = useQuery({
+    queryKey: ["dataset", activeDatasetId],
+    queryFn: () => fetchDataset(activeDatasetId as string, 25),
+    enabled: Boolean(activeDatasetId),
   });
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Datasets</h1>
-      <p className="text-sm text-gray-600">
-        Legacy case records remain available while the dataset workbench is expanded.
-      </p>
-
-      <div className="flex gap-3">
-        <input type="text" value={topicFilter} onChange={(e) => setTopicFilter(e.target.value)}
-          placeholder="Filter by topic" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        <select value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-          <option value="">All difficulties</option>
-          <option value="medical_student">Medical Student</option>
-          <option value="resident">Resident</option>
-          <option value="attending">Attending</option>
-        </select>
+      <div>
+        <h1 className="text-2xl font-bold">Dataset Workbench</h1>
+        <p className="mt-1 text-sm text-gray-600">
+          Review generated synthetic records, validation status, modalities, and fine-tuning exports.
+        </p>
       </div>
 
+      <input
+        type="text"
+        value={topicFilter}
+        onChange={(e) => setTopicFilter(e.target.value)}
+        placeholder="Filter by topic"
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+      />
+
       {isLoading && <p className="text-sm text-gray-500">Loading...</p>}
+      {error && <p className="text-sm text-red-600">Failed to load datasets.</p>}
 
       {data && (
-        <div className="space-y-2">
-          <p className="text-sm text-gray-500">{data.total} case(s)</p>
-          {data.cases.map((c) => (
-            <div key={c.case_id}
-              className="flex items-center justify-between rounded-lg border border-gray-200 p-4">
-              <div>
-                <p className="font-medium">{c.topic}</p>
-                <p className="text-sm text-gray-500">{c.difficulty} | {c.specialty.join(", ")}</p>
-              </div>
-              <div className="text-right text-sm">
-                <p className="text-green-600">Acc: {(c.review?.accuracy_score ?? 0).toFixed(2)}</p>
-                <p className="text-gray-400">{c.case_id.slice(0, 8)}</p>
-              </div>
-            </div>
-          ))}
-          {data.cases.length === 0 && <p className="text-gray-500">No cases yet. Generate some first.</p>}
+        <div className="grid gap-6 lg:grid-cols-[minmax(260px,320px)_1fr]">
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">{datasets.length} dataset(s)</p>
+            {datasets.map((dataset) => (
+              <DatasetRow
+                key={dataset.dataset_id}
+                dataset={dataset}
+                selected={dataset.dataset_id === activeDatasetId}
+                onSelect={() => setSelectedDatasetId(dataset.dataset_id)}
+              />
+            ))}
+            {datasets.length === 0 && (
+              <p className="rounded-lg border border-gray-200 p-4 text-sm text-gray-500">
+                No synthetic datasets match this filter.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            {isDetailLoading && <p className="text-sm text-gray-500">Loading dataset preview...</p>}
+            {detail && (
+              <>
+                <div className="rounded-lg border border-gray-200 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="text-lg font-semibold text-gray-900">{detail.manifest.name}</p>
+                      <p className="text-sm text-gray-500">{detail.manifest.dataset_id}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <select
+                        value={exportFormat}
+                        onChange={(event) => setExportFormat(event.target.value as ExportFormat)}
+                        className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                      >
+                        <option value="sft_jsonl">SFT JSONL</option>
+                        <option value="chat_jsonl">Chat JSONL</option>
+                        <option value="multimodal_jsonl">Multimodal JSONL</option>
+                        <option value="raw_jsonl">Raw JSONL</option>
+                      </select>
+                      <a
+                        href={datasetExportUrl(detail.manifest.dataset_id, exportFormat)}
+                        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                      >
+                        Export
+                      </a>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <Metric label="Records" value={detail.manifest.generated_count} />
+                    <Metric label="Approved" value={detail.manifest.approved_count} />
+                    <Metric
+                      label="Approval"
+                      value={`${Math.round(
+                        (detail.manifest.approved_count /
+                          Math.max(detail.manifest.generated_count, 1)) *
+                          100
+                      )}%`}
+                    />
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {detail.manifest.modalities.map((modality) => (
+                      <span
+                        key={modality}
+                        className="rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700"
+                      >
+                        {modality.replace("_", " ")}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {detail.records.map((record) => (
+                    <RecordPreview key={record.record_id} record={record} />
+                  ))}
+                  {detail.records.length === 0 && (
+                    <p className="rounded-lg border border-gray-200 p-4 text-sm text-gray-500">
+                      This dataset has no previewable records.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DatasetRow({
+  dataset,
+  selected,
+  onSelect,
+}: {
+  dataset: DatasetManifest;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full rounded-lg border p-4 text-left transition-colors ${
+        selected
+          ? "border-blue-500 bg-blue-50"
+          : "border-gray-200 bg-white hover:border-gray-300"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-gray-900">{dataset.topic}</p>
+          <p className="mt-1 text-xs text-gray-500">{dataset.dataset_id}</p>
+        </div>
+        <span className="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700">
+          {dataset.generated_count}
+        </span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-1">
+        {dataset.modalities.slice(0, 4).map((modality) => (
+          <span key={modality} className="text-xs text-gray-500">
+            {modality.replace("_", " ")}
+          </span>
+        ))}
+      </div>
+    </button>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-lg border border-gray-200 p-3">
+      <p className="text-xs font-medium uppercase text-gray-500">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-gray-900">{value}</p>
+    </div>
+  );
+}
+
+function RecordPreview({ record }: { record: SyntheticRecordPreview }) {
+  const note = record.documents[0];
+  const scores = record.validation;
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-gray-900">{record.record_id}</p>
+          <p className="text-sm text-gray-500">
+            {record.patient.age} {record.patient.sex} | {record.complexity}
+          </p>
+        </div>
+        {scores && (
+          <span
+            className={`rounded-md px-2 py-1 text-xs font-medium ${
+              scores.approved ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"
+            }`}
+          >
+            {scores.approved ? "Approved" : "Needs review"}
+          </span>
+        )}
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <p className="text-sm text-gray-600">
+          Labs: {record.labs.map((lab) => `${lab.name} ${lab.value}${lab.unit}`).join(", ") || "none"}
+        </p>
+        <p className="text-sm text-gray-600">
+          Vitals: {record.vitals.map((vital) => `${vital.name} ${vital.value}${vital.unit}`).join(", ") || "none"}
+        </p>
+        <p className="text-sm text-gray-600">
+          Assets: {record.documents.length} notes, {record.imaging.length} images
+        </p>
+      </div>
+      {note && (
+        <div className="mt-3 rounded-md bg-gray-50 p-3">
+          <p className="text-xs font-medium uppercase text-gray-500">{note.note_type}</p>
+          <p className="mt-1 line-clamp-3 text-sm text-gray-700">{note.clean_text}</p>
+        </div>
+      )}
+      {scores && (
+        <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
+          <span>Schema {scores.schema_score.toFixed(2)}</span>
+          <span>Consistency {scores.clinical_consistency_score.toFixed(2)}</span>
+          <span>Privacy {scores.privacy_score.toFixed(2)}</span>
+          <span>Utility {scores.utility_score.toFixed(2)}</span>
         </div>
       )}
     </div>

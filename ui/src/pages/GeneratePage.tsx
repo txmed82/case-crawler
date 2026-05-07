@@ -1,22 +1,42 @@
 import { useState } from "react";
 import { startDatasetGenerate } from "../api/client";
-import type { DatasetGenerateResponse } from "../api/client";
+import type { DatasetGenerateResponse, SyntheticModality } from "../api/client";
+
+const modalityOptions: { value: SyntheticModality; label: string }[] = [
+  { value: "structured_ehr", label: "EHR" },
+  { value: "clinical_text", label: "Notes" },
+  { value: "labs", label: "Labs" },
+  { value: "vitals", label: "Vitals" },
+  { value: "time_series", label: "Time series" },
+  { value: "imaging", label: "Imaging" },
+];
 
 export default function GeneratePage() {
   const [topic, setTopic] = useState("");
   const [complexity, setComplexity] = useState<"simple" | "moderate" | "complex" | "rare">("moderate");
   const [count, setCount] = useState(1);
+  const [modalities, setModalities] = useState<SyntheticModality[]>([
+    "structured_ehr",
+    "clinical_text",
+    "labs",
+    "vitals",
+  ]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<DatasetGenerateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
-    if (!topic.trim() || isGenerating) return;
+    if (!topic.trim() || modalities.length === 0 || isGenerating) return;
     setResult(null);
     setError(null);
     setIsGenerating(true);
     try {
-      const resp = await startDatasetGenerate({ topic: topic.trim(), complexity, count });
+      const resp = await startDatasetGenerate({
+        topic: topic.trim(),
+        complexity,
+        count,
+        modalities,
+      });
       setResult(resp);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Dataset generation failed");
@@ -25,9 +45,23 @@ export default function GeneratePage() {
     }
   };
 
+  const toggleModality = (modality: SyntheticModality) => {
+    setModalities((current) =>
+      current.includes(modality)
+        ? current.filter((item) => item !== modality)
+        : [...current, modality]
+    );
+  };
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Generate Dataset</h1>
+      <div>
+        <h1 className="text-2xl font-bold">Generate Dataset</h1>
+        <p className="mt-1 text-sm text-gray-600">
+          Create synthetic healthcare records with structured EHR fields, notes, labs, vitals,
+          time series, and image placeholders.
+        </p>
+      </div>
 
       <div className="space-y-4">
         <input
@@ -36,10 +70,29 @@ export default function GeneratePage() {
           type="text"
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
-          placeholder="e.g. sepsis"
+          placeholder="e.g. sepsis, heart failure exacerbation, diabetic ketoacidosis"
           className="w-full rounded-lg border border-gray-300 px-4 py-2"
           onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
         />
+        <div className="flex flex-wrap gap-2">
+          {modalityOptions.map((option) => {
+            const selected = modalities.includes(option.value);
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => toggleModality(option.value)}
+                className={`rounded-md border px-3 py-2 text-sm ${
+                  selected
+                    ? "border-blue-600 bg-blue-50 text-blue-700"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
         <div className="flex flex-wrap gap-4">
           <select
             id="dataset-complexity"
@@ -65,7 +118,7 @@ export default function GeneratePage() {
           />
           <button
             onClick={handleGenerate}
-            disabled={!topic.trim() || isGenerating}
+            disabled={!topic.trim() || modalities.length === 0 || isGenerating}
             className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
           >
             Generate
@@ -76,7 +129,7 @@ export default function GeneratePage() {
       {isGenerating && <div className="text-sm text-gray-600">Generating synthetic records...</div>}
 
       {result && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-4">
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
           <p className="font-medium text-green-800">Dataset generated</p>
           <p className="text-sm text-green-700">
             {result.generated} generated, {result.approved} approved
@@ -89,7 +142,7 @@ export default function GeneratePage() {
       )}
 
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
           <p className="font-medium text-red-800">Generation failed</p>
           <p className="text-sm text-red-700">{error}</p>
         </div>
