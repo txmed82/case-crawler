@@ -76,7 +76,22 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
         "difficulty": "easy",
         "scenario": "Annual check-up with diabetes family history.",
         "note": "Patient: Jane Doe, 48-year-old female. HbA1c ordered.",
-        "fhir_bundle": '{"resourceType":"Bundle","type":"collection"}',
+        "fhir_bundle": (
+            '{"resourceType":"Bundle","type":"collection","entry":['
+            '{"resource":{"resourceType":"Observation","id":"obs-hba1c",'
+            '"code":{"coding":[{"system":"http://loinc.org","code":"4548-4",'
+            '"display":"Hemoglobin A1c/Hemoglobin.total in Blood"}],"text":"HbA1c"},'
+            '"valueQuantity":{"value":7.4,"unit":"%"},"effectiveDateTime":"2026-01-01T00:00:00",'
+            '"referenceRange":[{"low":{"value":4.0,"unit":"%"},"high":{"value":5.6,"unit":"%"}}]}},'
+            '{"resource":{"resourceType":"Observation","id":"obs-hr",'
+            '"category":[{"coding":[{"code":"vital-signs"}]}],'
+            '"code":{"text":"Heart rate"},"valueQuantity":{"value":88,"unit":"/min"},'
+            '"effectiveDateTime":"2026-01-01T00:05:00"}},'
+            '{"resource":{"resourceType":"MedicationStatement","id":"med-metformin",'
+            '"medicationCodeableConcept":{"text":"Metformin"},'
+            '"status":"active","dosage":[{"route":{"text":"PO"},"text":"500 mg twice daily"}]}}'
+            ']}'
+        ),
         "valid": True,
         "validation_errors": None,
     }
@@ -92,15 +107,28 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
     assert record.documents[0].extracted_facts["instruction"] == (
         "Annual check-up with diabetes family history."
     )
-    assert record.documents[0].extracted_facts["answer"] == (
-        '{"resourceType":"Bundle","type":"collection"}'
-    )
+    assert record.documents[0].extracted_facts["answer"] == row["fhir_bundle"]
     assert record.documents[0].extracted_facts["source_fields"] == {
         "difficulty": "easy",
         "exampleId": "10004",
         "valid": True,
         "validation_errors": None,
     }
+    assert record.modalities == [
+        Modality.STRUCTURED_EHR,
+        Modality.CLINICAL_TEXT,
+        Modality.LABS,
+        Modality.VITALS,
+    ]
+    assert record.labs[0].name == "HbA1c"
+    assert record.labs[0].loinc == "4548-4"
+    assert record.labs[0].value == 7.4
+    assert record.labs[0].reference_low == 4.0
+    assert record.labs[0].reference_high == 5.6
+    assert record.vitals[0].name == "Heart rate"
+    assert record.vitals[0].value == 88
+    assert record.medication_history[0].name == "Metformin"
+    assert record.medication_history[0].route == "PO"
     assert record.topic == "easy"
     assert record.metadata["reference_dataset"] == "ai-galileo/clinical-notes-to-fhir"
 
@@ -136,6 +164,16 @@ def test_radiology_consistency_reference_row_maps_image_evidence_to_instruction(
         ),
         "modality": "XR",
         "study": "chest radiograph",
+    }
+    assert record.documents[0].note_type == "radiology_report"
+    assert record.modalities == [Modality.CLINICAL_TEXT, Modality.IMAGING]
+    assert record.imaging[0].image_id.startswith("img-")
+    assert record.imaging[0].modality == "XR"
+    assert record.imaging[0].body_region == "chest"
+    assert record.imaging[0].report_text == "The report says no pleural effusion."
+    assert {label.display for label in record.imaging[0].labels} == {
+        "Pleural effusion",
+        "Pneumothorax",
     }
     assert record.topic == "contradiction"
     assert record.metadata["reference_dataset"] == (
