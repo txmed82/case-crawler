@@ -186,6 +186,8 @@ synthetic:
   clinical_text_backend: "deterministic" # or "llm"
   imaging_backend: "placeholder"
   time_series_backend: "deterministic"
+  # GenerationRequest.cohort_constraints supports age_min, age_max, sexes,
+  # sex_cycle, and base_time for deterministic cohort composition.
   export_formats:
     - sft_jsonl
     - chat_jsonl

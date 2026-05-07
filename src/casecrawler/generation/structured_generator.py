@@ -27,10 +27,12 @@ class StructuredGenerator:
     ) -> SyntheticRecord:
         now = _normalize_base_time(req.cohort_constraints.get("base_time"))
         stable_prefix = _stable_record_seed(req, index)
+        age = _age_for_index(req.cohort_constraints, index)
+        sex = _sex_for_index(req.cohort_constraints, index)
         patient = SyntheticPatient(
             patient_id=f"pat-{uuid5(NAMESPACE_URL, f'{stable_prefix}:patient')}",
-            age=45 + (index % 35),
-            sex="female" if index % 2 else "male",
+            age=age,
+            sex=sex,
         )
         encounter = Encounter(
             encounter_id=f"enc-{uuid5(NAMESPACE_URL, f'{stable_prefix}:encounter')}",
@@ -80,6 +82,11 @@ class StructuredGenerator:
             ],
             medication_history=_medications_for_topic(req.topic, now[:10]),
             provenance=Provenance(generator="structured-generator", created_at=now),
+            metadata={
+                "cohort_constraints": _metadata_cohort_constraints(
+                    req.cohort_constraints
+                )
+            },
         )
 
 
@@ -110,6 +117,69 @@ def _stable_record_seed(req: GenerationRequest, index: int) -> str:
     constraints = json.dumps(canonical_constraints, sort_keys=True, default=str)
     modalities = ",".join(sorted(modality.value for modality in req.modalities))
     return f"{req.topic}:{req.complexity.value}:{modalities}:{constraints}:{index}"
+
+
+def _age_for_index(cohort_constraints: dict, index: int) -> int:
+    age_min = _coerce_int(
+        cohort_constraints.get("age_min", cohort_constraints.get("min_age", 45)),
+        "age_min",
+    )
+    age_max = _coerce_int(
+        cohort_constraints.get("age_max", cohort_constraints.get("max_age", 79)),
+        "age_max",
+    )
+    if age_min > age_max:
+        raise ValueError("cohort_constraints.age_min must be <= age_max.")
+    span = age_max - age_min + 1
+    return age_min + (index % span)
+
+
+def _sex_for_index(cohort_constraints: dict, index: int) -> str:
+    configured = cohort_constraints.get("sexes", cohort_constraints.get("sex_cycle"))
+    if configured is None:
+        sexes = ["male", "female"]
+    elif isinstance(configured, str):
+        sexes = [part.strip() for part in configured.split(",") if part.strip()]
+    elif isinstance(configured, list):
+        sexes = [str(part).strip() for part in configured if str(part).strip()]
+    else:
+        raise ValueError(
+            "cohort_constraints.sexes must be a list or comma-separated string."
+        )
+    if not sexes:
+        raise ValueError("cohort_constraints.sexes must contain at least one value.")
+    return sexes[index % len(sexes)]
+
+
+def _coerce_int(value, field_name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"cohort_constraints.{field_name} must be an integer.")
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"cohort_constraints.{field_name} must be an integer."
+        ) from exc
+
+
+def _metadata_cohort_constraints(cohort_constraints: dict) -> dict:
+    preserved_keys = [
+        "age_min",
+        "age_max",
+        "min_age",
+        "max_age",
+        "sexes",
+        "sex_cycle",
+        "base_time",
+    ]
+    metadata = {
+        key: cohort_constraints[key]
+        for key in preserved_keys
+        if key in cohort_constraints
+    }
+    if "base_time" in metadata:
+        metadata["base_time"] = _normalize_base_time(metadata["base_time"])
+    return metadata
 
 
 def _medications_for_topic(topic: str, start: str) -> list[MedicationStatement]:
