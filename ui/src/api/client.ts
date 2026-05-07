@@ -329,6 +329,22 @@ export interface ReviewSaveResponse {
   effective_approved: boolean;
 }
 
+export interface BenchmarkMetric {
+  name: string;
+  score: number;
+  generated_value: number | string | null;
+  reference_value: number | string | null;
+  details: Record<string, unknown>;
+}
+
+export interface BenchmarkReport {
+  generated_dataset_id: string;
+  reference_dataset_id: string;
+  overall_score: number;
+  metrics: BenchmarkMetric[];
+  warnings: string[];
+}
+
 async function readApiError(resp: Response): Promise<string> {
   try {
     const body = await resp.json();
@@ -405,6 +421,16 @@ export async function fetchDatasetCard(
   const resp = await fetch(`${BASE}/datasets/${datasetId}/card?${qs}`);
   if (!resp.ok) throw new Error(`Failed to fetch ${kind} card: ${await readApiError(resp)}`);
   return resp.text();
+}
+
+export async function fetchDatasetBenchmark(
+  datasetId: string,
+  referenceDatasetId: string
+): Promise<BenchmarkReport> {
+  const qs = new URLSearchParams({ reference_dataset_id: referenceDatasetId });
+  const resp = await fetch(`${BASE}/datasets/${datasetId}/benchmark?${qs}`);
+  if (!resp.ok) throw new Error(`Failed to benchmark dataset: ${await readApiError(resp)}`);
+  return resp.json();
 }
 
 export function datasetExportUrl(
