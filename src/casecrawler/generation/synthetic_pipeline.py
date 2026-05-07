@@ -66,8 +66,6 @@ class SyntheticPipeline:
                 req=req,
                 index=index,
             )
-            if Modality.CLINICAL_TEXT in plan.modalities:
-                record = await self._text_generator.add_documents_async(record)
             if Modality.TIME_SERIES in plan.modalities:
                 record = self._time_series_generator.add_time_series(
                     record,
@@ -82,6 +80,8 @@ class SyntheticPipeline:
                     )
                 ]
                 record = record.model_copy(update={"imaging": [*record.imaging, *images]})
+            if Modality.CLINICAL_TEXT in plan.modalities:
+                record = await self._text_generator.add_documents_async(record)
             validation = self._validator.validate(record)
             record = record.model_copy(update={"validation": validation})
             records.append(record)

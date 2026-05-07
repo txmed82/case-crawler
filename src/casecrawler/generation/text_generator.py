@@ -103,10 +103,7 @@ class TextGenerator:
                 "radiology_report",
                 "radiologist",
                 timestamp,
-                (
-                    f"Radiology review for {record.topic}. Portable chest imaging is "
-                    "synthetic; findings should be cross-checked against structured labels."
-                ),
+                _radiology_review_text(record),
             ),
         ]
         return record.model_copy(update={"documents": [*record.documents, *documents]})
@@ -167,7 +164,7 @@ def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:
         for lab in record.labs
         if lab.flag
     ]
-    return {
+    facts = {
         "topic": record.topic,
         "note_type": note_type,
         "patient_age": record.patient.age,
@@ -182,6 +179,40 @@ def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:
         "vital_names": [vital.name for vital in record.vitals],
         "medications": [med.name for med in record.medication_history],
     }
+    if note_type == "radiology_report":
+        facts.update(
+            {
+                "imaging_asset_ids": [asset.image_id for asset in record.imaging],
+                "imaging_modalities": [asset.modality for asset in record.imaging],
+                "imaging_body_regions": [asset.body_region for asset in record.imaging],
+                "imaging_labels": [
+                    label.display
+                    for asset in record.imaging
+                    for label in asset.labels
+                ],
+            }
+        )
+    return facts
+
+
+def _radiology_review_text(record: SyntheticRecord) -> str:
+    if not record.imaging:
+        return (
+            f"Radiology review for {record.topic}. Imaging is synthetic; findings "
+            "should be cross-checked against structured labels when present."
+        )
+    asset_summaries = []
+    for asset in record.imaging:
+        label_text = ", ".join(label.display for label in asset.labels) or "No labels"
+        asset_summaries.append(
+            f"{asset.image_id}: {asset.modality} {asset.body_region} with {label_text}. "
+            f"Report excerpt: {asset.report_text}"
+        )
+    return (
+        f"Radiology review for {record.topic}. "
+        + " ".join(asset_summaries)
+        + " Synthetic image-text alignment should be validated before training use."
+    )
 
 
 def _clinical_document_prompt(record: SyntheticRecord) -> str:
