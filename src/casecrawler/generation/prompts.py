@@ -33,43 +33,6 @@ DIFFICULTY_RULES = {
     },
 }
 
-CASE_GENERATOR_SYSTEM = """You are a clinical case author creating realistic, decision-forcing medical scenarios.
-
-Your cases must:
-- Be messy and incomplete, like real medicine
-- Force the clinician to make decisions with incomplete information
-- Include distractors that could lead to wrong diagnoses
-- Be grounded in real medical knowledge from the provided sources
-- Have diverse patient demographics (vary age, sex, background)
-- Avoid demographic stereotypes (do not default to stereotypical presentations)
-
-You will receive:
-1. A medical topic
-2. A difficulty level with specific rules
-3. Retrieved medical knowledge from real sources
-
-Generate a realistic clinical vignette with patient demographics and ground truth."""
-
-DECISION_TREE_SYSTEM = """You are a clinical decision tree architect.
-
-Given a clinical vignette and its ground truth, build a decision tree that:
-- Has exactly ONE correct path
-- Has plausible wrong paths that a clinician might actually choose
-- Labels each wrong path as "common_mistake" or "catastrophic"
-- Provides realistic consequences for each wrong choice
-- Includes a complications layer showing what happens with delayed or incorrect decisions
-
-Each choice must include:
-- The action the clinician would take
-- Whether it is correct
-- Clinical reasoning for why someone might choose it
-- The realistic outcome of that choice
-- For wrong choices: the consequence and what error type it represents
-
-Also generate complications that show temporal consequences:
-- What happens if diagnosis is delayed
-- What happens if incorrect treatment is given"""
-
 CLINICAL_REVIEWER_SYSTEM = """You are a senior clinical reviewer evaluating AI-generated medical cases for quality.
 
 Score each case on three dimensions (0.0 to 1.0):
@@ -94,55 +57,6 @@ Score each case on three dimensions (0.0 to 1.0):
 
 If ANY score is below the threshold, you MUST reject and provide specific, actionable feedback.
 Your feedback should tell the generator exactly what to fix."""
-
-
-def build_case_generator_prompt(topic: str, difficulty: str, context: str) -> str:
-    rules = DIFFICULTY_RULES.get(difficulty, DIFFICULTY_RULES["resident"])
-    return f"""Generate a clinical case for the following topic.
-
-## Topic
-{topic}
-
-## Difficulty Level: {difficulty}
-- Vignette: {rules['vignette']}
-- Knowledge level: {rules['knowledge']}
-
-## Medical Knowledge (from real sources)
-{context}
-
-## Instructions
-Create a realistic clinical vignette with:
-1. Patient demographics (age, sex, relevant background)
-2. The clinical presentation (history, exam findings, initial labs if relevant)
-3. A decision prompt ("What would you do next?")
-4. Ground truth: the correct diagnosis, optimal next step, rationale, and key findings
-
-Make the vignette realistic and messy — like a real patient encounter, not a textbook question."""
-
-
-def build_decision_tree_prompt(vignette: str, ground_truth_json: str, difficulty: str, context: str) -> str:
-    rules = DIFFICULTY_RULES.get(difficulty, DIFFICULTY_RULES["resident"])
-    return f"""Build a decision tree for this clinical case.
-
-## Vignette
-{vignette}
-
-## Ground Truth
-{ground_truth_json}
-
-## Difficulty Level: {difficulty}
-- Decision tree: {rules['decision_tree']}
-- Complications: {rules['complications']}
-
-## Medical Knowledge (from real sources)
-{context}
-
-## Instructions
-Create:
-1. Decision choices — one correct path and plausible wrong paths
-2. Complications — what happens with delayed diagnosis or incorrect treatment
-
-Each wrong choice must have an error_type of "common_mistake" or "catastrophic"."""
 
 
 def build_reviewer_prompt(case_json: str, context: str, threshold: float) -> str:
