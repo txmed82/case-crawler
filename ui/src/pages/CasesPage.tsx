@@ -5,6 +5,7 @@ import {
   fetchDataset,
   fetchDatasetBenchmark,
   fetchDatasetCard,
+  fetchDatasetQuality,
   fetchDatasetReviewQueue,
   fetchDatasets,
   saveRecordReview,
@@ -13,6 +14,7 @@ import type {
   DatasetManifest,
   ExportFormat,
   BenchmarkReport,
+  DatasetQualityReport,
   HumanReviewStatus,
   ReviewQueueItem,
   SyntheticRecordPreview,
@@ -58,6 +60,15 @@ export default function CasesPage() {
     enabled: Boolean(activeDatasetId),
   });
   const {
+    data: quality,
+    isLoading: isQualityLoading,
+    error: qualityError,
+  } = useQuery({
+    queryKey: ["dataset-quality", activeDatasetId],
+    queryFn: () => fetchDatasetQuality(activeDatasetId as string),
+    enabled: Boolean(activeDatasetId),
+  });
+  const {
     data: cardText,
     isLoading: isCardLoading,
     error: cardError,
@@ -91,6 +102,7 @@ export default function CasesPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dataset-reviews", activeDatasetId] });
+      queryClient.invalidateQueries({ queryKey: ["dataset-quality", activeDatasetId] });
       queryClient.invalidateQueries({ queryKey: ["dataset", activeDatasetId] });
       queryClient.invalidateQueries({ queryKey: ["datasets"] });
     },
@@ -221,6 +233,12 @@ export default function CasesPage() {
                     ))}
                   </div>
                 </div>
+
+                <QualityPanel
+                  quality={quality ?? null}
+                  isLoading={isQualityLoading}
+                  error={qualityError}
+                />
 
                 <section className="grid gap-4 xl:grid-cols-[minmax(320px,0.9fr)_1.1fr]">
                   <ReviewQueuePanel
@@ -353,6 +371,75 @@ function BenchmarkPanel({
               {benchmark.warnings.slice(0, 3).map((warning) => (
                 <p key={warning}>{warning}</p>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QualityPanel({
+  quality,
+  isLoading,
+  error,
+}: {
+  quality: DatasetQualityReport | null;
+  isLoading: boolean;
+  error: unknown;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Fine-tuning readiness</p>
+          <p className="text-xs text-gray-500">Validation and export quality gate</p>
+        </div>
+        {quality && (
+          <span
+            className={`rounded-md px-2 py-1 text-xs font-medium ${
+              quality.export_ready
+                ? "bg-green-50 text-green-700"
+                : "bg-yellow-50 text-yellow-700"
+            }`}
+          >
+            {quality.export_ready ? "Ready" : "Blocked"}
+          </span>
+        )}
+      </div>
+      {isLoading && <p className="mt-3 text-sm text-gray-500">Loading quality report...</p>}
+      {Boolean(error) && (
+        <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error instanceof Error ? error.message : "Failed to load quality report."}
+        </p>
+      )}
+      {quality && (
+        <div className="mt-4 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-4">
+            <Metric label="Records" value={quality.record_count} />
+            <Metric label="Approved" value={quality.approved_count} />
+            <Metric label="Approval" value={`${Math.round(quality.approval_rate * 100)}%`} />
+            <Metric label="Blockers" value={quality.blocking_issue_count} />
+          </div>
+          {quality.recommendations.length > 0 && (
+            <div className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800">
+              {quality.recommendations.slice(0, 3).map((recommendation) => (
+                <p key={recommendation}>{recommendation}</p>
+              ))}
+            </div>
+          )}
+          {Object.keys(quality.issue_counts_by_field).length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(quality.issue_counts_by_field)
+                .slice(0, 6)
+                .map(([field, count]) => (
+                  <span
+                    key={field}
+                    className="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700"
+                  >
+                    {field}: {count}
+                  </span>
+                ))}
             </div>
           )}
         </div>
