@@ -3,12 +3,12 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from casecrawler.config import get_config
 from casecrawler.export.cards import build_dataset_card, build_model_card
-from casecrawler.export.fine_tuning import export_record
+from casecrawler.export.fine_tuning import export_parquet_bytes, export_record
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.dataset import (
     ExportFormat,
@@ -378,6 +378,31 @@ def export_dataset(
                     "Set allow_blocked=true to export anyway."
                 ),
             )
+
+    if export_format == ExportFormat.PARQUET:
+        try:
+            payload, record_count = export_parquet_bytes(records)
+        except ImportError as err:
+            raise HTTPException(status_code=422, detail=str(err)) from err
+        store.save_export_manifest(
+            dataset_id=dataset_id,
+            export_format=export_format,
+            file_path=(
+                f"api://datasets/{dataset_id}/export?"
+                f"export_format={export_format.value}"
+            ),
+            record_count=record_count,
+            metadata={"transport": "api", "parquet_bytes": len(payload)},
+        )
+        return Response(
+            content=payload,
+            media_type="application/vnd.apache.parquet",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="{dataset_id}.parquet"'
+                )
+            },
+        )
 
     def _iter_jsonl():
         record_count = 0

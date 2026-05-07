@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from collections.abc import Iterable
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -406,6 +407,18 @@ def export_parquet_dataset(records: Iterable[SyntheticRecord], output: str | Pat
     rows = [export_parquet_record(record) for record in records]
     pandas.DataFrame(rows).to_parquet(output, index=False)
     return len(rows)
+
+
+def export_parquet_bytes(records: Iterable[SyntheticRecord]) -> tuple[bytes, int]:
+    """Write records to an in-memory parquet payload for API responses."""
+    from casecrawler.integrations.huggingface import require_package
+
+    pandas = require_package("pandas", "parquet")
+    require_package("pyarrow", "parquet")
+    rows = [export_parquet_record(record) for record in records]
+    buffer = BytesIO()
+    pandas.DataFrame(rows).to_parquet(buffer, index=False)
+    return buffer.getvalue(), len(rows)
 
 
 def export_record(record: SyntheticRecord, export_format: str | ExportFormat) -> dict[str, Any]:
