@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from casecrawler.config import get_config
@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.get("/datasets")
-async def list_datasets(limit: int = 100):
+def list_datasets(limit: int = Query(100, ge=1, le=1000)):
     store = DatasetStore()
     return {"datasets": [manifest.model_dump() for manifest in store.list_manifests(limit=limit)]}
 
@@ -46,7 +46,7 @@ async def generate_dataset(req: GenerationRequest):
 
 
 @router.get("/datasets/{dataset_id}")
-async def get_dataset(dataset_id: str, limit: int = 100):
+def get_dataset(dataset_id: str, limit: int = Query(100, ge=1, le=1000)):
     store = DatasetStore()
     try:
         manifest = store.get_manifest(dataset_id)
@@ -60,7 +60,7 @@ async def get_dataset(dataset_id: str, limit: int = 100):
 
 
 @router.get("/datasets/{dataset_id}/export")
-async def export_dataset(
+def export_dataset(
     dataset_id: str,
     export_format: ExportFormat = ExportFormat.SFT_JSONL,
 ):

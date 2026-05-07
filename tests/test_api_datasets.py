@@ -49,3 +49,14 @@ def test_dataset_api_lists_and_exports_records(tmp_path, monkeypatch):
     assert exported.status_code == 200
     first_line = exported.text.strip().splitlines()[0]
     assert json.loads(first_line)["dataset_id"] == dataset_id
+
+
+def test_dataset_api_rejects_invalid_limits(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    list_response = client.get("/api/datasets", params={"limit": -1})
+    detail_response = client.get("/api/datasets/ds-missing", params={"limit": 5000})
+
+    assert list_response.status_code == 422
+    assert detail_response.status_code == 422

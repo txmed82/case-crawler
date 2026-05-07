@@ -170,7 +170,7 @@ class DatasetStore:
             generated_count=len(records),
             approved_count=approved_count,
             modalities=modalities,
-            export_formats=[ExportFormat.SFT_JSONL],
+            export_formats=list(ExportFormat),
             created_at=first.provenance.created_at,
             metadata={"record_ids": [record.record_id for record in records]},
         )

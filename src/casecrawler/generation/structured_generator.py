@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from uuid import NAMESPACE_URL, uuid5
 
@@ -112,7 +113,7 @@ def _stable_record_seed(req: GenerationRequest, index: int) -> str:
 
 
 def _medications_for_topic(topic: str, start: str) -> list[MedicationStatement]:
-    normalized = topic.lower()
+    normalized = re.sub(r"\s+", " ", topic.lower().replace("-", " ").replace("_", " "))
     medications = []
     if any(
         term in normalized

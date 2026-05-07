@@ -1,3 +1,4 @@
+from casecrawler.models.dataset import ExportFormat
 from casecrawler.models.synthetic import (
     ComplexityProfile,
     Modality,
@@ -58,5 +59,6 @@ def test_dataset_store_builds_manifest_and_export_manifest(tmp_path):
     assert manifest.dataset_id == "ds-1"
     assert manifest.generated_count == 1
     assert manifest.modalities == [Modality.CLINICAL_TEXT, Modality.LABS]
+    assert manifest.export_formats == list(ExportFormat)
     assert export_manifest.dataset_id == "ds-1"
     assert export_manifest.record_count == 1

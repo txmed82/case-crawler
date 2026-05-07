@@ -114,3 +114,36 @@ def test_synthea_adapter_handles_null_observation_fields(tmp_path):
     assert record.patient.age == 0
     assert record.labs[0].name == "Observation"
     assert record.labs[0].value == "positive"
+
+
+def test_synthea_adapter_skips_malformed_entries_and_null_periods(tmp_path):
+    bundle = {
+        "resourceType": "Bundle",
+        "entry": [
+            None,
+            {"resource": None},
+            {
+                "resource": {
+                    "resourceType": "Patient",
+                    "id": "pat-1",
+                    "gender": "unknown",
+                    "birthDate": "1980-01-01",
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Encounter",
+                    "id": "enc-1",
+                    "period": None,
+                    "reasonCode": [{"text": "screening"}],
+                }
+            },
+        ],
+    }
+    path = tmp_path / "patient-malformed-entries.json"
+    path.write_text(json.dumps(bundle))
+
+    record = SyntheaAdapter().import_fhir_bundle(str(path), dataset_id="ds-1")
+
+    assert record.patient.patient_id == "pat-1"
+    assert record.encounters[0].start == "2026-01-01T00:00:00"

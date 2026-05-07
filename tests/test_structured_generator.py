@@ -66,3 +66,11 @@ def test_structured_generator_omits_medications_for_unrelated_topic():
     record = StructuredGenerator().generate("ds-one", req, 0)
 
     assert record.medication_history == []
+
+
+def test_structured_generator_adds_furosemide_for_heart_failure_topic_variant():
+    req = GenerationRequest(topic="heart-failure")
+
+    record = StructuredGenerator().generate("ds-one", req, 0)
+
+    assert any(medication.name == "Furosemide" for medication in record.medication_history)

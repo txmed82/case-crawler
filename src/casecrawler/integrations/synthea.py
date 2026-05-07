@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import date
 from pathlib import Path
 
@@ -18,7 +19,13 @@ from casecrawler.models.synthetic import (
 class SyntheaAdapter:
     def import_fhir_bundle(self, path: str, dataset_id: str) -> SyntheticRecord:
         bundle = json.loads(Path(path).read_text())
-        resources = [entry.get("resource", {}) for entry in bundle.get("entry", [])]
+        resources = []
+        for entry in bundle.get("entry", []):
+            if not isinstance(entry, Mapping):
+                continue
+            resource = entry.get("resource", {})
+            if isinstance(resource, Mapping):
+                resources.append(resource)
         patient_resource = _first_resource(resources, "Patient")
         encounter_resources = _resources(resources, "Encounter")
         observation_resources = _resources(resources, "Observation")
@@ -33,16 +40,19 @@ class SyntheaAdapter:
             sex=patient_resource.get("gender", "unknown"),
             demographics={"source": "synthea_fhir"},
         )
-        encounters = [
-            Encounter(
-                encounter_id=resource.get("id", f"enc-{index}"),
-                start=resource.get("period", {}).get("start", created_at),
-                end=resource.get("period", {}).get("end"),
-                setting="synthea",
-                reason=_reason(resource) or topic,
+        encounters = []
+        for index, resource in enumerate(encounter_resources):
+            raw_period = resource.get("period") or {}
+            period = raw_period if isinstance(raw_period, Mapping) else {}
+            encounters.append(
+                Encounter(
+                    encounter_id=resource.get("id", f"enc-{index}"),
+                    start=period.get("start", created_at),
+                    end=period.get("end"),
+                    setting="synthea",
+                    reason=_reason(resource) or topic,
+                )
             )
-            for index, resource in enumerate(encounter_resources)
-        ]
         labs = [_observation_to_lab(resource, created_at) for resource in observation_resources]
 
         return SyntheticRecord(
@@ -89,7 +99,9 @@ def _reason(encounter: dict) -> str | None:
 
 def _encounter_start(encounters: list[dict]) -> str | None:
     for encounter in encounters:
-        start = encounter.get("period", {}).get("start")
+        raw_period = encounter.get("period") or {}
+        period = raw_period if isinstance(raw_period, Mapping) else {}
+        start = period.get("start")
         if start:
             return start
     return None
