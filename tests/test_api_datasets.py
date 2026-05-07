@@ -169,6 +169,26 @@ def test_dataset_api_lists_hf_reference_catalog(tmp_path, monkeypatch):
     assert asclepius["license"]
 
 
+def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    response = client.get("/api/datasets/capabilities")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "clinical_text" in body["modalities"]
+    assert "sft_jsonl" in body["export_formats"]
+    assert "cxr_pneumonia_dreambooth" in {
+        profile["name"] for profile in body["imaging_model_profiles"]
+    }
+    assert "timediff" in {
+        profile["name"] for profile in body["time_series_model_profiles"]
+    }
+    assert "biomedclip" in {validator["key"] for validator in body["validators"]}
+    assert "medgemma" in {validator["key"] for validator in body["validators"]}
+
+
 def test_dataset_api_imports_hf_reference_dataset(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

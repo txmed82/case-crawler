@@ -241,6 +241,32 @@ export interface ReferenceDatasetImportResponse {
   license: string;
 }
 
+export interface DatasetCapabilitiesResponse {
+  modalities: SyntheticModality[];
+  complexity_profiles: Array<"simple" | "moderate" | "complex" | "rare">;
+  export_formats: ExportFormat[];
+  cohort_constraints: string[];
+  imaging_model_profiles: Array<{
+    name: string;
+    model_id: string;
+    modality: string;
+    body_region: string;
+    license?: string | null;
+    notes: string;
+  }>;
+  time_series_model_profiles: Array<{
+    name: string;
+    adapter_type: string;
+    reference: string;
+    notes: string;
+  }>;
+  validators: Array<{
+    key: string;
+    requires: string[];
+    description: string;
+  }>;
+}
+
 export type SyntheticModality =
   | "structured_ehr"
   | "clinical_text"
@@ -417,6 +443,12 @@ export async function importReferenceDataset(
     body: JSON.stringify(req),
   });
   if (!resp.ok) throw new Error(`Failed to import reference dataset: ${await readApiError(resp)}`);
+  return resp.json();
+}
+
+export async function fetchDatasetCapabilities(): Promise<DatasetCapabilitiesResponse> {
+  const resp = await fetch(`${BASE}/datasets/capabilities`);
+  if (!resp.ok) throw new Error(`Failed to fetch dataset capabilities: ${await readApiError(resp)}`);
   return resp.json();
 }
 

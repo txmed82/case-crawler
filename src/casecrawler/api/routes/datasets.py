@@ -15,6 +15,7 @@ from casecrawler.models.dataset import (
     GenerationRequest,
     HumanReviewDecision,
 )
+from casecrawler.models.synthetic import ComplexityProfile, Modality
 from casecrawler.storage.dataset_store import DatasetStore
 from casecrawler.validation.benchmark import DatasetBenchmark
 
@@ -74,6 +75,62 @@ def list_reference_catalog():
             }
             for key, spec in REFERENCE_DATASETS.items()
         ]
+    }
+
+
+@router.get("/datasets/capabilities")
+def list_dataset_capabilities():
+    from casecrawler.generation.imaging_models import list_imaging_model_profiles
+    from casecrawler.generation.timeseries_models import list_time_series_model_profiles
+
+    return {
+        "modalities": [modality.value for modality in Modality],
+        "complexity_profiles": [profile.value for profile in ComplexityProfile],
+        "export_formats": [export_format.value for export_format in ExportFormat],
+        "cohort_constraints": [
+            "age_min",
+            "age_max",
+            "sexes",
+            "sex_cycle",
+            "base_time",
+        ],
+        "imaging_model_profiles": [
+            {
+                "name": profile.name,
+                "model_id": profile.model_id,
+                "modality": profile.modality,
+                "body_region": profile.body_region,
+                "license": profile.license,
+                "notes": profile.notes,
+            }
+            for profile in list_imaging_model_profiles()
+        ],
+        "time_series_model_profiles": [
+            {
+                "name": profile.name,
+                "adapter_type": profile.adapter_type,
+                "reference": profile.reference,
+                "notes": profile.notes,
+            }
+            for profile in list_time_series_model_profiles()
+        ],
+        "validators": [
+            {
+                "key": "lexical",
+                "requires": [],
+                "description": "No-key prompt/report token overlap validator.",
+            },
+            {
+                "key": "biomedclip",
+                "requires": ["casecrawler[imaging]"],
+                "description": "Optional BiomedCLIP image-text alignment scorer.",
+            },
+            {
+                "key": "medgemma",
+                "requires": ["casecrawler[hf]", "casecrawler[imaging]", "accepted model terms"],
+                "description": "Optional gated MedGemma image/report reasoning validator.",
+            },
+        ],
     }
 
 
