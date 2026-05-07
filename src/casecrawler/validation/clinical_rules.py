@@ -120,6 +120,50 @@ def validate_time_series_waveforms(record: SyntheticRecord) -> list[ValidationIs
     return issues
 
 
+def validate_time_series_structured_alignment(
+    record: SyntheticRecord,
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    vital_targets = {
+        "heart_rate": _first_numeric_vital(record, {"hr", "heart-rate"}),
+        "systolic_bp": _first_numeric_vital(
+            record,
+            {"sbp", "systolic-bp", "systolic-blood-pressure"},
+        ),
+        "spo2": _first_numeric_vital(record, {"spo2", "oxygen-saturation"}),
+    }
+    lab_targets = {
+        f"lab_{_slug(lab.name)}": float(lab.value)
+        for lab in record.labs
+        if isinstance(lab.value, int | float)
+    }
+    for channel in record.time_series:
+        observed = _first_channel_value(channel)
+        if observed is None:
+            continue
+        target = vital_targets.get(channel.name)
+        field = f"time_series.{channel.name}.alignment"
+        tolerance = max(10.0, abs(target or 0) * 0.35)
+        if target is None and channel.name in lab_targets:
+            target = lab_targets[channel.name]
+            tolerance = max(1.0, abs(target) * 0.5)
+        if target is None:
+            continue
+        if abs(observed - target) > tolerance:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.TIME_SERIES,
+                    field=field,
+                    message=(
+                        f"Time series channel {channel.name} starts at {observed}, "
+                        f"which conflicts with structured value {target}."
+                    ),
+                )
+            )
+    return issues
+
+
 def validate_lab_flags(record: SyntheticRecord) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     for lab in record.labs:
@@ -426,6 +470,31 @@ def _contains_negated_term(text: str, term: str) -> bool:
 
 def _normalize_name(value: str) -> str:
     return "-".join(re.findall(r"[a-z0-9]+", value.lower()))
+
+
+def _slug(value: str) -> str:
+    return re.sub(r"\W+", "_", value.lower()).strip("_")
+
+
+def _first_numeric_vital(record: SyntheticRecord, names: set[str]) -> float | None:
+    for vital in record.vitals:
+        if _normalize_name(vital.name) in names:
+            return float(vital.value)
+    return None
+
+
+def _first_channel_value(channel) -> float | None:
+    if not channel.points:
+        return None
+    values = channel.points[0].values
+    candidate = values.get("value")
+    if isinstance(candidate, int | float):
+        return float(candidate)
+    if len(values) == 1:
+        only_value = next(iter(values.values()))
+        if isinstance(only_value, int | float):
+            return float(only_value)
+    return None
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
