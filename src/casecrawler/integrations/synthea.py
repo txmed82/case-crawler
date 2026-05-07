@@ -19,6 +19,20 @@ from casecrawler.models.synthetic import (
 
 
 class SyntheaAdapter:
+    def import_fhir_path(self, path: str, dataset_id: str) -> list[SyntheticRecord]:
+        source = Path(path)
+        if source.is_dir():
+            bundle_paths = sorted(
+                item
+                for item in source.iterdir()
+                if item.is_file() and item.suffix.lower() == ".json"
+            )
+            return [
+                self.import_fhir_bundle(str(bundle_path), dataset_id=dataset_id)
+                for bundle_path in bundle_paths
+            ]
+        return [self.import_fhir_bundle(str(source), dataset_id=dataset_id)]
+
     def import_fhir_bundle(self, path: str, dataset_id: str) -> SyntheticRecord:
         bundle = json.loads(Path(path).read_text())
         resources = []

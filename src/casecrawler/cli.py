@@ -281,6 +281,26 @@ def import_reference_dataset(
     )
 
 
+@cli.command("import-synthea-fhir")
+@click.argument("path")
+@click.option("--dataset-id", required=True, help="Dataset id for imported Synthea records")
+def import_synthea_fhir(path: str, dataset_id: str) -> None:
+    """Import Synthea FHIR JSON bundle files into the local dataset store."""
+    from casecrawler.integrations.synthea import SyntheaAdapter
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    try:
+        records = SyntheaAdapter().import_fhir_path(path, dataset_id=dataset_id)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise click.ClickException(f"Failed to import Synthea FHIR from {path}: {exc}") from exc
+    if not records:
+        raise click.ClickException(f"No Synthea FHIR JSON bundles found at {path}.")
+    store = DatasetStore()
+    for record in records:
+        store.save_record(record)
+    click.echo(f"Imported {len(records)} Synthea FHIR record(s) into {dataset_id}")
+
+
 @cli.command("config")
 def show_config() -> None:
     """Show current configuration."""
