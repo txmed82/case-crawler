@@ -11,9 +11,9 @@ from casecrawler.models.synthetic import SyntheticRecord
 
 
 def export_sft_record(record: SyntheticRecord, task: str = "summarize") -> dict[str, Any]:
-    note_text = "\n\n".join(document.clean_text for document in record.documents)
+    record_text = _record_text(record)
     if task == "summarize":
-        user = f"Summarize the following synthetic clinical record:\n\n{note_text}"
+        user = f"Summarize the following synthetic clinical record:\n\n{record_text}"
         assistant: str | dict = (
             f"Synthetic patient with {record.topic}; structured data includes "
             f"{len(record.labs)} labs and {len(record.vitals)} vitals."
@@ -21,7 +21,7 @@ def export_sft_record(record: SyntheticRecord, task: str = "summarize") -> dict[
     elif task == "extract":
         user = (
             "Extract diagnoses, abnormal labs, and vital sign abnormalities from "
-            f"this synthetic note:\n\n{note_text}"
+            f"this synthetic record:\n\n{record_text}"
         )
         assistant = {
             "topic": record.topic,

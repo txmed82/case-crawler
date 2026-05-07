@@ -59,6 +59,18 @@ def test_export_sft_record_contains_messages():
     assert exported["messages"][2]["role"] == "assistant"
 
 
+def test_export_sft_record_includes_structured_context_without_documents():
+    record = _multimodal_record().model_copy(update={"documents": []})
+
+    exported = export_sft_record(record, task="extract")
+
+    user_message = exported["messages"][1]["content"]
+    assert "Structured facts:" in user_message
+    assert "Lactate" in user_message
+    assert "Ceftriaxone" in user_message
+    assert "img-1" in user_message
+
+
 def test_export_record_dispatches_chat_and_multimodal():
     record = SyntheticRecord(
         record_id="rec-1",
