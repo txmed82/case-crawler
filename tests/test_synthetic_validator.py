@@ -1,11 +1,16 @@
 from casecrawler.models.synthetic import (
+    ClinicalDocument,
+    Encounter,
     ImagingAsset,
     ComplexityProfile,
     LabObservation,
+    MedicationStatement,
     Modality,
     Provenance,
     SyntheticPatient,
     SyntheticRecord,
+    TimeSeriesChannel,
+    TimeSeriesPoint,
     VitalObservation,
 )
 from casecrawler.validation.synthetic_validator import SyntheticValidator
@@ -156,3 +161,97 @@ def test_validator_scans_nested_record_fields_for_phi():
     assert report.approved is False
     assert report.clinical_consistency_score == 1.0
     assert any(issue.field == "privacy" for issue in report.issues)
+
+
+def test_validator_rejects_encounter_and_medication_temporal_inversions():
+    bad = _record(
+        encounters=[
+            Encounter(
+                encounter_id="enc-1",
+                start="2026-05-06T12:00:00",
+                end="2026-05-06T10:00:00",
+                setting="ed",
+                reason="fever",
+            )
+        ],
+        medication_history=[
+            MedicationStatement(
+                name="Ceftriaxone",
+                status="completed",
+                start="2026-05-07",
+                end="2026-05-06",
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "encounters.period" for issue in report.issues)
+    assert any(issue.field == "medication_history.period" for issue in report.issues)
+
+
+def test_validator_rejects_non_chronological_time_series():
+    bad = _record(
+        modalities=[Modality.TIME_SERIES],
+        time_series=[
+            TimeSeriesChannel(
+                name="heart_rate",
+                unit="/min",
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T11:00:00",
+                        values={"heart_rate": 110},
+                    ),
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T10:00:00",
+                        values={"heart_rate": 115},
+                    ),
+                ],
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "time_series.order" for issue in report.issues)
+
+
+def test_validator_rejects_text_structured_lab_and_vital_contradictions():
+    bad = _record(
+        labs=[
+            LabObservation(
+                name="Lactate",
+                value=5.2,
+                unit="mmol/L",
+                reference_low=0.5,
+                reference_high=2.0,
+                flag="critical",
+                effective_time="2026-05-06T08:30:00",
+            )
+        ],
+        vitals=[
+            VitalObservation(
+                name="Temperature",
+                value=39.2,
+                unit="C",
+                effective_time="2026-05-06T08:00:00",
+            )
+        ],
+        documents=[
+            ClinicalDocument(
+                document_id="doc-1",
+                note_type="ed_note",
+                author_role="physician",
+                timestamp="2026-05-06T09:00:00",
+                clean_text="Patient is afebrile and lactate is normal.",
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "documents.lactate" for issue in report.issues)
+    assert any(issue.field == "documents.fever" for issue in report.issues)

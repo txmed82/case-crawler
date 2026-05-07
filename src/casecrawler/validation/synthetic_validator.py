@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from casecrawler.models.synthetic import Modality, SyntheticRecord, ValidationIssue, ValidationReport
-from casecrawler.validation.clinical_rules import validate_lab_flags, validate_vitals
+from casecrawler.validation.clinical_rules import (
+    validate_lab_flags,
+    validate_temporal_consistency,
+    validate_text_structured_contradictions,
+    validate_vitals,
+)
 from casecrawler.validation.image_alignment import ImageAlignmentValidator
 from casecrawler.validation.privacy import validate_privacy
 
@@ -17,8 +22,10 @@ class SyntheticValidator:
 
     def validate(self, record: SyntheticRecord) -> ValidationReport:
         issues = [
+            *validate_temporal_consistency(record),
             *validate_lab_flags(record),
             *validate_vitals(record),
+            *validate_text_structured_contradictions(record),
             *validate_privacy(record),
         ]
         modality_alignment_score = self._image_alignment_score(record)
