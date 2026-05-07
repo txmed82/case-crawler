@@ -105,6 +105,12 @@ casecrawler config
 # Synthetic healthcare dataset generation
 casecrawler generate-dataset "sepsis" --count 25
 casecrawler generate-dataset "heart failure exacerbation" --count 100 --complexity complex
+casecrawler export-dataset --dataset-id <dataset_id> --format sft_jsonl --output train.jsonl
+casecrawler export-dataset --dataset-id <dataset_id> --format tool_call_jsonl --output tools.jsonl
+casecrawler export-dataset --dataset-id <dataset_id> --format dpo_jsonl --output preference.jsonl
+casecrawler export-dataset --dataset-id <dataset_id> --format rl_jsonl --output episodes.jsonl
+casecrawler export-dataset --dataset-id <dataset_id> --format fhir_ndjson --output fhir.ndjson
+casecrawler export-dataset --dataset-id <dataset_id> --format parquet --output records.parquet
 
 # Legacy case generation remains available
 casecrawler generate "subarachnoid hemorrhage" --difficulty resident

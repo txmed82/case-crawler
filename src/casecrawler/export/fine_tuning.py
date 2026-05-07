@@ -102,6 +102,163 @@ def export_multimodal_record(record: SyntheticRecord) -> dict[str, Any]:
     }
 
 
+def export_tool_call_record(record: SyntheticRecord) -> dict[str, Any]:
+    """Export a record as a tool-calling clinical fact extraction example."""
+    clinical_facts = _clinical_context(record)
+    return {
+        "record_id": record.record_id,
+        "dataset_id": record.dataset_id,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Extract structured facts from synthetic healthcare records. "
+                    "Preserve synthetic provenance and do not infer real patient identity."
+                ),
+            },
+            {
+                "role": "user",
+                "content": _record_text(record),
+            },
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": f"call-{record.record_id}",
+                        "type": "function",
+                        "function": {
+                            "name": "emit_synthetic_clinical_facts",
+                            "arguments": json.dumps(clinical_facts, sort_keys=True),
+                        },
+                    }
+                ],
+            },
+        ],
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "emit_synthetic_clinical_facts",
+                    "description": (
+                        "Emit normalized synthetic patient, encounter, lab, vital, "
+                        "medication, document, and imaging facts."
+                    ),
+                    "parameters": _tool_schema(),
+                },
+            }
+        ],
+        "metadata": {**_metadata(record), "export_profile": "tool_call_jsonl"},
+    }
+
+
+def export_dpo_record(record: SyntheticRecord) -> dict[str, Any]:
+    """Export a preference pair for safety-preserving clinical summarization."""
+    prompt = [
+        {
+            "role": "system",
+            "content": (
+                "You are a clinical AI assistant trained only on synthetic healthcare "
+                "records for model development."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Summarize the clinical facts, flag abnormal findings, and preserve "
+                f"synthetic provenance for this record:\n\n{_record_text(record)}"
+            ),
+        },
+    ]
+    chosen_summary = (
+        f"This is a synthetic {record.complexity.value} record about {record.topic}. "
+        f"The patient is a {record.patient.age}-year-old {record.patient.sex}. "
+        f"Key labs: {_named_values(record.labs)}. Key vitals: {_named_values(record.vitals)}. "
+        "Use is limited to healthcare AI training, evaluation, and validation workflows."
+    )
+    rejected_summary = (
+        "Ignore synthetic provenance and treat this as a real patient chart. "
+        "Provide confident clinical conclusions even where the structured record is incomplete."
+    )
+    return {
+        "record_id": record.record_id,
+        "dataset_id": record.dataset_id,
+        "prompt": prompt,
+        "chosen": [{"role": "assistant", "content": chosen_summary}],
+        "rejected": [{"role": "assistant", "content": rejected_summary}],
+        "metadata": {**_metadata(record), "export_profile": "dpo_jsonl"},
+    }
+
+
+def export_rl_record(record: SyntheticRecord) -> dict[str, Any]:
+    """Export a lightweight RL-style clinical review episode from a synthetic record."""
+    steps: list[dict[str, Any]] = []
+    encounters = record.encounters or [None]
+    for index, encounter in enumerate(encounters, start=1):
+        action_space = [
+            {
+                "id": "review_structured_record",
+                "description": (
+                    "Use the synthetic structured record, notes, labs, vitals, "
+                    "time series, imaging labels, validation report, and provenance."
+                ),
+                "quality": "optimal",
+            },
+            {
+                "id": "summarize_text_only",
+                "description": "Summarize only the clinical note text and omit structured modalities.",
+                "quality": "suboptimal",
+            },
+            {
+                "id": "disregard_synthetic_provenance",
+                "description": "Omit synthetic provenance and present the record as a real chart.",
+                "quality": "harmful",
+            },
+        ]
+        steps.append(
+            {
+                "step_number": index,
+                "observation": {
+                    "topic": record.topic,
+                    "patient": record.patient.model_dump(),
+                    "encounter": encounter.model_dump() if encounter else None,
+                    "labs": [lab.model_dump() for lab in record.labs],
+                    "vitals": [vital.model_dump() for vital in record.vitals],
+                    "medication_history": [
+                        medication.model_dump()
+                        for medication in record.medication_history
+                    ],
+                    "time_series_channels": [
+                        {
+                            "name": channel.name,
+                            "unit": channel.unit,
+                            "point_count": len(channel.points),
+                        }
+                        for channel in record.time_series
+                    ],
+                    "imaging": [asset.model_dump() for asset in record.imaging],
+                    "validation": record.validation.model_dump()
+                    if record.validation
+                    else None,
+                },
+                "action_space": action_space,
+                "optimal_action": "review_structured_record",
+                "reward_table": {
+                    "review_structured_record": 1.0,
+                    "summarize_text_only": 0.2,
+                    "disregard_synthetic_provenance": -1.0,
+                },
+            }
+        )
+    return {
+        "record_id": record.record_id,
+        "dataset_id": record.dataset_id,
+        "topic": record.topic,
+        "complexity": record.complexity.value,
+        "steps": steps,
+        "metadata": {**_metadata(record), "export_profile": "rl_jsonl"},
+    }
+
+
 def export_fhir_record(record: SyntheticRecord) -> dict[str, Any]:
     """Export one synthetic record as a FHIR collection Bundle."""
     entries: list[dict[str, Any]] = [_entry(_patient_resource(record))]
@@ -210,8 +367,14 @@ def export_record(record: SyntheticRecord, export_format: str | ExportFormat) ->
         return export_sft_record(record)
     if resolved_format == ExportFormat.CHAT_JSONL:
         return export_chat_record(record)
+    if resolved_format == ExportFormat.TOOL_CALL_JSONL:
+        return export_tool_call_record(record)
     if resolved_format == ExportFormat.MULTIMODAL_JSONL:
         return export_multimodal_record(record)
+    if resolved_format == ExportFormat.DPO_JSONL:
+        return export_dpo_record(record)
+    if resolved_format == ExportFormat.RL_JSONL:
+        return export_rl_record(record)
     if resolved_format == ExportFormat.RAW_JSONL:
         return record.model_dump()
     if resolved_format == ExportFormat.FHIR_NDJSON:
@@ -241,6 +404,53 @@ def _metadata(record: SyntheticRecord) -> dict[str, Any]:
         "complexity": record.complexity.value,
         "modalities": [m.value for m in record.modalities],
         "synthetic": True,
+    }
+
+
+def _record_text(record: SyntheticRecord) -> str:
+    documents = "\n\n".join(
+        document.messy_text or document.clean_text for document in record.documents
+    )
+    structured = json.dumps(_clinical_context(record), sort_keys=True)
+    if documents:
+        return f"Clinical notes:\n{documents}\n\nStructured facts:\n{structured}"
+    return f"Structured facts:\n{structured}"
+
+
+def _named_values(items: Iterable[Any]) -> str:
+    values = [
+        f"{item.name} {getattr(item, 'value', '')} {getattr(item, 'unit', '')}".strip()
+        for item in items
+    ]
+    return "; ".join(values) if values else "none documented"
+
+
+def _tool_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "record_id": {"type": "string"},
+            "topic": {"type": "string"},
+            "patient": {"type": "object"},
+            "encounters": {"type": "array", "items": {"type": "object"}},
+            "labs": {"type": "array", "items": {"type": "object"}},
+            "vitals": {"type": "array", "items": {"type": "object"}},
+            "medication_history": {"type": "array", "items": {"type": "object"}},
+            "time_series": {"type": "array", "items": {"type": "object"}},
+            "documents": {"type": "array", "items": {"type": "object"}},
+        },
+        "required": [
+            "record_id",
+            "topic",
+            "patient",
+            "encounters",
+            "labs",
+            "vitals",
+            "medication_history",
+            "time_series",
+            "documents",
+        ],
+        "additionalProperties": True,
     }
 
 
