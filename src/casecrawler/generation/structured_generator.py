@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime
+from typing import NamedTuple
 from uuid import NAMESPACE_URL, uuid5
 
 from casecrawler.models.dataset import GenerationRequest
@@ -18,6 +19,14 @@ from casecrawler.models.synthetic import (
 )
 
 
+class ClinicalProfile(NamedTuple):
+    diagnosis_display: str
+    diagnosis_code: str
+    labs: list[dict]
+    vitals: list[dict]
+    medications: list[dict]
+
+
 class StructuredGenerator:
     def generate(
         self,
@@ -29,6 +38,7 @@ class StructuredGenerator:
         stable_prefix = _stable_record_seed(req, index)
         age = _age_for_index(req.cohort_constraints, index)
         sex = _sex_for_index(req.cohort_constraints, index)
+        profile = _profile_for_topic(req.topic)
         patient = SyntheticPatient(
             patient_id=f"pat-{uuid5(NAMESPACE_URL, f'{stable_prefix}:patient')}",
             age=age,
@@ -42,8 +52,8 @@ class StructuredGenerator:
             diagnoses=[
                 Code(
                     system="synthetic",
-                    code=req.topic.replace(" ", "_"),
-                    display=req.topic,
+                    code=profile.diagnosis_code,
+                    display=profile.diagnosis_display,
                 )
             ],
         )
@@ -55,37 +65,18 @@ class StructuredGenerator:
             modalities=req.modalities,
             patient=patient,
             encounters=[encounter],
-            labs=[
-                LabObservation(
-                    name="WBC",
-                    value=15.2,
-                    unit="K/uL",
-                    reference_low=4.5,
-                    reference_high=11.0,
-                    flag="H",
-                    effective_time=now,
-                ),
-                LabObservation(
-                    name="Lactate",
-                    value=3.4,
-                    unit="mmol/L",
-                    reference_low=0.5,
-                    reference_high=2.0,
-                    flag="H",
-                    effective_time=now,
-                ),
+            labs=[_lab_observation(lab, now, index) for lab in profile.labs],
+            vitals=[_vital_observation(vital, now, index) for vital in profile.vitals],
+            medication_history=[
+                _medication_statement(medication, now[:10])
+                for medication in profile.medications
             ],
-            vitals=[
-                VitalObservation(name="HR", value=112, unit="/min", effective_time=now),
-                VitalObservation(name="SBP", value=92, unit="mmHg", effective_time=now),
-                VitalObservation(name="SpO2", value=94, unit="%", effective_time=now),
-            ],
-            medication_history=_medications_for_topic(req.topic, now[:10]),
             provenance=Provenance(generator="structured-generator", created_at=now),
             metadata={
                 "cohort_constraints": _metadata_cohort_constraints(
                     req.cohort_constraints
-                )
+                ),
+                "clinical_profile": profile.diagnosis_code,
             },
         )
 
@@ -182,46 +173,222 @@ def _metadata_cohort_constraints(cohort_constraints: dict) -> dict:
     return metadata
 
 
-def _medications_for_topic(topic: str, start: str) -> list[MedicationStatement]:
+def _profile_for_topic(topic: str) -> ClinicalProfile:
     normalized = re.sub(r"\s+", " ", topic.lower().replace("-", " ").replace("_", " "))
-    medications = []
-    if any(
-        term in normalized
-        for term in ["pain", "fever", "headache", "sepsis", "pneumonia", "infection"]
-    ):
-        medications.append(
-            MedicationStatement(
-                name="Acetaminophen",
-                rxnorm="161",
-                dose="650 mg",
-                route="oral",
-                frequency="every 6 hours as needed",
-                status="active",
-                start=start,
-            )
-        )
-    if any(term in normalized for term in ["sepsis", "pneumonia", "infection"]):
-        medications.append(
-            MedicationStatement(
-                name="Ceftriaxone",
-                rxnorm="2193",
-                dose="1 g",
-                route="IV",
-                frequency="daily",
-                status="active",
-                start=start,
-            )
-        )
-    if any(term in normalized for term in ["heart failure", "edema", "pulmonary edema"]):
-        medications.append(
-            MedicationStatement(
-                name="Furosemide",
-                rxnorm="4603",
-                dose="40 mg",
-                route="IV",
-                frequency="once",
-                status="active",
-                start=start,
-            )
-        )
-    return medications
+    for keywords, profile in _TOPIC_PROFILES:
+        if any(keyword in normalized for keyword in keywords):
+            return profile
+    return ClinicalProfile(
+        diagnosis_display=topic,
+        diagnosis_code=re.sub(r"\W+", "_", topic.lower()).strip("_") or "general",
+        labs=[],
+        vitals=[
+            _vital("HR", 82, "/min"),
+            _vital("SBP", 124, "mmHg"),
+            _vital("SpO2", 98, "%"),
+        ],
+        medications=[],
+    )
+
+
+def _lab_observation(template: dict, effective_time: str, index: int) -> LabObservation:
+    value = _indexed_value(template["value"], index, template.get("step", 0.0))
+    return LabObservation(
+        name=template["name"],
+        loinc=template.get("loinc"),
+        value=value,
+        unit=template["unit"],
+        reference_low=template.get("reference_low"),
+        reference_high=template.get("reference_high"),
+        flag=template.get("flag"),
+        effective_time=effective_time,
+        specimen=template.get("specimen"),
+    )
+
+
+def _vital_observation(template: dict, effective_time: str, index: int) -> VitalObservation:
+    value = _indexed_value(template["value"], index, template.get("step", 0.0))
+    return VitalObservation(
+        name=template["name"],
+        value=value,
+        unit=template["unit"],
+        effective_time=effective_time,
+    )
+
+
+def _medication_statement(template: dict, start: str) -> MedicationStatement:
+    return MedicationStatement(
+        name=template["name"],
+        rxnorm=template.get("rxnorm"),
+        dose=template.get("dose"),
+        route=template.get("route"),
+        frequency=template.get("frequency"),
+        status=template.get("status", "active"),
+        start=start,
+        end=template.get("end"),
+    )
+
+
+def _indexed_value(value: float, index: int, step: float) -> float:
+    adjusted = value + (index % 3) * step
+    return round(adjusted, 2)
+
+
+def _lab(
+    name: str,
+    value: float,
+    unit: str,
+    *,
+    reference_low: float | None = None,
+    reference_high: float | None = None,
+    flag: str | None = None,
+    loinc: str | None = None,
+    step: float = 0.0,
+) -> dict:
+    return {
+        "name": name,
+        "value": value,
+        "unit": unit,
+        "reference_low": reference_low,
+        "reference_high": reference_high,
+        "flag": flag,
+        "loinc": loinc,
+        "step": step,
+    }
+
+
+def _vital(name: str, value: float, unit: str, *, step: float = 0.0) -> dict:
+    return {"name": name, "value": value, "unit": unit, "step": step}
+
+
+def _med(
+    name: str,
+    *,
+    rxnorm: str | None = None,
+    dose: str | None = None,
+    route: str | None = None,
+    frequency: str | None = None,
+) -> dict:
+    return {
+        "name": name,
+        "rxnorm": rxnorm,
+        "dose": dose,
+        "route": route,
+        "frequency": frequency,
+    }
+
+
+_TOPIC_PROFILES: list[tuple[tuple[str, ...], ClinicalProfile]] = [
+    (
+        ("pneumonia",),
+        ClinicalProfile(
+            diagnosis_display="pneumonia",
+            diagnosis_code="pneumonia",
+            labs=[
+                _lab("WBC", 13.8, "K/uL", reference_low=4.5, reference_high=11.0, flag="H", step=0.4),
+                _lab("Procalcitonin", 1.4, "ng/mL", reference_low=0, reference_high=0.1, flag="H", step=0.2),
+                _lab("Sodium", 134, "mmol/L", reference_low=135, reference_high=145, flag="L", step=-1),
+            ],
+            vitals=[
+                _vital("HR", 108, "/min", step=2),
+                _vital("SBP", 116, "mmHg", step=-1),
+                _vital("SpO2", 91, "%", step=-1),
+                _vital("Temperature", 38.4, "C", step=0.1),
+                _vital("Respiratory rate", 24, "/min", step=1),
+            ],
+            medications=[
+                _med("Ceftriaxone", rxnorm="2193", dose="1 g", route="IV", frequency="daily"),
+                _med("Azithromycin", rxnorm="18631", dose="500 mg", route="IV", frequency="daily"),
+                _med("Acetaminophen", rxnorm="161", dose="650 mg", route="oral", frequency="every 6 hours as needed"),
+            ],
+        ),
+    ),
+    (
+        ("sepsis", "infection"),
+        ClinicalProfile(
+            diagnosis_display="sepsis",
+            diagnosis_code="sepsis",
+            labs=[
+                _lab("WBC", 15.2, "K/uL", reference_low=4.5, reference_high=11.0, flag="H", step=0.4),
+                _lab("Lactate", 3.4, "mmol/L", reference_low=0.5, reference_high=2.0, flag="H", loinc="2524-7", step=0.2),
+                _lab("Creatinine", 1.5, "mg/dL", reference_low=0.6, reference_high=1.3, flag="H", step=0.1),
+            ],
+            vitals=[
+                _vital("HR", 112, "/min", step=3),
+                _vital("SBP", 92, "mmHg", step=-2),
+                _vital("SpO2", 94, "%", step=-1),
+                _vital("Temperature", 38.8, "C", step=0.1),
+            ],
+            medications=[
+                _med("Acetaminophen", rxnorm="161", dose="650 mg", route="oral", frequency="every 6 hours as needed"),
+                _med("Ceftriaxone", rxnorm="2193", dose="1 g", route="IV", frequency="daily"),
+            ],
+        ),
+    ),
+    (
+        ("heart failure", "pulmonary edema", "volume overload", "edema"),
+        ClinicalProfile(
+            diagnosis_display="heart failure exacerbation",
+            diagnosis_code="heart_failure_exacerbation",
+            labs=[
+                _lab("BNP", 1240, "pg/mL", reference_low=0, reference_high=100, flag="H", step=75),
+                _lab("Creatinine", 1.4, "mg/dL", reference_low=0.6, reference_high=1.3, flag="H", step=0.1),
+                _lab("Sodium", 132, "mmol/L", reference_low=135, reference_high=145, flag="L", step=-1),
+            ],
+            vitals=[
+                _vital("HR", 104, "/min", step=2),
+                _vital("SBP", 156, "mmHg", step=4),
+                _vital("SpO2", 90, "%", step=-1),
+                _vital("Respiratory rate", 26, "/min", step=1),
+            ],
+            medications=[
+                _med("Furosemide", rxnorm="4603", dose="40 mg", route="IV", frequency="once"),
+                _med("Nitroglycerin", rxnorm="4917", dose="0.4 mg", route="sublingual", frequency="as needed"),
+            ],
+        ),
+    ),
+    (
+        ("diabetic ketoacidosis", "dka", "hyperglycemia"),
+        ClinicalProfile(
+            diagnosis_display="diabetic ketoacidosis",
+            diagnosis_code="diabetic_ketoacidosis",
+            labs=[
+                _lab("Glucose", 486, "mg/dL", reference_low=70, reference_high=110, flag="H", step=20),
+                _lab("Bicarbonate", 12, "mmol/L", reference_low=22, reference_high=29, flag="L", step=-1),
+                _lab("Anion gap", 24, "mmol/L", reference_low=8, reference_high=16, flag="H", step=1),
+                _lab("Beta-hydroxybutyrate", 5.1, "mmol/L", reference_low=0, reference_high=0.6, flag="H", step=0.2),
+            ],
+            vitals=[
+                _vital("HR", 118, "/min", step=3),
+                _vital("SBP", 98, "mmHg", step=-2),
+                _vital("Respiratory rate", 30, "/min", step=1),
+                _vital("Temperature", 37.1, "C", step=0.0),
+            ],
+            medications=[
+                _med("Regular insulin", rxnorm="253182", dose="0.1 units/kg/hr", route="IV", frequency="continuous"),
+                _med("Normal saline", dose="1 L", route="IV", frequency="bolus"),
+            ],
+        ),
+    ),
+    (
+        ("stroke", "cva", "aphasia", "hemiparesis"),
+        ClinicalProfile(
+            diagnosis_display="ischemic stroke",
+            diagnosis_code="ischemic_stroke",
+            labs=[
+                _lab("Glucose", 126, "mg/dL", reference_low=70, reference_high=110, flag="H", step=5),
+                _lab("Platelets", 238, "K/uL", reference_low=150, reference_high=450, step=6),
+                _lab("INR", 1.0, "", reference_low=0.8, reference_high=1.2, step=0.0),
+            ],
+            vitals=[
+                _vital("HR", 88, "/min", step=2),
+                _vital("SBP", 184, "mmHg", step=3),
+                _vital("SpO2", 97, "%", step=0),
+            ],
+            medications=[
+                _med("Aspirin", rxnorm="1191", dose="325 mg", route="oral", frequency="once"),
+                _med("Atorvastatin", rxnorm="83367", dose="80 mg", route="oral", frequency="daily"),
+            ],
+        ),
+    ),
+]
