@@ -108,6 +108,25 @@ def test_export_multimodal_record_preserves_imaging_labels_and_alignment_tasks()
     assert exported["supervised_tasks"][0]["target"]["labels"] == ["Opacity"]
 
 
+def test_export_multimodal_record_inlines_existing_image_bytes(tmp_path):
+    image_path = tmp_path / "image.png"
+    image_path.write_bytes(b"synthetic image bytes")
+    record = _multimodal_record().model_copy(
+        update={
+            "imaging": [
+                _multimodal_record().imaging[0].model_copy(
+                    update={"file_path": str(image_path)}
+                )
+            ]
+        }
+    )
+
+    exported = export_multimodal_record(record)
+
+    assert exported["images"][0]["image_base64"] == "c3ludGhldGljIGltYWdlIGJ5dGVz"
+    assert exported["images"][0]["image_mime_type"] == "image/png"
+
+
 def test_export_fhir_record_contains_training_bundle_resources():
     record = _multimodal_record()
 

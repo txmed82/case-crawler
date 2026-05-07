@@ -96,19 +96,7 @@ def export_multimodal_record(record: SyntheticRecord) -> dict[str, Any]:
         "record_id": record.record_id,
         "dataset_id": record.dataset_id,
         "clinical_context": _clinical_context(record),
-        "images": [
-            {
-                "image_id": asset.image_id,
-                "file_path": asset.file_path,
-                "modality": asset.modality,
-                "body_region": asset.body_region,
-                "prompt": asset.prompt,
-                "report_text": asset.report_text,
-                "labels": [label.model_dump() for label in asset.labels],
-                "generation_backend": asset.generation_backend,
-            }
-            for asset in record.imaging
-        ],
+        "images": [_multimodal_image_payload(asset) for asset in record.imaging],
         "image_text_pairs": image_text_pairs,
         "supervised_tasks": [
             {
@@ -127,6 +115,38 @@ def export_multimodal_record(record: SyntheticRecord) -> dict[str, Any]:
         ],
         "metadata": _metadata(record),
     }
+
+
+def _multimodal_image_payload(asset) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "image_id": asset.image_id,
+        "file_path": asset.file_path,
+        "modality": asset.modality,
+        "body_region": asset.body_region,
+        "prompt": asset.prompt,
+        "report_text": asset.report_text,
+        "labels": [label.model_dump() for label in asset.labels],
+        "generation_backend": asset.generation_backend,
+    }
+    if asset.file_path:
+        path = Path(asset.file_path)
+        if path.exists() and path.is_file():
+            payload["image_base64"] = base64.b64encode(path.read_bytes()).decode("ascii")
+            payload["image_mime_type"] = _image_mime_type(path)
+    return payload
+
+
+def _image_mime_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    if suffix == ".png":
+        return "image/png"
+    if suffix in {".tif", ".tiff"}:
+        return "image/tiff"
+    if suffix == ".dcm":
+        return "application/dicom"
+    return "application/octet-stream"
 
 
 def export_tool_call_record(record: SyntheticRecord) -> dict[str, Any]:
