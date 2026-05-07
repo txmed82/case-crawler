@@ -4,7 +4,7 @@ import IngestPage from './pages/IngestPage';
 import SearchPage from './pages/SearchPage';
 import SourcesPage from './pages/SourcesPage';
 import GeneratePage from './pages/GeneratePage';
-import CasesPage from './pages/CasesPage';
+import DatasetsPage from './pages/DatasetsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,8 +50,7 @@ export default function App() {
               <Route path="/search" element={<SearchPage />} />
               <Route path="/sources" element={<SourcesPage />} />
               <Route path="/generate" element={<GeneratePage />} />
-              <Route path="/datasets" element={<CasesPage />} />
-              <Route path="/cases" element={<CasesPage />} />
+              <Route path="/datasets" element={<DatasetsPage />} />
             </Routes>
           </main>
         </div>
