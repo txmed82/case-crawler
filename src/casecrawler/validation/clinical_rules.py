@@ -232,11 +232,72 @@ def validate_text_structured_contradictions(
     return issues
 
 
+def validate_radiology_document_alignment(
+    record: SyntheticRecord,
+) -> list[ValidationIssue]:
+    if not record.imaging:
+        return []
+    radiology_text = " ".join(
+        " ".join(part for part in [document.clean_text, document.messy_text] if part)
+        for document in record.documents
+        if document.note_type == "radiology_report"
+    )
+    if not radiology_text:
+        return []
+    issues: list[ValidationIssue] = []
+    for asset in record.imaging:
+        for label in asset.labels:
+            label_terms = _label_terms(label.display, label.code)
+            if not any(_contains_term(radiology_text, term) for term in label_terms):
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.CLINICAL_TEXT,
+                        field="documents.radiology_report",
+                        message=(
+                            f"Radiology document does not support imaging label "
+                            f"{label.display!r} for asset {asset.image_id}."
+                        ),
+                    )
+                )
+                continue
+            if any(_contains_negated_term(radiology_text, term) for term in label_terms):
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.CLINICAL_TEXT,
+                        field="documents.radiology_report",
+                        message=(
+                            f"Radiology document negates imaging label "
+                            f"{label.display!r} for asset {asset.image_id}."
+                        ),
+                    )
+                )
+    return issues
+
+
 def _document_text(record: SyntheticRecord) -> str:
     return "\n".join(
         " ".join(part for part in [document.clean_text, document.messy_text] if part)
         for document in record.documents
     ).lower()
+
+
+def _label_terms(display: str, code: str) -> set[str]:
+    terms = {display.lower(), code.replace("_", " ").lower()}
+    return {term for term in terms if term}
+
+
+def _contains_term(text: str, term: str) -> bool:
+    return re.search(rf"\b{re.escape(term)}\b", text.lower()) is not None
+
+
+def _contains_negated_term(text: str, term: str) -> bool:
+    lowered = text.lower()
+    return any(
+        re.search(rf"\b{negation}\s+(?:\w+\s+){{0,3}}{re.escape(term)}\b", lowered)
+        for negation in {"absent", "negative for", "no", "without"}
+    )
 
 
 def _normalize_name(value: str) -> str:

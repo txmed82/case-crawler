@@ -3,6 +3,7 @@ from __future__ import annotations
 from casecrawler.models.synthetic import Modality, SyntheticRecord, ValidationIssue, ValidationReport
 from casecrawler.validation.clinical_rules import (
     validate_lab_flags,
+    validate_radiology_document_alignment,
     validate_temporal_consistency,
     validate_text_structured_contradictions,
     validate_time_series_waveforms,
@@ -32,6 +33,7 @@ class SyntheticValidator:
             *validate_vitals(record),
             *validate_time_series_waveforms(record),
             *validate_text_structured_contradictions(record),
+            *validate_radiology_document_alignment(record),
             *validate_privacy(record),
         ]
         modality_alignment_score = self._image_alignment_score(record)

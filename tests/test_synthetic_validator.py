@@ -231,6 +231,86 @@ def test_validator_rejects_inconsistent_radiology_labels():
     assert any(issue.field == "imaging.img-1.labels" for issue in report.issues)
 
 
+def test_validator_rejects_radiology_document_that_negates_imaging_label():
+    record = _record(
+        modalities=[Modality.IMAGING, Modality.CLINICAL_TEXT],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="CT",
+                body_region="abdomen",
+                prompt="CT abdomen appendicitis",
+                file_path="appendicitis.png",
+                report_text="CT abdomen demonstrates appendicitis.",
+                labels=[
+                    Code(
+                        system="synthetic",
+                        code="appendicitis",
+                        display="Appendicitis",
+                    )
+                ],
+                generation_backend="unit-test",
+            )
+        ],
+        documents=[
+            ClinicalDocument(
+                document_id="doc-rad",
+                note_type="radiology_report",
+                author_role="radiologist",
+                timestamp="2026-05-06T09:00:00",
+                clean_text="CT abdomen without appendicitis.",
+            )
+        ],
+    )
+
+    report = SyntheticValidator(
+        image_alignment_validator=FakeImageAlignmentValidator(0.9)
+    ).validate(record)
+
+    assert report.approved is False
+    assert any(issue.field == "documents.radiology_report" for issue in report.issues)
+
+
+def test_validator_rejects_radiology_document_missing_imaging_label_evidence():
+    record = _record(
+        modalities=[Modality.IMAGING, Modality.CLINICAL_TEXT],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="XR",
+                body_region="chest",
+                prompt="portable chest x-ray pulmonary edema",
+                file_path="xray.png",
+                report_text="portable chest x-ray pulmonary edema",
+                labels=[
+                    Code(
+                        system="synthetic",
+                        code="pulmonary_edema",
+                        display="Pulmonary edema",
+                    )
+                ],
+                generation_backend="unit-test",
+            )
+        ],
+        documents=[
+            ClinicalDocument(
+                document_id="doc-rad",
+                note_type="radiology_report",
+                author_role="radiologist",
+                timestamp="2026-05-06T09:00:00",
+                clean_text="Portable chest radiograph reviewed.",
+            )
+        ],
+    )
+
+    report = SyntheticValidator(
+        image_alignment_validator=FakeImageAlignmentValidator(0.9)
+    ).validate(record)
+
+    assert report.approved is False
+    assert any(issue.field == "documents.radiology_report" for issue in report.issues)
+
+
 def test_validator_scans_nested_record_fields_for_phi():
     bad = _record(
         patient=SyntheticPatient(
