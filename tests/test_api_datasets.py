@@ -60,6 +60,31 @@ def test_dataset_api_lists_and_exports_records(tmp_path, monkeypatch):
     assert json.loads(first_line)["dataset_id"] == dataset_id
 
 
+def test_dataset_api_exports_parquet_payload(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    dataset_id = generated.json()["dataset_id"]
+
+    def fake_export_parquet_bytes(records):
+        records = list(records)
+        assert len(records) == 1
+        assert records[0].dataset_id == dataset_id
+        return b"PAR1synthetic-parquet", len(records)
+
+    monkeypatch.setattr(datasets_routes, "export_parquet_bytes", fake_export_parquet_bytes)
+
+    exported = client.get(
+        f"/api/datasets/{dataset_id}/export",
+        params={"export_format": "parquet"},
+    )
+
+    assert exported.status_code == 200
+    assert exported.content == b"PAR1synthetic-parquet"
+    assert exported.headers["content-type"] == "application/vnd.apache.parquet"
+    assert f'filename="{dataset_id}.parquet"' in exported.headers["content-disposition"]
+
+
 def test_dataset_api_export_blocks_unready_dataset_without_override(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     store = DatasetStore()
