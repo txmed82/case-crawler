@@ -22,6 +22,7 @@ const modalityOptions: { value: SyntheticModality; label: string }[] = [
 
 const sexOptions = ["female", "male", "other"] as const;
 type SexOption = (typeof sexOptions)[number];
+type ReferenceImportMode = "registered" | "custom";
 
 export default function GeneratePage() {
   const [topic, setTopic] = useState("");
@@ -41,9 +42,18 @@ export default function GeneratePage() {
   const [result, setResult] = useState<DatasetGenerateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [referenceCatalog, setReferenceCatalog] = useState<ReferenceDatasetCatalogItem[]>([]);
+  const [referenceImportMode, setReferenceImportMode] =
+    useState<ReferenceImportMode>("registered");
   const [referenceKey, setReferenceKey] = useState("");
   const [referenceDatasetId, setReferenceDatasetId] = useState("");
+  const [referenceRepoId, setReferenceRepoId] = useState("");
   const [referenceSplit, setReferenceSplit] = useState("");
+  const [referenceLicense, setReferenceLicense] = useState("");
+  const [referenceNoteField, setReferenceNoteField] = useState("note");
+  const [referenceQuestionField, setReferenceQuestionField] = useState("");
+  const [referenceAnswerField, setReferenceAnswerField] = useState("");
+  const [referenceTaskField, setReferenceTaskField] = useState("");
+  const [referencePatientIdField, setReferencePatientIdField] = useState("");
   const [referenceLimit, setReferenceLimit] = useState("25");
   const [isImportingReference, setIsImportingReference] = useState(false);
   const [referenceImportResult, setReferenceImportResult] =
@@ -134,7 +144,18 @@ export default function GeneratePage() {
   };
 
   const handleReferenceImport = async () => {
-    if (!referenceKey || !referenceDatasetId.trim() || isImportingReference) return;
+    if (
+      !referenceDatasetId.trim() ||
+      isImportingReference ||
+      (referenceImportMode === "registered" && !referenceKey) ||
+      (referenceImportMode === "custom" && !referenceRepoId.trim())
+    ) {
+      return;
+    }
+    if (referenceImportMode === "custom" && !referenceNoteField.trim()) {
+      setReferenceError("Custom imports require a note field.");
+      return;
+    }
     const parsedLimit = referenceLimit === "" ? undefined : Number(referenceLimit);
     if (
       parsedLimit !== undefined &&
@@ -148,8 +169,24 @@ export default function GeneratePage() {
     setIsImportingReference(true);
     try {
       const resp = await importReferenceDataset({
-        reference_key: referenceKey,
         dataset_id: referenceDatasetId.trim(),
+        ...(referenceImportMode === "registered"
+          ? { reference_key: referenceKey }
+          : {
+              repo_id: referenceRepoId.trim(),
+              ...(referenceLicense.trim() ? { license: referenceLicense.trim() } : {}),
+              note_field: referenceNoteField.trim(),
+              ...(referenceQuestionField.trim()
+                ? { question_field: referenceQuestionField.trim() }
+                : {}),
+              ...(referenceAnswerField.trim()
+                ? { answer_field: referenceAnswerField.trim() }
+                : {}),
+              ...(referenceTaskField.trim() ? { task_field: referenceTaskField.trim() } : {}),
+              ...(referencePatientIdField.trim()
+                ? { patient_id_field: referencePatientIdField.trim() }
+                : {}),
+            }),
         ...(referenceSplit.trim() ? { split: referenceSplit.trim() } : {}),
         ...(parsedLimit !== undefined ? { limit: parsedLimit } : {}),
       });
@@ -335,26 +372,61 @@ export default function GeneratePage() {
       <div className="border-t border-gray-200 pt-6">
         <h2 className="text-xl font-semibold">Import Reference Dataset</h2>
         <p className="mt-1 text-sm text-gray-600">
-          Pull registered Hugging Face synthetic clinical reference datasets into the
-          workbench for benchmarking and export.
+          Pull Hugging Face synthetic clinical reference datasets into the workbench
+          for benchmarking and export.
         </p>
 
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(["registered", "custom"] as const).map((mode) => {
+            const selected = referenceImportMode === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setReferenceImportMode(mode)}
+                aria-pressed={selected}
+                className={`rounded-md border px-3 py-2 text-sm capitalize ${
+                  selected
+                    ? "border-gray-900 bg-gray-900 text-white"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {mode}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,18rem)_minmax(0,16rem)_minmax(0,10rem)_minmax(0,8rem)]">
-          <label className="space-y-1 text-sm font-medium text-gray-700">
-            <span>Reference</span>
-            <select
-              aria-label="Reference dataset"
-              value={referenceKey}
-              onChange={(event) => setReferenceKey(event.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
-            >
-              {referenceCatalog.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.key}
-                </option>
-              ))}
-            </select>
-          </label>
+          {referenceImportMode === "registered" ? (
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Reference</span>
+              <select
+                aria-label="Reference dataset"
+                value={referenceKey}
+                onChange={(event) => setReferenceKey(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              >
+                {referenceCatalog.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.key}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Repo id</span>
+              <input
+                aria-label="Custom Hugging Face repo id"
+                type="text"
+                value={referenceRepoId}
+                onChange={(event) => setReferenceRepoId(event.target.value)}
+                placeholder="org/custom-synthetic-notes"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+          )}
           <label className="space-y-1 text-sm font-medium text-gray-700">
             <span>Dataset id</span>
             <input
@@ -377,6 +449,19 @@ export default function GeneratePage() {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
             />
           </label>
+          {referenceImportMode === "custom" && (
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>License</span>
+              <input
+                aria-label="Reference license"
+                type="text"
+                value={referenceLicense}
+                onChange={(event) => setReferenceLicense(event.target.value)}
+                placeholder="cc-by-4.0"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+          )}
           <label className="space-y-1 text-sm font-medium text-gray-700">
             <span>Limit</span>
             <input
@@ -390,7 +475,66 @@ export default function GeneratePage() {
           </label>
         </div>
 
-        {selectedReference && (
+        {referenceImportMode === "custom" && (
+          <div className="mt-4 grid gap-4 md:grid-cols-[repeat(5,minmax(0,1fr))]">
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Note field</span>
+              <input
+                aria-label="Reference note field"
+                type="text"
+                value={referenceNoteField}
+                onChange={(event) => setReferenceNoteField(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Prompt field</span>
+              <input
+                aria-label="Reference prompt field"
+                type="text"
+                value={referenceQuestionField}
+                onChange={(event) => setReferenceQuestionField(event.target.value)}
+                placeholder="prompt"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Answer field</span>
+              <input
+                aria-label="Reference answer field"
+                type="text"
+                value={referenceAnswerField}
+                onChange={(event) => setReferenceAnswerField(event.target.value)}
+                placeholder="completion"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Task field</span>
+              <input
+                aria-label="Reference task field"
+                type="text"
+                value={referenceTaskField}
+                onChange={(event) => setReferenceTaskField(event.target.value)}
+                placeholder="task"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Patient id field</span>
+              <input
+                aria-label="Reference patient id field"
+                type="text"
+                value={referencePatientIdField}
+                onChange={(event) => setReferencePatientIdField(event.target.value)}
+                placeholder="patient_id"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+          </div>
+        )}
+
+        {referenceImportMode === "registered" && selectedReference && (
           <p className="mt-3 text-xs text-gray-600">
             {selectedReference.repo_id} - {selectedReference.license}
           </p>
@@ -401,10 +545,12 @@ export default function GeneratePage() {
             type="button"
             onClick={handleReferenceImport}
             disabled={
-              !referenceKey ||
               !referenceDatasetId.trim() ||
               isImportingReference ||
-              referenceCatalog.length === 0
+              (referenceImportMode === "registered" &&
+                (!referenceKey || referenceCatalog.length === 0)) ||
+              (referenceImportMode === "custom" &&
+                (!referenceRepoId.trim() || !referenceNoteField.trim()))
             }
             className="rounded-lg bg-gray-900 px-6 py-2 text-white hover:bg-gray-800 disabled:opacity-50"
           >
