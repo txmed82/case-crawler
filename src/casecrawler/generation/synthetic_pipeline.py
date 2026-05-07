@@ -10,7 +10,7 @@ from casecrawler.generation.text_generator import TextGenerator
 from casecrawler.generation.timeseries_generator import TimeSeriesGenerator
 from casecrawler.llm.factory import get_provider
 from casecrawler.models.dataset import GenerationRequest
-from casecrawler.models.synthetic import Modality
+from casecrawler.models.synthetic import Modality, SyntheticRecord
 from casecrawler.validation.synthetic_validator import SyntheticValidator
 
 
@@ -67,8 +67,11 @@ class SyntheticPipeline:
                 )
             if Modality.IMAGING in plan.modalities:
                 images = [
-                    self._generate_image_asset(prompt=f"{req.topic} {view}")
-                    for view in (plan.imaging_views or ["medical_image"])
+                    self._generate_image_asset(prompt=prompt)
+                    for prompt in _imaging_prompts_for_record(
+                        record,
+                        plan.imaging_views or ["medical_image"],
+                    )
                 ]
                 record = record.model_copy(update={"imaging": [*record.imaging, *images]})
             validation = self._validator.validate(record)
@@ -126,3 +129,43 @@ def _text_generator_from_config(
         provider = get_provider(provider_name, model, base_url=ollama_base_url)
         return TextGenerator(provider=provider)
     raise ValueError(f"Unknown synthetic clinical text backend: {backend}")
+
+
+def _imaging_prompts_for_record(
+    record: SyntheticRecord,
+    views: list[str],
+) -> list[str]:
+    topic_prompt = _topic_imaging_prompt(record.topic)
+    diagnosis_terms = " ".join(
+        diagnosis.display
+        for encounter in record.encounters
+        for diagnosis in encounter.diagnoses
+    )
+    prompts = []
+    for view in views:
+        normalized_view = view.replace("_", " ")
+        prompts.append(
+            " ".join(
+                part
+                for part in [
+                    normalized_view,
+                    topic_prompt,
+                    diagnosis_terms,
+                ]
+                if part
+            )
+        )
+    return prompts
+
+
+def _topic_imaging_prompt(topic: str) -> str:
+    normalized = topic.lower().replace("-", " ").replace("_", " ")
+    if "heart failure" in normalized or "edema" in normalized:
+        return "pulmonary edema cardiomegaly small pleural effusion"
+    if "pneumonia" in normalized:
+        return "right lower lobe opacity pneumonia"
+    if "sepsis" in normalized or "infection" in normalized:
+        return "portable chest x-ray possible lower lobe opacity"
+    if "stroke" in normalized:
+        return "noncontrast head CT no acute hemorrhage"
+    return topic
