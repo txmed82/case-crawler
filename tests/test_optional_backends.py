@@ -9,6 +9,8 @@ def test_imaging_placeholder_does_not_require_diffusers(tmp_path):
 
     assert asset.generation_backend == "placeholder"
     assert asset.modality == "XR"
+    assert asset.labels[0].display == "Pulmonary edema"
+    assert "Pulmonary edema" in asset.report_text
 
 
 class FakeImage:
@@ -44,6 +46,8 @@ def test_diffusers_backend_uses_injected_pipeline(tmp_path):
     assert asset.file_path is not None
     assert (tmp_path / f"{asset.image_id}.png").read_bytes() == b"fake-png"
     assert pipeline.calls[0]["negative_prompt"] == "real patient identifiers"
+    assert asset.labels[0].display == "Pulmonary edema"
+    assert "Pulmonary edema" in asset.report_text
 
 
 def test_diffusers_backend_generates_unique_files(tmp_path):
