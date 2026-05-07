@@ -244,6 +244,61 @@ def validate_vitals(record: SyntheticRecord) -> list[ValidationIssue]:
     return issues
 
 
+def validate_medication_history(record: SyntheticRecord) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    valid_statuses = {
+        "active",
+        "completed",
+        "entered-in-error",
+        "intended",
+        "on-hold",
+        "stopped",
+        "unknown",
+    }
+    valid_routes = {
+        "im",
+        "inhaled",
+        "intranasal",
+        "iv",
+        "nebulized",
+        "oral",
+        "po",
+        "subcutaneous",
+        "sublingual",
+        "topical",
+    }
+    for medication in record.medication_history:
+        if not medication.name.strip():
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="medication_history.name",
+                    message="Medication statement has an empty medication name.",
+                )
+            )
+        normalized_status = medication.status.lower()
+        if normalized_status not in valid_statuses:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="medication_history.status",
+                    message=f"Medication {medication.name or '<empty>'} has an invalid status.",
+                )
+            )
+        if medication.route and medication.route.lower() not in valid_routes:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="medication_history.route",
+                    message=f"Medication {medication.name or '<empty>'} has an unsupported route.",
+                )
+            )
+    return issues
+
+
 def validate_text_structured_contradictions(
     record: SyntheticRecord,
 ) -> list[ValidationIssue]:
