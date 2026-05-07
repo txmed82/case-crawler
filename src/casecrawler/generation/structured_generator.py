@@ -394,4 +394,114 @@ _TOPIC_PROFILES: list[tuple[tuple[str, ...], ClinicalProfile]] = [
             ],
         ),
     ),
+    (
+        ("pulmonary embolism", "pulmonary embolus", "pe ", "pleuritic chest pain"),
+        ClinicalProfile(
+            diagnosis_display="pulmonary embolism",
+            diagnosis_code="pulmonary_embolism",
+            labs=[
+                _lab("D-dimer", 2.8, "mcg/mL FEU", reference_low=0, reference_high=0.5, flag="H", step=0.3),
+                _lab("Troponin I", 0.03, "ng/mL", reference_low=0, reference_high=0.04, step=0.01),
+                _lab("BNP", 180, "pg/mL", reference_low=0, reference_high=100, flag="H", step=20),
+            ],
+            vitals=[
+                _vital("HR", 122, "/min", step=3),
+                _vital("SBP", 108, "mmHg", step=-2),
+                _vital("SpO2", 90, "%", step=-1),
+                _vital("Respiratory rate", 28, "/min", step=1),
+            ],
+            medications=[
+                _med("Heparin", rxnorm="5224", dose="80 units/kg", route="IV", frequency="bolus then infusion"),
+                _med("Acetaminophen", rxnorm="161", dose="650 mg", route="oral", frequency="every 6 hours as needed"),
+            ],
+        ),
+    ),
+    (
+        ("acute coronary syndrome", "myocardial infarction", "stemi", "nstemi", "chest pain"),
+        ClinicalProfile(
+            diagnosis_display="acute coronary syndrome",
+            diagnosis_code="acute_coronary_syndrome",
+            labs=[
+                _lab("Troponin I", 1.8, "ng/mL", reference_low=0, reference_high=0.04, flag="H", step=0.4),
+                _lab("Creatinine", 1.1, "mg/dL", reference_low=0.6, reference_high=1.3, step=0.1),
+                _lab("Potassium", 4.1, "mmol/L", reference_low=3.5, reference_high=5.1, step=0.1),
+            ],
+            vitals=[
+                _vital("HR", 96, "/min", step=2),
+                _vital("SBP", 148, "mmHg", step=3),
+                _vital("SpO2", 96, "%", step=0),
+            ],
+            medications=[
+                _med("Aspirin", rxnorm="1191", dose="325 mg", route="oral", frequency="once"),
+                _med("Heparin", rxnorm="5224", dose="60 units/kg", route="IV", frequency="bolus then infusion"),
+                _med("Atorvastatin", rxnorm="83367", dose="80 mg", route="oral", frequency="daily"),
+                _med("Nitroglycerin", rxnorm="4917", dose="0.4 mg", route="sublingual", frequency="as needed"),
+            ],
+        ),
+    ),
+    (
+        ("copd", "chronic obstructive", "wheezing"),
+        ClinicalProfile(
+            diagnosis_display="COPD exacerbation",
+            diagnosis_code="copd_exacerbation",
+            labs=[
+                _lab("WBC", 12.4, "K/uL", reference_low=4.5, reference_high=11.0, flag="H", step=0.3),
+                _lab("pCO2", 58, "mmHg", reference_low=35, reference_high=45, flag="H", step=2),
+                _lab("Bicarbonate", 31, "mmol/L", reference_low=22, reference_high=29, flag="H", step=1),
+            ],
+            vitals=[
+                _vital("HR", 110, "/min", step=2),
+                _vital("SBP", 138, "mmHg", step=2),
+                _vital("SpO2", 88, "%", step=-1),
+                _vital("Respiratory rate", 30, "/min", step=1),
+            ],
+            medications=[
+                _med("Albuterol", rxnorm="435", dose="2.5 mg", route="nebulized", frequency="every 4 hours"),
+                _med("Ipratropium", rxnorm="7213", dose="0.5 mg", route="nebulized", frequency="every 6 hours"),
+                _med("Methylprednisolone", rxnorm="6902", dose="125 mg", route="IV", frequency="once"),
+            ],
+        ),
+    ),
+    (
+        ("gi bleed", "gastrointestinal bleed", "melena", "hematemesis"),
+        ClinicalProfile(
+            diagnosis_display="upper gastrointestinal bleeding",
+            diagnosis_code="upper_gastrointestinal_bleeding",
+            labs=[
+                _lab("Hemoglobin", 8.4, "g/dL", reference_low=12, reference_high=16, flag="L", step=-0.3),
+                _lab("BUN", 42, "mg/dL", reference_low=7, reference_high=20, flag="H", step=3),
+                _lab("INR", 1.3, "", reference_low=0.8, reference_high=1.2, flag="H", step=0.1),
+            ],
+            vitals=[
+                _vital("HR", 118, "/min", step=3),
+                _vital("SBP", 94, "mmHg", step=-2),
+                _vital("SpO2", 97, "%", step=0),
+            ],
+            medications=[
+                _med("Pantoprazole", rxnorm="40790", dose="80 mg", route="IV", frequency="bolus then infusion"),
+                _med("Normal saline", dose="1 L", route="IV", frequency="bolus"),
+            ],
+        ),
+    ),
+    (
+        ("acute kidney injury", "aki", "renal failure"),
+        ClinicalProfile(
+            diagnosis_display="acute kidney injury",
+            diagnosis_code="acute_kidney_injury",
+            labs=[
+                _lab("Creatinine", 3.2, "mg/dL", reference_low=0.6, reference_high=1.3, flag="H", step=0.2),
+                _lab("BUN", 58, "mg/dL", reference_low=7, reference_high=20, flag="H", step=4),
+                _lab("Potassium", 5.6, "mmol/L", reference_low=3.5, reference_high=5.1, flag="H", step=0.1),
+            ],
+            vitals=[
+                _vital("HR", 102, "/min", step=2),
+                _vital("SBP", 104, "mmHg", step=-2),
+                _vital("SpO2", 96, "%", step=0),
+            ],
+            medications=[
+                _med("Normal saline", dose="1 L", route="IV", frequency="bolus"),
+                _med("Calcium gluconate", rxnorm="1895", dose="1 g", route="IV", frequency="once"),
+            ],
+        ),
+    ),
 ]

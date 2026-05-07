@@ -91,6 +91,28 @@ def test_structured_generator_uses_topic_specific_profiles():
     assert stroke.encounters[0].diagnoses[0].display == "ischemic stroke"
 
 
+def test_structured_generator_uses_additional_common_clinical_profiles():
+    generator = StructuredGenerator()
+
+    pe = generator.generate("ds-one", GenerationRequest(topic="pulmonary embolism"), 0)
+    acs = generator.generate("ds-one", GenerationRequest(topic="acute coronary syndrome"), 0)
+    copd = generator.generate("ds-one", GenerationRequest(topic="COPD exacerbation"), 0)
+    gi_bleed = generator.generate("ds-one", GenerationRequest(topic="upper GI bleed"), 0)
+    aki = generator.generate("ds-one", GenerationRequest(topic="acute kidney injury"), 0)
+
+    assert _lab_value(pe, "D-dimer") > 0.5
+    assert _vital_value(pe, "SpO2") < 94
+    assert any(medication.name == "Heparin" for medication in pe.medication_history)
+    assert _lab_value(acs, "Troponin I") > 0.04
+    assert any(medication.name == "Aspirin" for medication in acs.medication_history)
+    assert _lab_value(copd, "pCO2") > 45
+    assert any(medication.name == "Albuterol" for medication in copd.medication_history)
+    assert _lab_value(gi_bleed, "Hemoglobin") < 12
+    assert any(medication.name == "Pantoprazole" for medication in gi_bleed.medication_history)
+    assert _lab_value(aki, "Creatinine") > 1.5
+    assert any(medication.name == "Normal saline" for medication in aki.medication_history)
+
+
 def test_structured_generator_adds_furosemide_for_heart_failure_topic_variant():
     req = GenerationRequest(topic="heart-failure")
 
