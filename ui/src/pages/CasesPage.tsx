@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   datasetExportUrl,
   fetchDataset,
+  fetchDatasetBenchmark,
   fetchDatasetCard,
   fetchDatasetReviewQueue,
   fetchDatasets,
@@ -11,6 +12,7 @@ import {
 import type {
   DatasetManifest,
   ExportFormat,
+  BenchmarkReport,
   HumanReviewStatus,
   ReviewQueueItem,
   SyntheticRecordPreview,
@@ -22,6 +24,7 @@ export default function CasesPage() {
   const [exportFormat, setExportFormat] = useState<ExportFormat>("sft_jsonl");
   const [includeReviewed, setIncludeReviewed] = useState(false);
   const [cardKind, setCardKind] = useState<"dataset" | "model">("dataset");
+  const [referenceDatasetId, setReferenceDatasetId] = useState("");
   const queryClient = useQueryClient();
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -62,6 +65,16 @@ export default function CasesPage() {
     queryKey: ["dataset-card", activeDatasetId, cardKind],
     queryFn: () => fetchDatasetCard(activeDatasetId as string, cardKind),
     enabled: Boolean(activeDatasetId),
+  });
+  const {
+    data: benchmark,
+    isLoading: isBenchmarkLoading,
+    error: benchmarkError,
+  } = useQuery({
+    queryKey: ["dataset-benchmark", activeDatasetId, referenceDatasetId],
+    queryFn: () =>
+      fetchDatasetBenchmark(activeDatasetId as string, referenceDatasetId),
+    enabled: Boolean(activeDatasetId && referenceDatasetId),
   });
   const reviewMutation = useMutation({
     mutationFn: ({
@@ -231,6 +244,16 @@ export default function CasesPage() {
                   />
                 </section>
 
+                <BenchmarkPanel
+                  datasets={datasets}
+                  activeDatasetId={detail.manifest.dataset_id}
+                  referenceDatasetId={referenceDatasetId}
+                  onReferenceDatasetChange={setReferenceDatasetId}
+                  benchmark={benchmark ?? null}
+                  isLoading={isBenchmarkLoading}
+                  error={benchmarkError}
+                />
+
                 <div className="space-y-3">
                   {detail.records.map((record) => (
                     <RecordPreview key={record.record_id} record={record} />
@@ -244,6 +267,94 @@ export default function CasesPage() {
               </>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BenchmarkPanel({
+  datasets,
+  activeDatasetId,
+  referenceDatasetId,
+  onReferenceDatasetChange,
+  benchmark,
+  isLoading,
+  error,
+}: {
+  datasets: DatasetManifest[];
+  activeDatasetId: string;
+  referenceDatasetId: string;
+  onReferenceDatasetChange: (datasetId: string) => void;
+  benchmark: BenchmarkReport | null;
+  isLoading: boolean;
+  error: unknown;
+}) {
+  const referenceOptions = datasets.filter(
+    (dataset) => dataset.dataset_id !== activeDatasetId
+  );
+  const topMetrics = benchmark?.metrics.slice(0, 6) ?? [];
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Benchmark comparison</p>
+          <p className="text-xs text-gray-500">Compare against a stored reference dataset</p>
+        </div>
+        <select
+          value={referenceDatasetId}
+          onChange={(event) => onReferenceDatasetChange(event.target.value)}
+          className="min-w-64 rounded-md border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="">Select reference dataset</option>
+          {referenceOptions.map((dataset) => (
+            <option key={dataset.dataset_id} value={dataset.dataset_id}>
+              {dataset.topic} | {dataset.dataset_id}
+            </option>
+          ))}
+        </select>
+      </div>
+      {referenceOptions.length === 0 && (
+        <p className="mt-3 rounded-md bg-gray-50 p-3 text-sm text-gray-500">
+          Import or generate another dataset to use as a benchmark reference.
+        </p>
+      )}
+      {isLoading && <p className="mt-3 text-sm text-gray-500">Running benchmark...</p>}
+      {Boolean(error) && (
+        <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error instanceof Error ? error.message : "Failed to run benchmark."}
+        </p>
+      )}
+      {benchmark && (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Metric label="Overall score" value={benchmark.overall_score.toFixed(3)} />
+            <Metric label="Metric count" value={benchmark.metrics.length} />
+            <Metric label="Warnings" value={benchmark.warnings.length} />
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {topMetrics.map((metric) => (
+              <div key={metric.name} className="rounded-md border border-gray-200 p-3">
+                <p className="text-xs font-medium uppercase text-gray-500">
+                  {metric.name.replaceAll("_", " ")}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {metric.score.toFixed(3)}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  gen {formatMetricValue(metric.generated_value)} | ref{" "}
+                  {formatMetricValue(metric.reference_value)}
+                </p>
+              </div>
+            ))}
+          </div>
+          {benchmark.warnings.length > 0 && (
+            <div className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800">
+              {benchmark.warnings.slice(0, 3).map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -477,6 +588,12 @@ function reviewStatusClass(status: HumanReviewStatus) {
   if (status === "rejected") return `${base} bg-red-50 text-red-700`;
   if (status === "needs_revision") return `${base} bg-yellow-50 text-yellow-700`;
   return `${base} bg-gray-100 text-gray-700`;
+}
+
+function formatMetricValue(value: number | string | null) {
+  if (typeof value === "number") return value.toFixed(2);
+  if (value === null) return "none";
+  return value;
 }
 
 function RecordPreview({ record }: { record: SyntheticRecordPreview }) {
