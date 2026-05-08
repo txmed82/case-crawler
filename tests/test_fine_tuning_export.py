@@ -38,6 +38,7 @@ from casecrawler.models.synthetic import (
     TimeSeriesPoint,
     VitalObservation,
 )
+from casecrawler.validation.benchmark import benchmark_profile_artifact, profile_records
 
 
 def test_export_sft_record_contains_messages():
@@ -233,6 +234,50 @@ def test_verify_jsonl_split_package_accepts_zip_archive(tmp_path):
     assert report["archive"] is True
     assert report["package_dir"] == str(archive_path)
     assert report["splits"]["test"]["example_count"] == 1
+
+
+def test_verify_jsonl_split_package_validates_benchmark_profile_artifact(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+        audit_artifacts={
+            "benchmark_profile.json": benchmark_profile_artifact(
+                profile_records(records)
+            )
+        },
+    )
+    profile_payload = json.loads((tmp_path / "benchmark_profile.json").read_text())
+    profile_payload["profile"]["dataset_id"] = "ds-other"
+    (tmp_path / "benchmark_profile.json").write_text(json.dumps(profile_payload))
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    manifest["files"]["benchmark_profile.json"]["byte_size"] = (
+        tmp_path / "benchmark_profile.json"
+    ).stat().st_size
+    manifest["files"]["benchmark_profile.json"]["sha256"] = hashlib.sha256(
+        (tmp_path / "benchmark_profile.json").read_bytes()
+    ).hexdigest()
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path)
+
+    assert report["valid"] is False
+    assert any(
+        issue["field"]
+        == "audit_artifacts.benchmark_profile.json.profile.dataset_id"
+        for issue in report["issues"]
+    )
 
 
 def test_verify_jsonl_split_package_rejects_zip_with_unsafe_path(tmp_path):
