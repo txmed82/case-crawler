@@ -239,6 +239,46 @@ def validate_time_series_structured_alignment(
     return issues
 
 
+def validate_time_series_trends(record: SyntheticRecord) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    lab_targets = {
+        f"lab_{_slug(lab.name)}": _lab_trend_target(lab)
+        for lab in record.labs
+        if isinstance(lab.value, int | float)
+    }
+    for channel in record.time_series:
+        first = _first_channel_value(channel)
+        last = _last_channel_value(channel)
+        if first is None or last is None:
+            continue
+        lab_target = lab_targets.get(channel.name)
+        if lab_target is not None:
+            direction = _trend_direction(first, last, lab_target)
+            if direction == "away":
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.TIME_SERIES,
+                        field=f"time_series.{channel.name}.trend",
+                        message=(
+                            f"Time series channel {channel.name} trends away from "
+                            "the structured lab reference range."
+                        ),
+                    )
+                )
+            continue
+        if channel.name == "spo2" and first < 90 and last < first - 2:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.TIME_SERIES,
+                    field="time_series.spo2.trend",
+                    message="Hypoxic SpO2 time series declines from an already low baseline.",
+                )
+            )
+    return issues
+
+
 def validate_lab_flags(record: SyntheticRecord) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     for lab in record.labs:
@@ -717,6 +757,37 @@ def _first_channel_value(channel) -> float | None:
         if isinstance(only_value, int | float):
             return float(only_value)
     return None
+
+
+def _last_channel_value(channel) -> float | None:
+    if not channel.points:
+        return None
+    values = channel.points[-1].values
+    candidate = values.get("value")
+    if isinstance(candidate, int | float):
+        return float(candidate)
+    if len(values) == 1:
+        only_value = next(iter(values.values()))
+        if isinstance(only_value, int | float):
+            return float(only_value)
+    return None
+
+
+def _lab_trend_target(lab) -> float | None:
+    value = float(lab.value)
+    if lab.reference_high is not None and value > lab.reference_high:
+        return float(lab.reference_high)
+    if lab.reference_low is not None and value < lab.reference_low:
+        return float(lab.reference_low)
+    return None
+
+
+def _trend_direction(first: float, last: float, target: float) -> str:
+    initial_distance = abs(first - target)
+    final_distance = abs(last - target)
+    if final_distance > initial_distance + max(0.5, initial_distance * 0.1):
+        return "away"
+    return "toward_or_stable"
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
