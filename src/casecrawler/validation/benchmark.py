@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
+from pathlib import Path
 
 from casecrawler.models.evaluation import BenchmarkMetric, BenchmarkReport, CohortProfile
 from casecrawler.models.synthetic import Modality, SyntheticRecord, TimeSeriesChannel
@@ -17,6 +18,7 @@ ARTIFACT_DENSITY_KEYS = {
     "medications_per_record": "medications",
     "time_series_channels_per_record": "time_series_channels",
     "imaging_assets_per_record": "imaging_assets",
+    "imaging_file_assets_per_record": "imaging_file_assets",
 }
 
 
@@ -544,6 +546,11 @@ def _count_record_artifacts(record: SyntheticRecord, artifact_counts: Counter[st
         len(channel.points) for channel in record.time_series
     )
     artifact_counts["imaging_assets"] += len(record.imaging)
+    artifact_counts["imaging_file_assets"] += sum(
+        1
+        for asset in record.imaging
+        if asset.file_path and Path(asset.file_path).is_file()
+    )
     artifact_counts["imaging_labels"] += sum(len(asset.labels) for asset in record.imaging)
 
 
