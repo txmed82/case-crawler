@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from casecrawler.models.evaluation import BenchmarkReport
 from casecrawler.storage.dataset_store import DatasetStore
 from casecrawler.validation.benchmark import DatasetBenchmark
 
@@ -177,6 +178,40 @@ def run_recommended_benchmark_suite(
             "min_metric_score": thresholds[1],
         },
         "results": results,
+    }
+
+
+def benchmark_suite_from_report(
+    *,
+    dataset_id: str,
+    benchmark_report: BenchmarkReport,
+    reference_dataset_id: str,
+    reference_key: str | None = None,
+    primary_recipe: str | None = None,
+    recommended_reference_keys: list[str] | None = None,
+    task_export_results: dict | None = None,
+) -> dict:
+    """Build a one-reference benchmark suite artifact from an explicit benchmark gate."""
+    resolved_reference_key = reference_key or reference_dataset_id
+    return {
+        "dataset_id": dataset_id,
+        "primary_recipe": primary_recipe,
+        "recommended_reference_keys": recommended_reference_keys or [resolved_reference_key],
+        "task_export_results": task_export_results or {},
+        "reference_count": 1,
+        "passed": benchmark_report.passed,
+        "mean_overall_score": benchmark_report.overall_score,
+        "thresholds": benchmark_report.thresholds,
+        "results": [
+            {
+                "reference_key": resolved_reference_key,
+                "reference_dataset_id": reference_dataset_id,
+                "passed": benchmark_report.passed,
+                "overall_score": benchmark_report.overall_score,
+                "failing_metrics": benchmark_report.failing_metrics,
+                "report": benchmark_report.model_dump(mode="json"),
+            }
+        ],
     }
 
 

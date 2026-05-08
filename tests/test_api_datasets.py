@@ -309,12 +309,19 @@ def test_dataset_api_split_export_can_require_benchmark_gate(tmp_path, monkeypat
     assert exported.status_code == 200
     with zipfile.ZipFile(BytesIO(exported.content)) as archive:
         assert "benchmark_report.json" in archive.namelist()
+        assert "benchmark_suite_report.json" in archive.namelist()
         benchmark_report = json.loads(archive.read("benchmark_report.json"))
+        benchmark_suite = json.loads(archive.read("benchmark_suite_report.json"))
         assert benchmark_report["reference_dataset_id"] == reference_dataset_id
         assert benchmark_report["passed"] is True
+        assert benchmark_suite["reference_count"] == 1
+        assert benchmark_suite["passed"] is True
+        assert benchmark_suite["results"][0]["reference_dataset_id"] == reference_dataset_id
     metadata = listed.json()["exports"][0]["metadata"]
     assert metadata["benchmark_reference_dataset_id"] == reference_dataset_id
     assert metadata["benchmark_passed"] is True
+    assert metadata["benchmark_suite_passed"] is True
+    assert metadata["benchmark_suite_reference_count"] == 1
 
 
 def test_dataset_api_export_can_require_benchmark_gate(tmp_path, monkeypatch):

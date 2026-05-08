@@ -1406,7 +1406,10 @@ def export_dataset_splits(
         benchmark_profile_artifact,
         profile_records,
     )
-    from casecrawler.validation.benchmark_selection import resolve_benchmark_gate
+    from casecrawler.validation.benchmark_selection import (
+        benchmark_suite_from_report,
+        resolve_benchmark_gate,
+    )
     from casecrawler.validation.quality import build_dataset_quality_report, export_profile_blocker
 
     store = DatasetStore()
@@ -1446,6 +1449,7 @@ def export_dataset_splits(
     benchmark_metadata = {}
     benchmark_audit = {}
     benchmark_plan = None
+    benchmark_suite = None
     if benchmark_gate:
         reference_records = list(
             store.iter_records(dataset_id=benchmark_gate.reference_dataset_id)
@@ -1467,6 +1471,13 @@ def export_dataset_splits(
             "benchmark_thresholds": benchmark_report.thresholds,
         }
         benchmark_audit["benchmark_report.json"] = benchmark_report.model_dump(mode="json")
+        benchmark_suite = benchmark_suite_from_report(
+            dataset_id=dataset_id,
+            benchmark_report=benchmark_report,
+            reference_dataset_id=benchmark_gate.reference_dataset_id,
+            reference_key=benchmark_gate.reference_key,
+        )
+        benchmark_audit["benchmark_suite_report.json"] = benchmark_suite
         benchmark_plan = {
             "recommended_reference_keys": [
                 benchmark_gate.reference_key or benchmark_gate.reference_dataset_id
@@ -1537,6 +1548,16 @@ def export_dataset_splits(
             "multimodal_release_missing": report.multimodal_release_missing,
             "core_artifact_coverage": report.core_artifact_coverage,
             **benchmark_metadata,
+            **(
+                {
+                    "benchmark_suite_passed": benchmark_suite["passed"],
+                    "benchmark_suite_reference_count": benchmark_suite[
+                        "reference_count"
+                    ],
+                }
+                if benchmark_suite
+                else {}
+            ),
             "splits": {
                 name: {
                     "file_path": data["file_path"],

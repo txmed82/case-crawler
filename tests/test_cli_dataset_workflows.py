@@ -411,9 +411,18 @@ def test_dataset_cli_split_export_can_require_benchmark_gate(tmp_path, monkeypat
 
     assert exported.exit_code == 0
     assert "benchmark_report.json" in manifest["audit_artifacts"]
+    assert "benchmark_suite_report.json" in manifest["audit_artifacts"]
     assert (tmp_path / "benchmark-split-package" / "benchmark_report.json").exists()
+    suite_report = json.loads(
+        (tmp_path / "benchmark-split-package" / "benchmark_suite_report.json").read_text()
+    )
+    assert suite_report["reference_count"] == 1
+    assert suite_report["passed"] is True
+    assert suite_report["results"][0]["reference_dataset_id"] == reference_dataset_id
     assert exports[0].metadata["benchmark_reference_dataset_id"] == reference_dataset_id
     assert exports[0].metadata["benchmark_passed"] is True
+    assert exports[0].metadata["benchmark_suite_passed"] is True
+    assert exports[0].metadata["benchmark_suite_reference_count"] == 1
 
 
 def test_dataset_cli_blocks_export_until_required_human_review(tmp_path, monkeypatch):
