@@ -163,6 +163,7 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.mean_age == 65
     assert profile.sex_counts == {"female": 1, "male": 1}
     assert profile.lab_name_counts == {"WBC": 2}
+    assert profile.lab_unit_counts == {"K/uL": 2}
     assert profile.lab_flag_counts == {"H": 2}
     assert profile.lab_numeric_summaries["wbc"] == {
         "count": 2,
@@ -176,6 +177,7 @@ def test_profile_records_summarizes_multimodal_cohort():
         "mean": 110.0,
         "min": 110.0,
     }
+    assert profile.vital_unit_counts == {"/min": 2}
     assert profile.time_series_numeric_summaries["heart_rate.value"] == {
         "count": 4,
         "max": 105.0,
@@ -385,9 +387,13 @@ def test_dataset_benchmark_compares_longitudinal_profiles():
         "modality_overlap",
         "mean_age",
         "lab_name_overlap",
+        "lab_unit_overlap",
+        "lab_unit_distribution",
         "lab_flag_distribution",
         "lab_value_mean:wbc",
         "vital_name_overlap",
+        "vital_unit_overlap",
+        "vital_unit_distribution",
         "vital_value_mean:hr",
         "procedure_name_overlap",
         "procedure_name_distribution",
@@ -580,6 +586,33 @@ def test_dataset_benchmark_compares_time_series_value_summaries():
     assert metric.generated_value == 102.5
     assert metric.reference_value == 152.5
     assert "time_series_value_mean:heart_rate.value" in report.failing_metrics
+
+
+def test_dataset_benchmark_fails_on_lab_and_vital_unit_mismatch():
+    generated = [_record("rec-1", "ds-gen")]
+    reference_base = _record("ref-1", "ds-ref")
+    reference = [
+        reference_base.model_copy(
+            update={
+                "labs": [
+                    reference_base.labs[0].model_copy(update={"unit": "10^9/L"})
+                ],
+                "vitals": [
+                    reference_base.vitals[0].model_copy(update={"unit": "bpm"})
+                ],
+            }
+        )
+    ]
+
+    report = DatasetBenchmark(min_metric_score=0.5).compare(generated, reference)
+    metrics = {metric.name: metric for metric in report.metrics}
+
+    assert metrics["lab_unit_overlap"].score == 0.0
+    assert metrics["lab_unit_distribution"].score == 0.0
+    assert metrics["vital_unit_overlap"].score == 0.0
+    assert metrics["vital_unit_distribution"].score == 0.0
+    assert "lab_unit_overlap" in report.failing_metrics
+    assert "vital_unit_overlap" in report.failing_metrics
 
 
 def test_dataset_benchmark_compares_imaging_generation_backends():
