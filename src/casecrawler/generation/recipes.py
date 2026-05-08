@@ -64,6 +64,7 @@ RECIPES: dict[str, GenerationRecipe] = {
             "clinical_notes_to_fhir",
             "medsynth_dialogue_note",
             "technetium_i",
+            "clinical_timeseries_reference",
             "synthchex_75k",
             "radiology_report_consistency",
         ],
@@ -140,6 +141,7 @@ RECIPES: dict[str, GenerationRecipe] = {
             "medsynth_dialogue_note",
             "clinical_notes_to_fhir",
             "technetium_i",
+            "clinical_timeseries_reference",
         ],
         benchmark_min_overall_score=0.75,
         benchmark_min_metric_score=0.5,
@@ -187,6 +189,7 @@ RECIPES: dict[str, GenerationRecipe] = {
             "clinical_notes_to_fhir",
             "medsynth_dialogue_note",
             "technetium_i",
+            "clinical_timeseries_reference",
         ],
         benchmark_min_overall_score=0.75,
         benchmark_min_metric_score=0.5,
@@ -219,6 +222,7 @@ TASK_EXPORT_REFERENCE_KEYS: dict[ExportFormat, list[str]] = {
         "clinical_notes_to_fhir",
     ],
     ExportFormat.TIME_SERIES_JSONL: [
+        "clinical_timeseries_reference",
         "synthea_fhir",
     ],
     ExportFormat.MULTIMODAL_JSONL: [

@@ -39,6 +39,7 @@ def test_bundled_reference_fixtures_cover_release_benchmark_keys():
         "clinical_notes_to_fhir",
         "medsynth_dialogue_note",
         "technetium_i",
+        "clinical_timeseries_reference",
         "synthchex_75k",
         "radiology_report_consistency",
     }.issubset(set(FIXTURE_REFERENCE_KEYS))
@@ -70,6 +71,25 @@ def test_import_reference_fixture_builds_synthea_reference_records():
     assert record.medication_history[0].name == "Ceftriaxone"
 
 
+def test_import_reference_fixture_builds_time_series_reference_records():
+    records = import_reference_fixture(
+        "clinical_timeseries_reference",
+        dataset_id="ds-timeseries-fixture",
+    )
+
+    record = records[0]
+    assert record.dataset_id == "ds-timeseries-fixture"
+    assert record.metadata["reference_key"] == "clinical_timeseries_reference"
+    assert Modality.TIME_SERIES in record.modalities
+    assert {channel.name for channel in record.time_series} == {
+        "heart_rate",
+        "lactate",
+    }
+    assert record.time_series[0].points[0].values["value"] == 122
+    assert record.documents[0].note_type == "nursing_note"
+    assert record.medication_history[0].name == "Norepinephrine"
+
+
 @pytest.mark.asyncio
 async def test_seed_recommended_reference_fixtures_imports_recipe_references(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -97,6 +117,7 @@ async def test_seed_recommended_reference_fixtures_imports_recipe_references(tmp
         "medsynth_dialogue_note",
         "clinical_notes_to_fhir",
         "technetium_i",
+        "clinical_timeseries_reference",
     }
     assert store.find_reference_dataset_id(["synthea_fhir"], exclude_dataset_id=result["dataset_id"])
 

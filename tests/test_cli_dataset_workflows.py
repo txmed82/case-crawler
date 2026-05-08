@@ -43,6 +43,9 @@ def test_dataset_cli_lists_generation_capabilities(tmp_path, monkeypatch):
     assert references["synthchex_75k"]["image_modality"] == "XR"
     assert references["radiology_report_consistency"]["fixture_available"] is True
     assert references["synthea_fhir"]["source"] == "synthea"
+    assert references["clinical_timeseries_reference"]["source"] == (
+        "casecrawler-fixture"
+    )
     validators = {validator["key"]: validator for validator in body["validators"]}
     assert validators["biomedclip"]["model_id"] == (
         "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
@@ -786,6 +789,7 @@ def test_dataset_cli_seeds_recipe_reference_fixtures(tmp_path, monkeypatch):
         "medsynth_dialogue_note",
         "clinical_notes_to_fhir",
         "technetium_i",
+        "clinical_timeseries_reference",
     }
     plan_body = json.loads(plan.output)
     assert plan_body["ready"] is True
