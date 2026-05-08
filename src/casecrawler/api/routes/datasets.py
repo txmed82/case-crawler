@@ -469,6 +469,10 @@ def list_dataset_capabilities():
                 "license": profile.license,
                 "gated": profile.gated,
                 "use_policy": profile.use_policy,
+                "command_template": profile.command_template,
+                "input_contract": profile.input_contract,
+                "output_contract": profile.output_contract,
+                "validation_requirements": profile.validation_requirements,
                 "notes": profile.notes,
             }
             for profile in list_time_series_model_profiles()

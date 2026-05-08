@@ -68,8 +68,11 @@ def test_dataset_cli_lists_time_series_model_policy_metadata(tmp_path, monkeypat
     assert "model_id=MuhangTian/TimeDiff" in result.output
     assert "license=mit" in result.output
     assert "use_policy=wrap_external_sampler_validate_outputs" in result.output
+    assert "command=timediff-sample --checkpoint <checkpoint>" in result.output
+    assert "stdout=TimeSeriesChannel[]" in result.output
     assert "mira: adapter=external_command" in result.output
     assert "model_id=MIRA-Mode/MIRA" in result.output
+    assert "command=mira-rollout --model MIRA-Mode/MIRA" in result.output
     assert "use_policy=forecasting_backbone_validate_synthetic_rollouts" in result.output
 
 
