@@ -90,6 +90,9 @@ Optional backends are intentionally lazy:
 - `casecrawler[hf]` for Hugging Face helpers
 - `casecrawler[imaging]` for diffusers/image validation backends
 - Imaging model profiles include chest X-ray focused adapters, CheXGenBench Sana (`raman07/CheXGenBench-Models-Sana-e20`) for chest-radiograph experiments, and `medisyn` (`hiesingerlab/MediSyn`) for broader text-guided medical image synthesis
+- `casecrawler imaging-models` and `/api/datasets/capabilities` expose each
+  image profile contract: diffusers command template, prompt inputs, generated
+  `ImagingAsset` fields, and required image/report validation gates
 - `BiomedCLIPImageValidator` scores generated image/report alignment when `casecrawler[imaging]` dependencies are installed
 - `MedGemmaImageTextValidator` can use gated MedGemma multimodal models through `casecrawler[hf]` plus imaging dependencies for report/image consistency checks
 - `casecrawler[parquet]` for parquet exports
@@ -309,6 +312,8 @@ synthetic:
   imaging_backend: "placeholder" # or "diffusers"
   imaging_model_profile: null # e.g. cxr_pneumonia_dreambooth
   diffusers_model_id: "stabilityai/stable-diffusion-2-1"
+  # Imaging profiles declare prompt inputs, generated ImagingAsset output fields,
+  # licensing/use policy, and validation gates for file integrity and alignment.
   time_series_backend: "deterministic" # or "external"
   time_series_model_profile: null # e.g. timediff or rawmed
   time_series_command: null # e.g. ["timediff-sample", "--checkpoint", "local.pt"]

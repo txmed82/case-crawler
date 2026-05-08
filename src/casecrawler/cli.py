@@ -145,10 +145,17 @@ def imaging_models() -> None:
     for profile in list_imaging_model_profiles():
         click.echo(
             f"{profile.name}: {profile.model_id} "
+            f"adapter={profile.adapter_type} "
             f"modality={profile.modality} region={profile.body_region} "
             f"license={profile.license or 'unspecified'} "
             f"gated={profile.gated} use_policy={profile.use_policy}"
         )
+        if profile.command_template:
+            click.echo(f"  command={' '.join(profile.command_template)}")
+        if profile.output_contract:
+            click.echo(
+                f"  artifact={profile.output_contract.get('artifact', 'unspecified')}"
+            )
         if profile.notes:
             click.echo(f"  {profile.notes}")
 
@@ -1077,6 +1084,7 @@ def datasets_capabilities() -> None:
         reference_dataset_capabilities,
         release_coverage_requirements,
     )
+    from casecrawler.generation.imaging_models import list_imaging_model_profiles
     from casecrawler.generation.recipes import list_generation_recipes
     from casecrawler.generation.timeseries_models import list_time_series_model_profiles
     from casecrawler.models.dataset import ExportFormat
@@ -1103,6 +1111,24 @@ def datasets_capabilities() -> None:
         ],
         "release_coverage_requirements": release_coverage_requirements(),
         "reference_datasets": reference_dataset_capabilities(),
+        "imaging_model_profiles": [
+            {
+                "name": profile.name,
+                "model_id": profile.model_id,
+                "adapter_type": profile.adapter_type,
+                "modality": profile.modality,
+                "body_region": profile.body_region,
+                "license": profile.license,
+                "gated": profile.gated,
+                "use_policy": profile.use_policy,
+                "command_template": profile.command_template,
+                "input_contract": profile.input_contract,
+                "output_contract": profile.output_contract,
+                "validation_requirements": profile.validation_requirements,
+                "notes": profile.notes,
+            }
+            for profile in list_imaging_model_profiles()
+        ],
         "time_series_model_profiles": [
             {
                 "name": profile.name,

@@ -630,6 +630,12 @@ def test_dataset_cli_lists_imaging_model_use_policies():
         "use_policy=model_card_missing_review_terms_and_validate_privacy_utility"
         in result.output
     )
+    assert "adapter=diffusers" in result.output
+    assert (
+        "command=casecrawler generate-dataset <topic> --imaging-backend diffusers "
+        "--imaging-model-profile chexgenbench_sana_e20"
+    ) in result.output
+    assert "artifact=ImagingAsset" in result.output
     assert "roentgen_v2_gated" in result.output
     assert "gated=True" in result.output
 
