@@ -138,6 +138,10 @@ export interface ReferenceDatasetCatalogItem {
   description: string;
   image_field?: string | null;
   image_label_field?: string | null;
+  lab_values_field?: string | null;
+  vital_values_field?: string | null;
+  medications_field?: string | null;
+  time_series_field?: string | null;
   image_modality: string;
   image_body_region: string;
   gated: boolean;
@@ -163,6 +167,10 @@ export interface ReferenceDatasetImportRequest {
   image_label_field?: string;
   image_modality?: string;
   image_body_region?: string;
+  lab_values_field?: string;
+  vital_values_field?: string;
+  medications_field?: string;
+  time_series_field?: string;
   limit?: number;
 }
 

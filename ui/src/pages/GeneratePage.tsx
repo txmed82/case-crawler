@@ -94,6 +94,10 @@ export default function GeneratePage() {
   const [referencePatientIdField, setReferencePatientIdField] = useState("");
   const [referenceImageField, setReferenceImageField] = useState("");
   const [referenceImageLabelField, setReferenceImageLabelField] = useState("");
+  const [referenceLabValuesField, setReferenceLabValuesField] = useState("");
+  const [referenceVitalValuesField, setReferenceVitalValuesField] = useState("");
+  const [referenceMedicationsField, setReferenceMedicationsField] = useState("");
+  const [referenceTimeSeriesField, setReferenceTimeSeriesField] = useState("");
   const [referenceLimit, setReferenceLimit] = useState("25");
   const [isImportingReference, setIsImportingReference] = useState(false);
   const [referenceImportResult, setReferenceImportResult] =
@@ -299,6 +303,18 @@ export default function GeneratePage() {
               ...(referenceImageField.trim() ? { image_field: referenceImageField.trim() } : {}),
               ...(referenceImageLabelField.trim()
                 ? { image_label_field: referenceImageLabelField.trim() }
+                : {}),
+              ...(referenceLabValuesField.trim()
+                ? { lab_values_field: referenceLabValuesField.trim() }
+                : {}),
+              ...(referenceVitalValuesField.trim()
+                ? { vital_values_field: referenceVitalValuesField.trim() }
+                : {}),
+              ...(referenceMedicationsField.trim()
+                ? { medications_field: referenceMedicationsField.trim() }
+                : {}),
+              ...(referenceTimeSeriesField.trim()
+                ? { time_series_field: referenceTimeSeriesField.trim() }
                 : {}),
             }),
         ...(referenceSplit.trim() ? { split: referenceSplit.trim() } : {}),
@@ -916,6 +932,50 @@ export default function GeneratePage() {
                 value={referenceImageLabelField}
                 onChange={(event) => setReferenceImageLabelField(event.target.value)}
                 placeholder="label"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Labs field</span>
+              <input
+                aria-label="Reference labs field"
+                type="text"
+                value={referenceLabValuesField}
+                onChange={(event) => setReferenceLabValuesField(event.target.value)}
+                placeholder="labs"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Vitals field</span>
+              <input
+                aria-label="Reference vitals field"
+                type="text"
+                value={referenceVitalValuesField}
+                onChange={(event) => setReferenceVitalValuesField(event.target.value)}
+                placeholder="vitals"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Meds field</span>
+              <input
+                aria-label="Reference medications field"
+                type="text"
+                value={referenceMedicationsField}
+                onChange={(event) => setReferenceMedicationsField(event.target.value)}
+                placeholder="medications"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Series field</span>
+              <input
+                aria-label="Reference time series field"
+                type="text"
+                value={referenceTimeSeriesField}
+                onChange={(event) => setReferenceTimeSeriesField(event.target.value)}
+                placeholder="time_series"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
               />
             </label>
