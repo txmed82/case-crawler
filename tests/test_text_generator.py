@@ -55,6 +55,16 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     assert "pt msg:" in documents_by_type["ed_note"].messy_text
     assert "OCR:" in documents_by_type["radiology_report"].messy_text
     assert "MAR:" in documents_by_type["nursing_note"].messy_text
+    assert "Encounter diagnoses:" in documents_by_type["ed_note"].clean_text
+    assert "pneumonia" in documents_by_type["ed_note"].clean_text
+    assert "Procedures performed or planned:" in documents_by_type["ed_note"].clean_text
+    assert "specialty consultation" in documents_by_type["ed_note"].clean_text
+    assert "Relevant diagnoses:" in documents_by_type[
+        "medication_administration_record"
+    ].clean_text
+    assert "Related procedures:" in documents_by_type[
+        "medication_administration_record"
+    ].clean_text
     assert documents_by_type["ed_note"].extracted_facts["topic"] == "pneumonia"
     assert "WBC" in documents_by_type["ed_note"].extracted_facts["lab_names"]
     assert "Ceftriaxone" in documents_by_type["ed_note"].extracted_facts["medications"]
