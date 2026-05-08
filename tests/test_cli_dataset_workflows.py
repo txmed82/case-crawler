@@ -240,6 +240,33 @@ def test_dataset_cli_blocks_profile_specific_split_export_when_artifacts_missing
     assert "labs_or_vitals" in blocked.output
 
 
+def test_dataset_cli_can_require_multimodal_release_for_split_export(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generate = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generate.output).group(1)
+
+    blocked = runner.invoke(
+        cli,
+        [
+            "export-dataset-splits",
+            "--dataset-id",
+            dataset_id,
+            "--output-dir",
+            "release-package",
+            "--require-multimodal-release",
+        ],
+    )
+
+    assert blocked.exit_code != 0
+    assert "not ready for multimodal release package export" in blocked.output
+    assert "benchmark_reference" in blocked.output
+
+
 def test_dataset_cli_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

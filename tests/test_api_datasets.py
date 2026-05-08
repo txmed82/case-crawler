@@ -204,6 +204,25 @@ def test_dataset_api_blocks_profile_specific_split_export_when_artifacts_missing
     assert "labs_or_vitals" in blocked.json()["detail"]
 
 
+def test_dataset_api_can_require_multimodal_release_for_split_export(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    dataset_id = generated.json()["dataset_id"]
+
+    blocked = client.get(
+        f"/api/datasets/{dataset_id}/export-splits",
+        params={"require_multimodal_release": "true"},
+    )
+
+    assert blocked.status_code == 409
+    assert "not ready for multimodal release package export" in blocked.json()["detail"]
+    assert "benchmark_reference" in blocked.json()["detail"]
+
+
 def test_dataset_api_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)
