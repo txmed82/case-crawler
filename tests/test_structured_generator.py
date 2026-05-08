@@ -397,6 +397,20 @@ def test_structured_generator_populates_demographics_and_social_history_context(
         "alcohol_use": "none",
         "housing": "stable",
     }
+    assert first.metadata["cohort_constraints"]["races"] == [
+        "synthetic_race_a",
+        "synthetic_race_b",
+    ]
+    assert first.metadata["cohort_constraints"]["ethnicities"] == [
+        "synthetic_ethnicity"
+    ]
+    assert first.metadata["cohort_constraints"]["insurance"] == ["synthetic_plan"]
+    assert first.metadata["cohort_constraints"]["smoking_statuses"] == [
+        "never",
+        "former",
+    ]
+    assert first.metadata["cohort_constraints"]["alcohol_use"] == ["none"]
+    assert first.metadata["cohort_constraints"]["housing"] == ["stable"]
     assert second.patient.demographics["race"] == "synthetic_race_b"
     assert second.patient.social_history["smoking_status"] == "former"
 

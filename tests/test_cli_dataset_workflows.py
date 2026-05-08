@@ -393,6 +393,18 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
             "77",
             "--age-max",
             "77",
+            "--races",
+            "synthetic_race_a",
+            "--ethnicities",
+            "synthetic_ethnicity_a",
+            "--insurance",
+            "synthetic_plan_a",
+            "--smoking-statuses",
+            "former",
+            "--alcohol-use",
+            "none",
+            "--housing",
+            "stable",
             "--encounter-count",
             "2",
         ],
@@ -495,7 +507,25 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     assert release_summary["benchmark_suite"]["results"] == benchmark_suite["results"]
     assert payloads[0]["metadata"]["cohort_constraints"]["age_min"] == 77
     assert payloads[0]["metadata"]["cohort_constraints"]["age_max"] == 77
+    assert payloads[0]["metadata"]["cohort_constraints"]["races"] == [
+        "synthetic_race_a"
+    ]
+    assert payloads[0]["metadata"]["cohort_constraints"]["ethnicities"] == [
+        "synthetic_ethnicity_a"
+    ]
+    assert payloads[0]["metadata"]["cohort_constraints"]["insurance"] == [
+        "synthetic_plan_a"
+    ]
+    assert payloads[0]["metadata"]["cohort_constraints"]["smoking_statuses"] == [
+        "former"
+    ]
+    assert payloads[0]["metadata"]["cohort_constraints"]["alcohol_use"] == ["none"]
+    assert payloads[0]["metadata"]["cohort_constraints"]["housing"] == ["stable"]
     assert payloads[0]["metadata"]["cohort_constraints"]["encounter_count"] == 2
+    assert quality["race_counts"] == {"synthetic_race_a": 1}
+    assert quality["ethnicity_counts"] == {"synthetic_ethnicity_a": 1}
+    assert quality["insurance_counts"] == {"synthetic_plan_a": 1}
+    assert quality["social_history_counts"]["smoking_status"] == {"former": 1}
     assert body["benchmark_suite"]["passed"] is True
     assert body["benchmark_suite"]["reference_count"] == benchmark_suite["reference_count"]
     assert release_verified.exit_code == 0, release_verified.output
@@ -1149,6 +1179,55 @@ def test_dataset_cli_passes_imaging_model_options(tmp_path, monkeypatch):
     assert captured[0].imaging_model_profile == "cxr_pneumonia_dreambooth"
     assert captured[0].diffusers_model_id == "hf/test-cxr"
     assert captured[0].imaging_command == ["hf-image-sample", "--profile", "cxr"]
+
+
+def test_dataset_cli_passes_demographic_cohort_options(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    class FakePipeline:
+        async def generate(self, req: GenerationRequest):
+            captured.append(req)
+            return {
+                "dataset_id": "ds-test",
+                "generated": 0,
+                "approved": 0,
+                "records": [],
+            }
+
+    monkeypatch.setattr("casecrawler.generation.synthetic_pipeline.SyntheticPipeline", FakePipeline)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "generate-dataset",
+            "sepsis",
+            "--races",
+            "synthetic_race_a,synthetic_race_b",
+            "--ethnicities",
+            "synthetic_ethnicity",
+            "--insurance",
+            "synthetic_plan",
+            "--smoking-statuses",
+            "never,former",
+            "--alcohol-use",
+            "none",
+            "--housing",
+            "stable",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured[0].cohort_constraints["races"] == [
+        "synthetic_race_a",
+        "synthetic_race_b",
+    ]
+    assert captured[0].cohort_constraints["ethnicities"] == ["synthetic_ethnicity"]
+    assert captured[0].cohort_constraints["insurance"] == ["synthetic_plan"]
+    assert captured[0].cohort_constraints["smoking_statuses"] == ["never", "former"]
+    assert captured[0].cohort_constraints["alcohol_use"] == ["none"]
+    assert captured[0].cohort_constraints["housing"] == ["stable"]
 
 
 def test_dataset_cli_passes_time_series_model_options(tmp_path, monkeypatch):
