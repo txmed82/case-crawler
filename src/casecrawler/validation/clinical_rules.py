@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from math import isfinite
+from math import isfinite, log10
 from datetime import datetime, timezone
 
 from casecrawler.generation.imaging_templates import get_imaging_template
@@ -503,18 +503,35 @@ def validate_derived_lab_consistency(record: SyntheticRecord) -> list[Validation
         chloride = _first_named_value(values, {"cl", "chloride"})
         bicarbonate = _first_named_value(values, {"bicarbonate", "co2", "hco3"})
         anion_gap = _first_named_value(values, {"anion-gap"})
-        if None in {sodium, chloride, bicarbonate, anion_gap}:
+        if None not in {sodium, chloride, bicarbonate, anion_gap}:
+            expected_gap = round(float(sodium) - float(chloride) - float(bicarbonate), 1)
+            if abs(float(anion_gap) - expected_gap) > 3.0:
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.LABS,
+                        field="labs.derived.anion_gap",
+                        message=(
+                            f"Anion gap {float(anion_gap):g} conflicts with Na-Cl-HCO3 "
+                            f"derived value {expected_gap:g} at {effective_time}."
+                        ),
+                    )
+                )
+        ph = _first_named_value(values, {"ph"})
+        pco2 = _first_named_value(values, {"pco2", "paco2"})
+        hco3 = _first_named_value(values, {"hco3", "bicarbonate"})
+        if None in {ph, pco2, hco3} or float(pco2) <= 0 or float(hco3) <= 0:
             continue
-        expected_gap = round(float(sodium) - float(chloride) - float(bicarbonate), 1)
-        if abs(float(anion_gap) - expected_gap) > 3.0:
+        expected_ph = round(6.1 + log10(float(hco3) / (0.03 * float(pco2))), 2)
+        if abs(float(ph) - expected_ph) > 0.12:
             issues.append(
                 ValidationIssue(
                     severity="error",
                     modality=Modality.LABS,
-                    field="labs.derived.anion_gap",
+                    field="labs.derived.abg_ph",
                     message=(
-                        f"Anion gap {float(anion_gap):g} conflicts with Na-Cl-HCO3 "
-                        f"derived value {expected_gap:g} at {effective_time}."
+                        f"ABG pH {float(ph):g} conflicts with pCO2/HCO3 derived "
+                        f"value {expected_ph:g} at {effective_time}."
                     ),
                 )
             )
