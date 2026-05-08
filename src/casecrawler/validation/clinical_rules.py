@@ -761,7 +761,21 @@ def validate_document_extracted_fact_alignment(
         for item in _fact_list(facts.get("lab_values")):
             name = _normalize_name(str(item.get("name", "")))
             value = item.get("value")
-            if name not in lab_values or not isinstance(value, int | float):
+            if name not in lab_values:
+                if name and lab_values:
+                    issues.append(
+                        ValidationIssue(
+                            severity="error",
+                            modality=Modality.CLINICAL_TEXT,
+                            field="documents.extracted_facts.lab_values",
+                            message=(
+                                f"Document {document.document_id} extracted lab {name} "
+                                "not present in structured lab observations."
+                            ),
+                        )
+                    )
+                continue
+            if not isinstance(value, int | float):
                 continue
             if _numeric_conflict(float(value), lab_values[name]):
                 issues.append(
@@ -778,7 +792,21 @@ def validate_document_extracted_fact_alignment(
         for item in _fact_list(facts.get("vital_values")):
             name = _normalize_name(str(item.get("name", "")))
             value = item.get("value")
-            if name not in vital_values or not isinstance(value, int | float):
+            if name not in vital_values:
+                if name and vital_values:
+                    issues.append(
+                        ValidationIssue(
+                            severity="error",
+                            modality=Modality.CLINICAL_TEXT,
+                            field="documents.extracted_facts.vital_values",
+                            message=(
+                                f"Document {document.document_id} extracted vital {name} "
+                                "not present in structured vital observations."
+                            ),
+                        )
+                    )
+                continue
+            if not isinstance(value, int | float):
                 continue
             if _numeric_conflict(float(value), vital_values[name]):
                 issues.append(

@@ -441,6 +441,36 @@ def test_validator_rejects_document_extracted_fact_conflicts():
     assert any(issue.field == "documents.extracted_facts.medications" for issue in report.issues)
 
 
+def test_validator_rejects_unsupported_extracted_lab_and_vital_names():
+    bad = _record(
+        documents=[
+            ClinicalDocument(
+                document_id="doc-unsupported-observations",
+                note_type="progress_note",
+                author_role="physician",
+                timestamp="2026-05-06T09:00:00",
+                clean_text="Progress note with unsupported observation facts.",
+                extracted_facts={
+                    "lab_values": [
+                        {"name": "Lactate", "value": 4.8, "unit": "mmol/L"},
+                        {"name": "Troponin", "value": 1.4, "unit": "ng/mL"},
+                    ],
+                    "vital_values": [
+                        {"name": "HR", "value": 118, "unit": "/min"},
+                        {"name": "SpO2", "value": 84, "unit": "%"},
+                    ],
+                },
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "documents.extracted_facts.lab_values" for issue in report.issues)
+    assert any(issue.field == "documents.extracted_facts.vital_values" for issue in report.issues)
+
+
 def test_validator_rejects_document_extracted_medication_detail_conflicts():
     bad = _record(
         documents=[
