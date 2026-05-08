@@ -57,7 +57,7 @@ def build_objective_coverage_audit(
             "Cohort demographics and distributions are compared to validation references.",
             _cohort_similarity_satisfied(benchmark_suite),
             ["benchmark_suite_report.json"],
-            _cohort_similarity_evidence(benchmark_suite),
+            _cohort_similarity_evidence(benchmark_suite, quality_report),
         ),
         "labs": _criterion(
             "Lab observations and lab reports are present.",
@@ -215,12 +215,19 @@ def _cohort_similarity_satisfied(benchmark_suite: dict[str, Any]) -> bool:
         "record_count",
         "mean_age",
         "sex_distribution",
+        "race_distribution",
+        "ethnicity_distribution",
+        "insurance_distribution",
+        "social_history_distribution:smoking_status",
         "modality_overlap",
     }
     return required_metrics.issubset(metric_names)
 
 
-def _cohort_similarity_evidence(benchmark_suite: dict[str, Any]) -> dict[str, Any]:
+def _cohort_similarity_evidence(
+    benchmark_suite: dict[str, Any],
+    quality_report: DatasetQualityReport,
+) -> dict[str, Any]:
     metric_names = sorted(set(_benchmark_metric_names(benchmark_suite)))
     return {
         "reference_count": benchmark_suite.get("reference_count"),
@@ -229,8 +236,16 @@ def _cohort_similarity_evidence(benchmark_suite: dict[str, Any]) -> dict[str, An
             "record_count",
             "mean_age",
             "sex_distribution",
+            "race_distribution",
+            "ethnicity_distribution",
+            "insurance_distribution",
+            "social_history_distribution:smoking_status",
             "modality_overlap",
         ],
+        "generated_race_counts": quality_report.race_counts,
+        "generated_ethnicity_counts": quality_report.ethnicity_counts,
+        "generated_insurance_counts": quality_report.insurance_counts,
+        "generated_social_history_counts": quality_report.social_history_counts,
         "available_metrics": metric_names,
     }
 

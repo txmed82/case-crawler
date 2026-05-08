@@ -52,7 +52,20 @@ def _record(
             Modality.TIME_SERIES,
             Modality.IMAGING,
         ],
-        patient=SyntheticPatient(patient_id=f"pat-{record_id}", age=age, sex=sex),
+        patient=SyntheticPatient(
+            patient_id=f"pat-{record_id}",
+            age=age,
+            sex=sex,
+            demographics={
+                "race": "synthetic_white" if sex == "male" else "synthetic_black",
+                "ethnicity": "synthetic_not_hispanic_or_latino",
+                "insurance": "synthetic_private",
+            },
+            social_history={
+                "smoking_status": "former" if sex == "male" else "never",
+                "housing": "stable",
+            },
+        ),
         encounters=[
             Encounter(
                 encounter_id=f"enc-{record_id}",
@@ -169,6 +182,13 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.record_count == 2
     assert profile.mean_age == 65
     assert profile.sex_counts == {"female": 1, "male": 1}
+    assert profile.race_counts == {"synthetic_black": 1, "synthetic_white": 1}
+    assert profile.ethnicity_counts == {"synthetic_not_hispanic_or_latino": 2}
+    assert profile.insurance_counts == {"synthetic_private": 2}
+    assert profile.social_history_counts == {
+        "housing": {"stable": 2},
+        "smoking_status": {"former": 1, "never": 1},
+    }
     assert profile.lab_name_counts == {"WBC": 2}
     assert profile.lab_unit_counts == {"K/uL": 2}
     assert profile.lab_flag_counts == {"H": 2}

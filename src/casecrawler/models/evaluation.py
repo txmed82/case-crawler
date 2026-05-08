@@ -11,6 +11,10 @@ class CohortProfile(BaseModel):
     modality_counts: dict[str, int] = Field(default_factory=dict)
     mean_age: float | None = None
     sex_counts: dict[str, int] = Field(default_factory=dict)
+    race_counts: dict[str, int] = Field(default_factory=dict)
+    ethnicity_counts: dict[str, int] = Field(default_factory=dict)
+    insurance_counts: dict[str, int] = Field(default_factory=dict)
+    social_history_counts: dict[str, dict[str, int]] = Field(default_factory=dict)
     mean_document_chars: float | None = None
     note_type_counts: dict[str, int] = Field(default_factory=dict)
     document_author_role_counts: dict[str, int] = Field(default_factory=dict)
@@ -98,6 +102,10 @@ class DatasetQualityReport(BaseModel):
     benchmark_thresholds: dict[str, float] = Field(default_factory=dict)
     task_export_reference_readiness: dict[str, dict[str, Any]] = Field(default_factory=dict)
     modality_counts: dict[str, int] = Field(default_factory=dict)
+    race_counts: dict[str, int] = Field(default_factory=dict)
+    ethnicity_counts: dict[str, int] = Field(default_factory=dict)
+    insurance_counts: dict[str, int] = Field(default_factory=dict)
+    social_history_counts: dict[str, dict[str, int]] = Field(default_factory=dict)
     artifact_counts: dict[str, int] = Field(default_factory=dict)
     export_profile_readiness: dict[str, dict[str, Any]] = Field(default_factory=dict)
     longitudinal_record_rate: float | None = None

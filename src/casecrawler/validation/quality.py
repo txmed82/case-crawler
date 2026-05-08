@@ -20,6 +20,10 @@ def build_dataset_quality_report(
 ) -> DatasetQualityReport:
     approval_fn = effective_approved or _validation_approved
     modality_counts: Counter[str] = Counter()
+    race_counts: Counter[str] = Counter()
+    ethnicity_counts: Counter[str] = Counter()
+    insurance_counts: Counter[str] = Counter()
+    social_history_counts: dict[str, Counter[str]] = {}
     artifact_counts: Counter[str] = Counter()
     note_type_counts: Counter[str] = Counter()
     clinical_text_model_policy_counts: Counter[str] = Counter()
@@ -63,6 +67,20 @@ def build_dataset_quality_report(
     for record in records:
         if approval_fn(record) is True:
             approved_count += 1
+        _count_optional_demographic(record.patient.demographics, "race", race_counts)
+        _count_optional_demographic(
+            record.patient.demographics,
+            "ethnicity",
+            ethnicity_counts,
+        )
+        _count_optional_demographic(
+            record.patient.demographics,
+            "insurance",
+            insurance_counts,
+        )
+        for key, value in record.patient.social_history.items():
+            if value is not None:
+                social_history_counts.setdefault(key, Counter())[str(value)] += 1
         longitudinal_values.append(1 if len(record.encounters) > 1 else 0)
         encounter_span = _encounter_span_hours(record)
         if encounter_span is not None:
@@ -187,6 +205,13 @@ def build_dataset_quality_report(
             "task_export_reference_readiness"
         ],
         modality_counts=dict(sorted(modality_counts.items())),
+        race_counts=dict(sorted(race_counts.items())),
+        ethnicity_counts=dict(sorted(ethnicity_counts.items())),
+        insurance_counts=dict(sorted(insurance_counts.items())),
+        social_history_counts={
+            key: dict(sorted(counts.items()))
+            for key, counts in sorted(social_history_counts.items())
+        },
         artifact_counts=dict(sorted(artifact_counts.items())),
         export_profile_readiness=_export_profile_readiness(
             record_count=record_count,
@@ -289,6 +314,16 @@ def _numeric_summaries(values_by_name: dict[str, list[float]]) -> dict[str, dict
             "min": round(min(values), 4),
         }
     return summaries
+
+
+def _count_optional_demographic(
+    demographics: dict,
+    key: str,
+    counter: Counter[str],
+) -> None:
+    value = demographics.get(key)
+    if value is not None:
+        counter[str(value)] += 1
 
 
 def _count_artifacts(
