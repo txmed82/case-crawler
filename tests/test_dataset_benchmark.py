@@ -122,6 +122,12 @@ def _record(
                 timestamp="2026-01-01T00:00:00",
                 clean_text="Synthetic clinical note with labs and vitals.",
                 messy_text="synthetic clinical note w/ labs + vitals",
+                extracted_facts={
+                    "lab_values": [{"name": "WBC", "value": 12.0, "unit": "K/uL"}],
+                    "vital_values": [{"name": "HR", "value": 110, "unit": "/min"}],
+                    "medications": ["Ceftriaxone"],
+                    "imaging_labels": ["Opacity", "Effusion"],
+                },
             )
         ],
         provenance=Provenance(generator="unit-test", created_at="2026-01-01T00:00:00"),
@@ -163,6 +169,18 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.medication_status_counts == {"active": 2}
     assert profile.document_author_role_counts == {"physician": 2}
     assert profile.messy_document_rate == 1.0
+    assert profile.extracted_fact_key_counts == {
+        "imaging_labels": 2,
+        "lab_values": 2,
+        "medications": 2,
+        "vital_values": 2,
+    }
+    assert profile.extracted_fact_density == {
+        "imaging_labels_per_record": 1.0,
+        "lab_values_per_record": 1.0,
+        "medications_per_record": 1.0,
+        "vital_values_per_record": 1.0,
+    }
     assert profile.artifact_counts["documents"] == 2
     assert profile.artifact_counts["encounters"] == 2
     assert profile.artifact_counts["diagnoses"] == 2
@@ -233,6 +251,12 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "document_author_role_overlap",
         "document_author_role_distribution",
         "messy_document_rate",
+        "extracted_fact_key_overlap",
+        "extracted_fact_key_distribution",
+        "extracted_fact_density:imaging_labels_per_record",
+        "extracted_fact_density:lab_values_per_record",
+        "extracted_fact_density:medications_per_record",
+        "extracted_fact_density:vital_values_per_record",
         "artifact_density:documents_per_record",
         "artifact_density:encounters_per_record",
         "artifact_density:diagnoses_per_record",
@@ -484,6 +508,51 @@ def test_dataset_benchmark_flags_declared_structured_ehr_without_artifacts():
     assert encounter_density.generated_value == 0.0
     assert diagnosis_density.generated_value == 0.0
     assert any("modality_artifact_coverage:structured_ehr" in warning for warning in report.warnings)
+
+
+def test_dataset_benchmark_flags_missing_note_fact_targets():
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "documents": [
+                    ClinicalDocument(
+                        document_id="doc-gen",
+                        note_type="progress_note",
+                        author_role="physician",
+                        timestamp="2026-01-01T00:00:00",
+                        clean_text="Synthetic clinical note without extracted facts.",
+                        messy_text="synthetic clinical note",
+                        extracted_facts={},
+                    )
+                ]
+            }
+        )
+    ]
+    reference = [_record("ref-1", "ds-ref")]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    overlap_metric = next(
+        metric for metric in report.metrics if metric.name == "extracted_fact_key_overlap"
+    )
+    lab_density_metric = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "extracted_fact_density:lab_values_per_record"
+    )
+
+    assert report.generated_profile.extracted_fact_key_counts == {}
+    assert overlap_metric.score == 0.0
+    assert overlap_metric.details["reference_only"] == [
+        "imaging_labels",
+        "lab_values",
+        "medications",
+        "vital_values",
+    ]
+    assert lab_density_metric.generated_value is None
+    assert lab_density_metric.reference_value == 1.0
+    assert lab_density_metric.score == 0.0
+    assert "extracted_fact_key_overlap" in report.failing_metrics
+    assert any("extracted_fact_key_overlap" in warning for warning in report.warnings)
 
 
 def test_profile_records_rejects_mixed_dataset_records():

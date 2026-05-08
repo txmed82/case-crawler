@@ -94,6 +94,20 @@ class DatasetBenchmark:
                 reference_profile.messy_document_rate,
                 tolerance=0.5,
             ),
+            _jaccard_metric(
+                "extracted_fact_key_overlap",
+                set(generated_profile.extracted_fact_key_counts),
+                set(reference_profile.extracted_fact_key_counts),
+            ),
+            _distribution_metric(
+                "extracted_fact_key_distribution",
+                generated_profile.extracted_fact_key_counts,
+                reference_profile.extracted_fact_key_counts,
+            ),
+            *_fact_density_metrics(
+                generated_profile.extracted_fact_density,
+                reference_profile.extracted_fact_density,
+            ),
             *_density_metrics(
                 generated_profile.artifact_density,
                 reference_profile.artifact_density,
@@ -241,6 +255,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     sex_counts: Counter[str] = Counter()
     note_type_counts: Counter[str] = Counter()
     document_author_role_counts: Counter[str] = Counter()
+    extracted_fact_key_counts: Counter[str] = Counter()
     artifact_counts: Counter[str] = Counter()
     lab_name_counts: Counter[str] = Counter()
     lab_flag_counts: Counter[str] = Counter()
@@ -277,6 +292,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             document_author_role_counts[document.author_role or "unknown"] += 1
             document_lengths.append(len(document.clean_text))
             messy_document_values.append(1 if document.messy_text else 0)
+            for key, value in document.extracted_facts.items():
+                if _has_fact_value(value):
+                    extracted_fact_key_counts[_fact_key(key)] += 1
         for lab in record.labs:
             lab_name_counts[lab.name] += 1
             if lab.flag:
@@ -329,6 +347,8 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         note_type_counts=dict(sorted(note_type_counts.items())),
         document_author_role_counts=dict(sorted(document_author_role_counts.items())),
         messy_document_rate=_mean(messy_document_values),
+        extracted_fact_key_counts=dict(sorted(extracted_fact_key_counts.items())),
+        extracted_fact_density=_counter_density(extracted_fact_key_counts, len(records)),
         artifact_counts=dict(sorted(artifact_counts.items())),
         artifact_density=_artifact_density(artifact_counts, len(records)),
         modality_artifact_coverage=_modality_artifact_coverage(
@@ -399,6 +419,15 @@ def _artifact_density(artifact_counts: Counter[str], record_count: int) -> dict[
     return {
         density_key: round(artifact_counts.get(artifact_key, 0) / record_count, 4)
         for density_key, artifact_key in sorted(ARTIFACT_DENSITY_KEYS.items())
+    }
+
+
+def _counter_density(counts: Counter[str], record_count: int) -> dict[str, float]:
+    if record_count == 0:
+        return {}
+    return {
+        f"{key}_per_record": round(value / record_count, 4)
+        for key, value in sorted(counts.items())
     }
 
 
@@ -557,6 +586,31 @@ def _coverage_metrics(
     ]
 
 
+def _fact_density_metrics(
+    generated_density: dict[str, float],
+    reference_density: dict[str, float],
+) -> list[BenchmarkMetric]:
+    return [
+        _closeness_metric(
+            f"extracted_fact_density:{key}",
+            generated_density.get(key),
+            reference_density.get(key),
+            tolerance=max(reference_density.get(key, 0), 1.0),
+        )
+        for key in sorted(set(generated_density) | set(reference_density))
+    ]
+
+
+def _has_fact_value(value: object) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, list | tuple | set | dict):
+        return bool(value)
+    return True
+
+
 def _warnings(
     generated_profile: CohortProfile,
     reference_profile: CohortProfile,
@@ -630,3 +684,7 @@ def _imaging_label_key(display: str, code: str) -> str:
 
 def _metric_key(value: str) -> str:
     return " ".join(value.lower().replace("_", " ").split())
+
+
+def _fact_key(value: str) -> str:
+    return "_".join(value.lower().replace("-", "_").split())
