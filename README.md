@@ -240,6 +240,9 @@ arrays, medication-history arrays, and time-series channel arrays into the local
 JSON arrays, or `{"rows": [...]}` files via `--path` or the REST import `path`
 field, so private validation sets can stay local.
 
+The current external landscape and model/dataset research notes are tracked in
+`docs/research/2026-05-08-synthetic-healthcare-data-landscape.md`.
+
 ## REST API
 
 Start the server with `casecrawler serve` or `docker compose up`.
