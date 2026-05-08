@@ -581,6 +581,50 @@ def test_validator_rejects_low_image_alignment():
     assert any(issue.field == "imaging.alignment" for issue in report.issues)
 
 
+def test_validator_rejects_missing_artifact_generation_backend():
+    bad = _record(
+        modalities=[Modality.TIME_SERIES, Modality.IMAGING],
+        time_series=[
+            TimeSeriesChannel(
+                name="heart_rate",
+                unit="/min",
+                generation_backend=" ",
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T10:00:00",
+                        values={"value": 110},
+                    )
+                ],
+            )
+        ],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="XR",
+                body_region="chest",
+                prompt="portable chest x-ray pulmonary edema",
+                file_path="xray.png",
+                report_text="portable chest x-ray pulmonary edema",
+                generation_backend="",
+            )
+        ],
+    )
+
+    report = SyntheticValidator(
+        image_alignment_validator=FakeImageAlignmentValidator(0.9)
+    ).validate(bad)
+
+    assert report.approved is False
+    assert any(
+        issue.field == "time_series.heart_rate.generation_backend"
+        for issue in report.issues
+    )
+    assert any(
+        issue.field == "imaging.img-1.generation_backend"
+        for issue in report.issues
+    )
+
+
 def test_validator_rejects_missing_generated_image_file():
     record = _record(
         modalities=[Modality.IMAGING],
