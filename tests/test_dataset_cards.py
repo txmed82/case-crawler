@@ -36,6 +36,13 @@ def test_build_dataset_card_includes_validation_and_use_limits():
     assert "- medications: 1" in card
     assert "## Procedures" in card
     assert "- Central venous catheter placement: 1" in card
+    assert "## Diagnosis Coding Signals" in card
+    assert "- ICD-9-CM: 2" in card
+    assert "- ICD-9-CM:401.9: 1" in card
+    assert "- ICD-9-CM:428.0: 1" in card
+    assert "## PHI Annotation Signals" in card
+    assert "- AGE: 1" in card
+    assert "- NAME: 1" in card
 
 
 def test_build_model_card_documents_generator_and_validation_gates():
@@ -57,6 +64,10 @@ def test_build_model_card_documents_generator_and_validation_gates():
     assert "- external:timediff-sample: 1" in card
     assert "## Procedure Coverage" in card
     assert "- Central venous catheter placement: 1" in card
+    assert "## Diagnosis Coding Signals" in card
+    assert "- ICD-9-CM: 2" in card
+    assert "## PHI Annotation Signals" in card
+    assert "- NAME: 1" in card
     assert "PHI-like privacy scanning" in card
 
 
@@ -74,6 +85,10 @@ def _record() -> SyntheticRecord:
                 start="2026-05-06T10:00:00",
                 setting="emergency_department",
                 reason="sepsis",
+                diagnoses=[
+                    Code(system="ICD-9-CM", code="428.0", display="Heart failure"),
+                    Code(system="ICD-9-CM", code="401.9", display="Hypertension"),
+                ],
                 procedures=[
                     Code(
                         system="http://snomed.info/sct",
@@ -93,6 +108,20 @@ def _record() -> SyntheticRecord:
                 extracted_facts={
                     "lab_values": [{"name": "Lactate", "value": 3.4, "unit": "mmol/L"}],
                     "medications": ["Ceftriaxone"],
+                    "phi_annotations": [
+                        {
+                            "entity_type": "NAME",
+                            "text": "Smith",
+                            "start": 0,
+                            "end": 5,
+                        },
+                        {
+                            "entity_type": "AGE",
+                            "text": "64-year-old",
+                            "start": 6,
+                            "end": 17,
+                        },
+                    ],
                     "empty_target": [],
                 },
             )
