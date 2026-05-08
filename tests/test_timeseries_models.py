@@ -27,7 +27,10 @@ def test_time_series_model_catalog_lists_external_references():
         "channels",
         "points",
     ]
-    assert profiles["timediff"].output_contract["stdout_json"] == "TimeSeriesChannel[]"
+    assert (
+        profiles["timediff"].output_contract["stdout_json"]
+        == "TimeSeriesChannel[] or {'channels': TimeSeriesChannel[]}"
+    )
     assert "generation_backend" in profiles["timediff"].validation_requirements
     assert profiles["rawmed"].use_policy == "research_reference_validate_outputs"
     assert profiles["rawmed"].output_contract["channel_fields"] == [

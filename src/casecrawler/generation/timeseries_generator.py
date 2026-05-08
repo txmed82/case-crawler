@@ -153,8 +153,13 @@ class TimeSeriesGenerator:
             raw_channels = json.loads(output)
         except json.JSONDecodeError as exc:
             raise RuntimeError("External time-series backend returned invalid JSON.") from exc
+        if isinstance(raw_channels, dict):
+            raw_channels = raw_channels.get("channels")
         if not isinstance(raw_channels, list):
-            raise RuntimeError("External time-series backend must return a JSON list.")
+            raise RuntimeError(
+                "External time-series backend must return a JSON list or "
+                "an object with a channels list."
+            )
         backend = f"external:{' '.join(self._external_command)}"
         generated_channels = [
             _external_channel(channel, backend=backend)

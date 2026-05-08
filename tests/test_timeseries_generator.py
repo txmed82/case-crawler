@@ -158,6 +158,42 @@ def test_timeseries_generator_can_use_external_backend():
     assert updated.time_series[0].points[0].values["value"] == 101.0
 
 
+def test_timeseries_generator_accepts_external_backend_envelope():
+    req = GenerationRequest(
+        topic="sepsis",
+        modalities=[Modality.TIME_SERIES],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0)
+
+    def fake_runner(_command, _payload):
+        return json.dumps(
+            {
+                "model": "MuhangTian/TimeDiff",
+                "channels": [
+                    {
+                        "name": "heart_rate",
+                        "unit": "/min",
+                        "points": [
+                            {
+                                "timestamp": "2026-01-01T00:00:00",
+                                "values": {"value": 101.0},
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+
+    updated = TimeSeriesGenerator(
+        external_command=["timediff-sample"],
+        external_runner=fake_runner,
+    ).add_time_series(record, channels=["heart_rate"], points=1)
+
+    assert updated.time_series[0].name == "heart_rate"
+    assert updated.time_series[0].generation_backend == "external:timediff-sample"
+
+
 def test_timeseries_generator_rejects_empty_external_command():
     try:
         TimeSeriesGenerator(external_command=[])
