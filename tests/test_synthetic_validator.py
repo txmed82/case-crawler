@@ -366,6 +366,51 @@ def test_validator_rejects_hypoxic_spo2_time_series_trending_down():
     assert any(issue.field == "time_series.spo2.trend" for issue in report.issues)
 
 
+def test_validator_rejects_document_extracted_fact_conflicts():
+    bad = _record(
+        documents=[
+            ClinicalDocument(
+                document_id="doc-facts",
+                note_type="progress_note",
+                author_role="physician",
+                timestamp="2026-05-06T09:00:00",
+                clean_text="Progress note with extracted facts.",
+                extracted_facts={
+                    "lab_values": [
+                        {
+                            "name": "Lactate",
+                            "value": 1.1,
+                            "unit": "mmol/L",
+                        }
+                    ],
+                    "vital_values": [
+                        {
+                            "name": "HR",
+                            "value": 72,
+                            "unit": "/min",
+                        }
+                    ],
+                    "medications": ["Vancomycin"],
+                },
+            )
+        ],
+        medication_history=[
+            MedicationStatement(
+                name="Ceftriaxone",
+                route="iv",
+                status="active",
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "documents.extracted_facts.lab_values" for issue in report.issues)
+    assert any(issue.field == "documents.extracted_facts.vital_values" for issue in report.issues)
+    assert any(issue.field == "documents.extracted_facts.medications" for issue in report.issues)
+
+
 def test_validator_rejects_phi_like_text():
     bad = _record(metadata={"free_text": "Call patient at 555-123-4567 tomorrow."})
 

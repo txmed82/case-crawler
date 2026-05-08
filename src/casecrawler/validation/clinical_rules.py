@@ -592,6 +592,78 @@ def validate_text_structured_contradictions(
     return issues
 
 
+def validate_document_extracted_fact_alignment(
+    record: SyntheticRecord,
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    lab_values = {
+        _normalize_name(lab.name): float(lab.value)
+        for lab in record.labs
+        if isinstance(lab.value, int | float)
+    }
+    vital_values = {
+        _normalize_name(vital.name): float(vital.value) for vital in record.vitals
+    }
+    medication_names = {_normalize_name(medication.name) for medication in record.medication_history}
+
+    for document in record.documents:
+        facts = document.extracted_facts
+        for item in _fact_list(facts.get("lab_values")):
+            name = _normalize_name(str(item.get("name", "")))
+            value = item.get("value")
+            if name not in lab_values or not isinstance(value, int | float):
+                continue
+            if _numeric_conflict(float(value), lab_values[name]):
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.CLINICAL_TEXT,
+                        field="documents.extracted_facts.lab_values",
+                        message=(
+                            f"Document {document.document_id} extracted lab {name}="
+                            f"{value} conflicts with structured value {lab_values[name]}."
+                        ),
+                    )
+                )
+        for item in _fact_list(facts.get("vital_values")):
+            name = _normalize_name(str(item.get("name", "")))
+            value = item.get("value")
+            if name not in vital_values or not isinstance(value, int | float):
+                continue
+            if _numeric_conflict(float(value), vital_values[name]):
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.CLINICAL_TEXT,
+                        field="documents.extracted_facts.vital_values",
+                        message=(
+                            f"Document {document.document_id} extracted vital {name}="
+                            f"{value} conflicts with structured value {vital_values[name]}."
+                        ),
+                    )
+                )
+        extracted_medications = {
+            _normalize_name(str(item))
+            for item in facts.get("medications", [])
+            if isinstance(item, str)
+        }
+        unsupported_medications = extracted_medications - medication_names
+        if unsupported_medications and medication_names:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.CLINICAL_TEXT,
+                    field="documents.extracted_facts.medications",
+                    message=(
+                        f"Document {document.document_id} extracted medication names "
+                        f"not present in structured medication history: "
+                        f"{', '.join(sorted(unsupported_medications))}."
+                    ),
+                )
+            )
+    return issues
+
+
 def validate_radiology_document_alignment(
     record: SyntheticRecord,
 ) -> list[ValidationIssue]:
@@ -743,6 +815,17 @@ def _has_active_medication(record: SyntheticRecord, names: set[str]) -> bool:
         if any(normalized == name or normalized.startswith(f"{name}-") for name in names):
             return True
     return False
+
+
+def _fact_list(value) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _numeric_conflict(observed: float, expected: float) -> bool:
+    tolerance = max(0.5, abs(expected) * 0.2)
+    return abs(observed - expected) > tolerance
 
 
 def _first_channel_value(channel) -> float | None:
