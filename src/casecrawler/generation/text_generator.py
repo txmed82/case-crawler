@@ -5,7 +5,7 @@ from uuid import NAMESPACE_URL, uuid5
 from pydantic import BaseModel, Field
 
 from casecrawler.llm.base import BaseLLMProvider
-from casecrawler.models.synthetic import ClinicalDocument, SyntheticRecord
+from casecrawler.models.synthetic import ClinicalDocument, Modality, SyntheticRecord
 
 
 class ClinicalDocumentBatch(BaseModel):
@@ -171,12 +171,18 @@ class TextGenerator:
                     "medication reconciliation, and follow-up needs."
                 ),
             ),
-            _document(
-                record,
-                "radiology_report",
-                "radiologist",
-                timestamp,
-                _radiology_review_text(record),
+            *(
+                [
+                    _document(
+                        record,
+                        "radiology_report",
+                        "radiologist",
+                        timestamp,
+                        _radiology_review_text(record),
+                    )
+                ]
+                if _needs_radiology_report(record)
+                else []
             ),
         ]
         return record.model_copy(update={"documents": [*record.documents, *documents]})
@@ -374,6 +380,10 @@ def _radiology_review_text(record: SyntheticRecord) -> str:
         + " ".join(asset_summaries)
         + " Synthetic image-text alignment should be validated before training use."
     )
+
+
+def _needs_radiology_report(record: SyntheticRecord) -> bool:
+    return bool(record.imaging) or Modality.IMAGING in record.modalities
 
 
 def _clinical_document_prompt(record: SyntheticRecord) -> str:
