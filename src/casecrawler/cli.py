@@ -650,6 +650,262 @@ def generate_dataset(
     click.echo(f"Approved: {result['approved']}")
 
 
+@cli.command("generate-release-package")
+@click.argument("topic")
+@click.option("--output-dir", required=True, help="Output directory for the release package")
+@click.option("--count", default=1, type=int, show_default=True)
+@click.option(
+    "--recipe",
+    default="full_multimodal_acute_care",
+    show_default=True,
+    help="Built-in generation recipe to use for the package.",
+)
+@click.option(
+    "--format",
+    "export_format",
+    default="multimodal_jsonl",
+    show_default=True,
+    type=click.Choice(
+        [
+            "raw_jsonl",
+            "sft_jsonl",
+            "note_fact_sft_jsonl",
+            "clinical_observation_jsonl",
+            "medication_reconciliation_jsonl",
+            "chat_jsonl",
+            "tool_call_jsonl",
+            "multimodal_jsonl",
+            "time_series_jsonl",
+            "dpo_jsonl",
+            "rl_jsonl",
+            "fhir_ndjson",
+        ]
+    ),
+)
+@click.option("--seed", default="casecrawler", show_default=True)
+@click.option(
+    "--imaging-backend",
+    default="placeholder",
+    show_default=True,
+    type=click.Choice(["placeholder", "diffusers"]),
+    help="Synthetic imaging backend for generated assets.",
+)
+@click.option(
+    "--imaging-model-profile",
+    default=None,
+    help="Built-in imaging model profile, for example prompt2medimage.",
+)
+@click.option("--diffusers-model-id", default=None, help="Hugging Face diffusers model id.")
+@click.option(
+    "--fixture-limit",
+    default=1,
+    type=click.IntRange(1),
+    show_default=True,
+    help="Maximum records imported per bundled reference fixture.",
+)
+@click.option(
+    "--min-overall-score",
+    default=0.0,
+    type=click.FloatRange(0.0, 1.0),
+    show_default=True,
+    help="Minimum benchmark overall score for the release gate.",
+)
+@click.option(
+    "--min-metric-score",
+    default=0.0,
+    type=click.FloatRange(0.0, 1.0),
+    show_default=True,
+    help="Minimum benchmark metric score for the release gate.",
+)
+def generate_release_package(
+    topic: str,
+    output_dir: str,
+    count: int,
+    recipe: str,
+    export_format: str,
+    seed: str,
+    imaging_backend: str,
+    imaging_model_profile: str | None,
+    diffusers_model_id: str | None,
+    fixture_limit: int,
+    min_overall_score: float,
+    min_metric_score: float,
+) -> None:
+    """Generate, benchmark, export, and verify a multimodal release package."""
+    from casecrawler.export.cards import build_dataset_card, build_model_card
+    from casecrawler.export.fine_tuning import (
+        export_jsonl_split_package,
+        verify_jsonl_split_package,
+    )
+    from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
+    from casecrawler.integrations.reference_fixtures import (
+        seed_recommended_reference_fixtures,
+    )
+    from casecrawler.models.dataset import ExportFormat, GenerationRequest
+    from casecrawler.storage.dataset_store import DatasetStore
+    from casecrawler.validation.benchmark import (
+        DatasetBenchmark,
+        benchmark_profile_artifact,
+        profile_records,
+    )
+    from casecrawler.validation.benchmark_selection import build_benchmark_plan_summary
+    from casecrawler.validation.quality import (
+        build_dataset_quality_report,
+        export_profile_blocker,
+    )
+
+    try:
+        req = GenerationRequest(
+            topic=topic,
+            count=count,
+            recipe=recipe,
+            export_formats=[ExportFormat(export_format)],
+            imaging_backend=imaging_backend,
+            imaging_model_profile=imaging_model_profile,
+            diffusers_model_id=diffusers_model_id,
+        )
+        result = asyncio.run(SyntheticPipeline().generate(req))
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    store = DatasetStore()
+    records = result["records"]
+    for record in records:
+        store.save_record(record)
+    dataset_id = result["dataset_id"]
+    seeded_references = seed_recommended_reference_fixtures(
+        store,
+        dataset_id=dataset_id,
+        dataset_id_prefix=f"{dataset_id}-release-fixture",
+        limit=fixture_limit,
+    )
+    benchmark_plan_summary = build_benchmark_plan_summary(store, dataset_id)
+    reference_dataset_id = benchmark_plan_summary.get("resolved_reference_dataset_id")
+    if not isinstance(reference_dataset_id, str) or not reference_dataset_id:
+        raise click.ClickException(
+            "Generated dataset has no seeded benchmark reference. "
+            f"Missing: {benchmark_plan_summary.get('missing_reference_keys', [])}."
+        )
+    reference_records = list(store.iter_records(dataset_id=reference_dataset_id))
+    benchmark_report = DatasetBenchmark(
+        min_overall_score=min_overall_score,
+        min_metric_score=min_metric_score,
+    ).compare(records, reference_records)
+    benchmark_reference_key = benchmark_plan_summary.get("resolved_reference_key")
+    benchmark_plan = {
+        "recommended_reference_keys": benchmark_plan_summary["recommended_reference_keys"],
+        "ready": benchmark_report.passed,
+        "resolved_reference_dataset_id": reference_dataset_id
+        if benchmark_report.passed
+        else None,
+        "missing_reference_keys": []
+        if benchmark_report.passed
+        else [benchmark_reference_key or reference_dataset_id],
+        "thresholds": benchmark_report.thresholds,
+        "task_export_reference_readiness": benchmark_plan_summary[
+            "task_export_reference_readiness"
+        ],
+    }
+    quality_report = build_dataset_quality_report(
+        dataset_id,
+        records,
+        effective_approved=store.effective_approved,
+        benchmark_plan=benchmark_plan,
+    )
+    if not quality_report.export_ready:
+        raise click.ClickException(
+            "Generated dataset is not ready for fine-tuning export. "
+            f"Blockers: {quality_report.issue_counts_by_field}."
+        )
+    profile_blocker = export_profile_blocker(quality_report, export_format)
+    if profile_blocker:
+        raise click.ClickException(profile_blocker)
+    if not quality_report.multimodal_release_ready:
+        raise click.ClickException(
+            "Generated dataset is not multimodal-release-ready. "
+            f"Missing: {quality_report.multimodal_release_missing}."
+        )
+
+    manifest_snapshot = store.get_manifest(dataset_id)
+    manifest = export_jsonl_split_package(
+        records,
+        output_dir,
+        export_format,
+        dataset_id=dataset_id,
+        seed=seed,
+        audit_artifacts={
+            "quality_report.json": quality_report.model_dump(mode="json"),
+            "benchmark_profile.json": benchmark_profile_artifact(profile_records(records)),
+            "benchmark_report.json": benchmark_report.model_dump(mode="json"),
+            "dataset_card.md": build_dataset_card(manifest_snapshot, records),
+            "model_card.md": build_model_card(manifest_snapshot, records),
+        },
+    )
+    store.save_export_manifest(
+        dataset_id=dataset_id,
+        export_format=export_format,
+        file_path=manifest["manifest_path"],
+        record_count=manifest["example_count"],
+        metadata={
+            "split_package": True,
+            "release_package": True,
+            "seed": manifest["seed"],
+            "ratios": manifest["ratios"],
+            "audit_artifacts": manifest["audit_artifacts"],
+            "multimodal_release_ready": quality_report.multimodal_release_ready,
+            "multimodal_release_missing": quality_report.multimodal_release_missing,
+            "core_artifact_coverage": quality_report.core_artifact_coverage,
+            "benchmark_reference_dataset_id": reference_dataset_id,
+            "benchmark_reference_key": benchmark_reference_key,
+            "benchmark_auto_selected": True,
+            "benchmark_overall_score": benchmark_report.overall_score,
+            "benchmark_passed": benchmark_report.passed,
+            "benchmark_failing_metrics": benchmark_report.failing_metrics,
+            "benchmark_thresholds": benchmark_report.thresholds,
+            "splits": {
+                name: {
+                    "file_path": data["file_path"],
+                    "record_count": data["record_count"],
+                    "example_count": data["example_count"],
+                }
+                for name, data in manifest["splits"].items()
+            },
+        },
+    )
+    verification = verify_jsonl_split_package(output_dir)
+    if not verification["valid"]:
+        raise click.ClickException("Release package verification failed.")
+    click.echo(
+        json.dumps(
+            {
+                "dataset_id": dataset_id,
+                "generated": result["generated"],
+                "approved": result["approved"],
+                "output_dir": output_dir,
+                "manifest_path": manifest["manifest_path"],
+                "seeded_references": seeded_references,
+                "quality_report": {
+                    "export_ready": quality_report.export_ready,
+                    "multimodal_release_ready": quality_report.multimodal_release_ready,
+                    "multimodal_release_missing": quality_report.multimodal_release_missing,
+                    "core_artifact_coverage": quality_report.core_artifact_coverage,
+                },
+                "benchmark": {
+                    "reference_dataset_id": reference_dataset_id,
+                    "reference_key": benchmark_reference_key,
+                    "passed": benchmark_report.passed,
+                    "overall_score": benchmark_report.overall_score,
+                    "failing_metrics": benchmark_report.failing_metrics,
+                    "thresholds": benchmark_report.thresholds,
+                },
+                "manifest": manifest,
+                "verification": verification,
+            },
+            indent=2,
+        )
+    )
+
+
 @cli.group("datasets", invoke_without_command=True)
 @click.pass_context
 def datasets_group(ctx: click.Context) -> None:

@@ -485,7 +485,11 @@ async def test_synthetic_pipeline_allows_request_clinical_text_backend_override(
 
 
 @pytest.mark.asyncio
-async def test_synthetic_pipeline_honors_request_validation_threshold(tmp_path):
+async def test_synthetic_pipeline_honors_request_validation_threshold(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "casecrawler.validation.image_alignment.ImageAlignmentValidator.score",
+        lambda self, asset: 0.5,
+    )
     pipeline = SyntheticPipeline(
         image_output_dir=str(tmp_path),
         image_backend="placeholder",

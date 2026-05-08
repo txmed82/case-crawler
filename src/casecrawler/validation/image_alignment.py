@@ -28,7 +28,24 @@ class ImageAlignmentValidator:
     @staticmethod
     def _tokens(text: str) -> set[str]:
         allowed_acronyms = {"ct", "mr", "xr", "us"}
-        stopwords = {"a", "an", "and", "for", "in", "of", "the", "to", "with"}
+        stopwords = {
+            "a",
+            "an",
+            "and",
+            "context",
+            "findings",
+            "for",
+            "impression",
+            "in",
+            "of",
+            "prompt",
+            "radiology",
+            "report",
+            "synthetic",
+            "the",
+            "to",
+            "with",
+        }
         return {
             token
             for token in re.findall(r"[a-z0-9]+", text.lower())
