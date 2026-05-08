@@ -257,6 +257,9 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.imaging_model_policy_counts == {}
     assert profile.imaging_label_counts == {"effusion": 2, "opacity": 2}
     assert profile.imaging_label_pair_counts == {"effusion|opacity": 2}
+    assert profile.mean_imaging_prompt_chars == 20
+    assert profile.mean_imaging_report_chars == 17
+    assert profile.imaging_report_label_evidence_rate == 1.0
     assert profile.approved_rate == 1.0
     assert profile.mean_modality_alignment_score == 0.9
 
@@ -847,6 +850,36 @@ def test_dataset_benchmark_compares_imaging_model_policies():
     assert overlap_metric.score == 0.0
     assert distribution_metric.score == 0.0
     assert "imaging_model_policy_overlap" in report.failing_metrics
+
+
+def test_dataset_benchmark_compares_imaging_report_label_evidence():
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "imaging": [
+                    _record("rec-1", "ds-gen").imaging[0].model_copy(
+                        update={
+                            "prompt": "portable chest x-ray",
+                            "report_text": "Portable chest radiograph reviewed.",
+                        }
+                    )
+                ]
+            }
+        )
+    ]
+    reference = [_record("ref-1", "ds-ref")]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    evidence_metric = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "imaging_report_label_evidence_rate"
+    )
+
+    assert report.generated_profile.imaging_report_label_evidence_rate == 0.0
+    assert report.reference_profile.imaging_report_label_evidence_rate == 1.0
+    assert evidence_metric.score == 0.0
+    assert "imaging_report_label_evidence_rate" in report.failing_metrics
 
 
 def test_dataset_benchmark_flags_numeric_lab_and_vital_drift():
