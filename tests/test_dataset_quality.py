@@ -167,6 +167,69 @@ def test_objective_coverage_blocks_privacy_safety_failures():
     assert "privacy_safety" in audit["missing"]
 
 
+def test_objective_coverage_requires_cohort_similarity_metrics():
+    report = build_dataset_quality_report(
+        "ds-quality",
+        [_record("rec-1")],
+        benchmark_plan={
+            "ready": True,
+            "recommended_reference_keys": ["synthea_fhir"],
+            "resolved_reference_dataset_id": "ds-reference",
+            "missing_reference_keys": [],
+            "thresholds": {"min_overall_score": 0.1, "min_metric_score": 0.0},
+            "task_export_reference_readiness": {},
+        },
+    )
+
+    missing_metrics = build_objective_coverage_audit(
+        quality_report=report,
+        benchmark_suite={
+            "passed": True,
+            "reference_count": 1,
+            "mean_overall_score": 0.8,
+            "results": [
+                {
+                    "report": {
+                        "metrics": [
+                            {"name": "record_count"},
+                            {"name": "modality_overlap"},
+                        ]
+                    }
+                }
+            ],
+        },
+        manifest={"task_coverage": {"sft_jsonl": 1}, "audit_artifacts": {}},
+    )
+    complete_metrics = build_objective_coverage_audit(
+        quality_report=report,
+        benchmark_suite={
+            "passed": True,
+            "reference_count": 1,
+            "mean_overall_score": 0.8,
+            "results": [
+                {
+                    "report": {
+                        "metrics": [
+                            {"name": "record_count"},
+                            {"name": "mean_age"},
+                            {"name": "sex_distribution"},
+                            {"name": "modality_overlap"},
+                        ]
+                    }
+                }
+            ],
+        },
+        manifest={"task_coverage": {"sft_jsonl": 1}, "audit_artifacts": {}},
+    )
+
+    assert missing_metrics["criteria"]["cohort_similarity"]["satisfied"] is False
+    assert "mean_age" in missing_metrics["criteria"]["cohort_similarity"]["evidence"][
+        "required_metrics"
+    ]
+    assert "cohort_similarity" in missing_metrics["missing"]
+    assert complete_metrics["criteria"]["cohort_similarity"]["satisfied"] is True
+
+
 def test_quality_report_counts_clinical_text_model_policy():
     record = _record("rec-1").model_copy(
         update={

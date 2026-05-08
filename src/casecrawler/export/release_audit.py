@@ -14,6 +14,7 @@ OBJECTIVE_SUMMARY = (
 OBJECTIVE_COVERAGE_KEYS = frozenset(
     {
         "records",
+        "cohort_similarity",
         "structured_ehr",
         "labs",
         "vitals",
@@ -51,6 +52,12 @@ def build_objective_coverage_audit(
             coverage.get("structured_ehr") is True,
             ["quality_report.json"],
             {"modality_counts": quality_report.modality_counts},
+        ),
+        "cohort_similarity": _criterion(
+            "Cohort demographics and distributions are compared to validation references.",
+            _cohort_similarity_satisfied(benchmark_suite),
+            ["benchmark_suite_report.json"],
+            _cohort_similarity_evidence(benchmark_suite),
         ),
         "labs": _criterion(
             "Lab observations and lab reports are present.",
@@ -198,6 +205,57 @@ def _privacy_issue_counts(quality_report: DatasetQualityReport) -> dict[str, int
         for field, count in quality_report.issue_counts_by_field.items()
         if field.startswith("privacy")
     }
+
+
+def _cohort_similarity_satisfied(benchmark_suite: dict[str, Any]) -> bool:
+    if benchmark_suite.get("passed") is not True:
+        return False
+    metric_names = set(_benchmark_metric_names(benchmark_suite))
+    required_metrics = {
+        "record_count",
+        "mean_age",
+        "sex_distribution",
+        "modality_overlap",
+    }
+    return required_metrics.issubset(metric_names)
+
+
+def _cohort_similarity_evidence(benchmark_suite: dict[str, Any]) -> dict[str, Any]:
+    metric_names = sorted(set(_benchmark_metric_names(benchmark_suite)))
+    return {
+        "reference_count": benchmark_suite.get("reference_count"),
+        "mean_overall_score": benchmark_suite.get("mean_overall_score"),
+        "required_metrics": [
+            "record_count",
+            "mean_age",
+            "sex_distribution",
+            "modality_overlap",
+        ],
+        "available_metrics": metric_names,
+    }
+
+
+def _benchmark_metric_names(benchmark_suite: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    results = benchmark_suite.get("results")
+    if not isinstance(results, list):
+        return names
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        report = result.get("report")
+        if not isinstance(report, dict):
+            continue
+        metrics = report.get("metrics")
+        if not isinstance(metrics, list):
+            continue
+        for metric in metrics:
+            if not isinstance(metric, dict):
+                continue
+            name = metric.get("name")
+            if isinstance(name, str) and name:
+                names.append(name)
+    return names
 
 
 def _has_required_audit_artifacts(manifest: dict[str, Any]) -> bool:
