@@ -137,6 +137,10 @@ export interface ReferenceDatasetCatalogItem {
   description: string;
   image_field?: string | null;
   image_label_field?: string | null;
+  image_modality: string;
+  image_body_region: string;
+  gated: boolean;
+  use_policy: string;
 }
 
 export interface ReferenceDatasetCatalogResponse {

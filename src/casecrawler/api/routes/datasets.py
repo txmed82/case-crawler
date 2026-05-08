@@ -92,6 +92,10 @@ def list_reference_catalog():
                 "description": spec.description,
                 "image_field": spec.image_field,
                 "image_label_field": spec.image_label_field,
+                "image_modality": spec.image_modality,
+                "image_body_region": spec.image_body_region,
+                "gated": spec.gated,
+                "use_policy": spec.use_policy,
             }
             for key, spec in REFERENCE_DATASETS.items()
         ]

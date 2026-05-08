@@ -438,6 +438,9 @@ def test_dataset_api_lists_hf_reference_catalog(tmp_path, monkeypatch):
     assert asclepius["license"]
     assert rexgradient["repo_id"] == "rajpurkarlab/ReXGradient-160K"
     assert rexgradient["license"] == "rexgradient-non-commercial-gated"
+    assert rexgradient["gated"] is True
+    assert rexgradient["use_policy"] == "non_commercial_research_only"
+    assert rexgradient["image_modality"] == "XR"
 
 
 def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
