@@ -418,6 +418,26 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     assert exports[0].metadata["objective_coverage"]["missing"] == []
 
 
+def test_dataset_api_release_package_passes_time_series_backend_options(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/release-package",
+        json={
+            "topic": "sepsis",
+            "count": 1,
+            "time_series_backend": "external",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "time_series_backend is 'external'" in response.json()["detail"]
+
+
 def test_dataset_api_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)
