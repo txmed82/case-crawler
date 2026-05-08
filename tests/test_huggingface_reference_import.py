@@ -443,7 +443,7 @@ def test_structured_reference_fields_map_labs_vitals_meds_and_time_series():
                 "name": "arterial_pressure",
                 "unit": "mmHg",
                 "generation_backend": "reference:waveform",
-                "sampling_rate_hz": 1.0,
+                "sample_rate_hz": 1.0,
                 "points": [
                     {
                         "timestamp": "2026-01-01T01:05:00",
@@ -469,6 +469,7 @@ def test_structured_reference_fields_map_labs_vitals_meds_and_time_series():
     assert record.vitals[0].name == "MAP"
     assert record.medication_history[0].name == "Norepinephrine"
     assert record.time_series[0].name == "arterial_pressure"
+    assert record.time_series[0].sampling_rate_hz == 1.0
     assert record.time_series[0].points[0].values["mean"] == 62.0
     assert record.documents[0].extracted_facts["lab_values"][0]["specimen"] == "plasma"
     assert record.documents[0].extracted_facts["vital_values"][0]["name"] == "MAP"

@@ -832,11 +832,25 @@ def _structured_time_series(value: object) -> list[TimeSeriesChannel]:
                 generation_backend=(
                     _coerce_text(item.get("generation_backend")) or "reference"
                 ),
-                sampling_rate_hz=_numeric_or_none(item.get("sampling_rate_hz")),
+                sampling_rate_hz=_time_series_sampling_rate(item),
                 points=points,
             )
         )
     return channels
+
+
+def _time_series_sampling_rate(item: dict) -> float | None:
+    for key in (
+        "sampling_rate_hz",
+        "sample_rate_hz",
+        "sampling_frequency_hz",
+        "frequency_hz",
+        "hz",
+    ):
+        value = _numeric_or_none(item.get(key))
+        if value is not None:
+            return value
+    return None
 
 
 def _structured_time_series_points(value: object) -> list[TimeSeriesPoint]:
