@@ -139,6 +139,7 @@ export interface ReleasePackageRequest {
   recipe?: string;
   export_format?: ExportFormat;
   seed?: string;
+  cohort_constraints?: Record<string, unknown>;
   clinical_text_backend?: "deterministic" | "llm" | "external";
   clinical_text_model_profile?: string;
   clinical_text_command?: string[];

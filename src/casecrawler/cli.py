@@ -811,6 +811,21 @@ def generate_dataset(
     ),
 )
 @click.option("--seed", default="casecrawler", show_default=True)
+@click.option("--age-min", default=None, type=int, help="Minimum generated patient age.")
+@click.option("--age-max", default=None, type=int, help="Maximum generated patient age.")
+@click.option("--sexes", default=None, help="Comma-separated sex cycle.")
+@click.option(
+    "--topic-mix",
+    default=None,
+    help="Comma-separated topic cycle for mixed release cohorts.",
+)
+@click.option("--base-time", default=None, help="ISO-8601 base timestamp.")
+@click.option(
+    "--encounter-count",
+    default=None,
+    type=click.IntRange(1, 30),
+    help="Number of longitudinal encounters per generated patient record.",
+)
 @click.option(
     "--imaging-backend",
     default="placeholder",
@@ -896,6 +911,12 @@ def generate_release_package(
     recipe: str,
     export_format: str,
     seed: str,
+    age_min: int | None,
+    age_max: int | None,
+    sexes: str | None,
+    topic_mix: str | None,
+    base_time: str | None,
+    encounter_count: int | None,
     imaging_backend: str,
     imaging_model_profile: str | None,
     diffusers_model_id: str | None,
@@ -942,6 +963,23 @@ def generate_release_package(
     )
 
     try:
+        cohort_constraints = {}
+        if age_min is not None:
+            cohort_constraints["age_min"] = age_min
+        if age_max is not None:
+            cohort_constraints["age_max"] = age_max
+        if sexes:
+            cohort_constraints["sexes"] = [
+                value.strip() for value in sexes.split(",") if value.strip()
+            ]
+        if topic_mix:
+            cohort_constraints["topic_mix"] = [
+                value.strip() for value in topic_mix.split(",") if value.strip()
+            ]
+        if base_time:
+            cohort_constraints["base_time"] = base_time
+        if encounter_count is not None:
+            cohort_constraints["encounter_count"] = encounter_count
         parsed_imaging_command = (
             [value.strip() for value in imaging_command.split(",") if value.strip()]
             if imaging_command
@@ -961,6 +999,7 @@ def generate_release_package(
             topic=topic,
             count=count,
             recipe=recipe,
+            cohort_constraints=cohort_constraints,
             export_formats=[ExportFormat(export_format)],
             clinical_text_backend=clinical_text_backend,
             llm_provider=llm_provider,

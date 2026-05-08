@@ -91,6 +91,7 @@ class ReleasePackageRequest(BaseModel):
     validation_ratio: float = Field(default=0.1, ge=0.0)
     test_ratio: float = Field(default=0.1, ge=0.0)
     seed: str = "casecrawler"
+    cohort_constraints: dict = Field(default_factory=dict)
     clinical_text_backend: Literal["deterministic", "llm", "external"] | None = None
     clinical_text_model_profile: str | None = Field(default=None, min_length=1)
     clinical_text_command: list[str] | None = Field(default=None, min_length=1)
@@ -164,6 +165,7 @@ async def generate_release_package(req: ReleasePackageRequest):
             topic=req.topic,
             count=req.count,
             recipe=req.recipe,
+            cohort_constraints=req.cohort_constraints,
             export_formats=[req.export_format],
             clinical_text_backend=req.clinical_text_backend,
             clinical_text_model_profile=req.clinical_text_model_profile,
