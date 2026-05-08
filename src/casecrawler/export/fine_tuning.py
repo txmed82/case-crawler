@@ -88,12 +88,7 @@ def export_sft_record(record: SyntheticRecord, task: str = "summarize") -> dict[
                 else json.dumps(assistant, sort_keys=True),
             },
         ],
-        "metadata": {
-            "topic": record.topic,
-            "complexity": record.complexity.value,
-            "modalities": [m.value for m in record.modalities],
-            "synthetic": True,
-        },
+        "metadata": _metadata(record),
     }
 
 
@@ -3801,12 +3796,25 @@ def _procedures(record: SyntheticRecord) -> list[dict[str, Any]]:
 
 
 def _metadata(record: SyntheticRecord) -> dict[str, Any]:
-    return {
+    metadata: dict[str, Any] = {
         "topic": record.topic,
         "complexity": record.complexity.value,
         "modalities": [m.value for m in record.modalities],
         "synthetic": True,
+        "provenance": record.provenance.model_dump(),
     }
+    for key in (
+        "clinical_text_model_policy",
+        "imaging_model_policy",
+        "image_validator_policy",
+        "time_series_model_policy",
+        "generation_overrides",
+        "cohort_constraints",
+    ):
+        value = _json_object_or_none(record.metadata.get(key))
+        if value is not None:
+            metadata[key] = value
+    return metadata
 
 
 def _numeric_reference_flag(

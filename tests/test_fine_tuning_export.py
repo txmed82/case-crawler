@@ -1431,6 +1431,84 @@ def test_export_note_fact_sft_records_creates_document_level_examples():
     assert example["metadata"]["export_profile"] == "note_fact_sft_jsonl"
 
 
+def test_export_training_rows_preserve_provenance_and_model_policies():
+    policy_metadata = {
+        "clinical_text_model_policy": {
+            "backend": "llm",
+            "provider": "ollama",
+            "model_id": "medgemma-local",
+            "license": "provider_terms",
+            "gated": False,
+            "use_policy": "synthetic_clinical_text_review_outputs_before_release",
+        },
+        "imaging_model_policy": {
+            "profile": "cxr_pneumonia_dreambooth",
+            "backend": "diffusers",
+            "model_id": "rexgradient/synthetic-chest-xray-pneumonia",
+            "license": "cc-by-nc-4.0",
+            "gated": False,
+            "use_policy": "non_commercial_no_derivatives_review_before_release",
+        },
+        "image_validator_policy": {
+            "profile": "biomedclip",
+            "backend": "BiomedCLIPImageValidator",
+            "model_id": "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224",
+            "license": "mit",
+            "gated": False,
+            "use_policy": "open_validation_model_review_alignment_scores",
+        },
+        "time_series_model_policy": {
+            "profile": "timediff",
+            "backend": "external",
+            "model_id": "MuhangTian/TimeDiff",
+            "license": "research",
+            "gated": False,
+            "use_policy": "wrap_external_generator_validate_outputs",
+        },
+    }
+    record = _multimodal_record().model_copy(
+        update={
+            "metadata": policy_metadata,
+            "provenance": Provenance(
+                generator="unit-test-generator",
+                model="unit-test-model",
+                source_refs=[{"source": "fixture", "id": "ref-1"}],
+                prompt_hash="abc123",
+                created_at="2026-05-06T10:00:00",
+            ),
+        }
+    )
+
+    exported = [
+        export_sft_record(record),
+        export_chat_record(record),
+        export_multimodal_record(record),
+        export_note_fact_sft_records(record)[0],
+        export_clinical_observation_records(record)[0],
+        export_time_series_records(record)[0],
+        export_medication_reconciliation_records(record)[0],
+    ]
+
+    for row in exported:
+        metadata = row["metadata"]
+        assert metadata["provenance"]["generator"] == "unit-test-generator"
+        assert metadata["provenance"]["model"] == "unit-test-model"
+        assert metadata["provenance"]["source_refs"] == [
+            {"source": "fixture", "id": "ref-1"}
+        ]
+        assert metadata["provenance"]["prompt_hash"] == "abc123"
+        assert metadata["clinical_text_model_policy"] == (
+            policy_metadata["clinical_text_model_policy"]
+        )
+        assert metadata["imaging_model_policy"] == policy_metadata["imaging_model_policy"]
+        assert metadata["image_validator_policy"] == (
+            policy_metadata["image_validator_policy"]
+        )
+        assert metadata["time_series_model_policy"] == (
+            policy_metadata["time_series_model_policy"]
+        )
+
+
 def test_export_record_dispatches_chat_and_multimodal():
     record = SyntheticRecord(
         record_id="rec-1",
