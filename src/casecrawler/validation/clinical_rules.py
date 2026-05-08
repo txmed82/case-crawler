@@ -713,6 +713,18 @@ def validate_document_extracted_fact_alignment(
         _normalize_name(vital.name): float(vital.value) for vital in record.vitals
     }
     medication_names = {_normalize_name(medication.name) for medication in record.medication_history}
+    diagnosis_names = {
+        _normalize_name(diagnosis.display)
+        for encounter in record.encounters
+        for diagnosis in encounter.diagnoses
+        if diagnosis.display
+    }
+    diagnosis_codes = {
+        _normalize_name(diagnosis.code)
+        for encounter in record.encounters
+        for diagnosis in encounter.diagnoses
+        if diagnosis.code
+    }
     procedure_names = {
         _normalize_name(procedure.display)
         for encounter in record.encounters
@@ -786,6 +798,32 @@ def validate_document_extracted_fact_alignment(
                         f"Document {document.document_id} extracted medication names "
                         f"not present in structured medication history: "
                         f"{', '.join(sorted(unsupported_medications))}."
+                    ),
+                )
+            )
+        unsupported_diagnoses = []
+        for item in facts.get("diagnoses", []):
+            if isinstance(item, str):
+                display = _normalize_name(item)
+                if display and display not in diagnosis_names:
+                    unsupported_diagnoses.append(display)
+            elif isinstance(item, dict):
+                display = _normalize_name(str(item.get("display", "")))
+                code = _normalize_name(str(item.get("code", "")))
+                if display and display not in diagnosis_names:
+                    unsupported_diagnoses.append(display)
+                if code and code not in diagnosis_codes:
+                    unsupported_diagnoses.append(code)
+        if unsupported_diagnoses and (diagnosis_names or diagnosis_codes):
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.CLINICAL_TEXT,
+                    field="documents.extracted_facts.diagnoses",
+                    message=(
+                        f"Document {document.document_id} extracted diagnoses "
+                        f"not present in structured encounters: "
+                        f"{', '.join(sorted(set(unsupported_diagnoses)))}."
                     ),
                 )
             )

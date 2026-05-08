@@ -441,6 +441,50 @@ def test_validator_rejects_document_extracted_fact_conflicts():
     assert any(issue.field == "documents.extracted_facts.medications" for issue in report.issues)
 
 
+def test_validator_rejects_document_extracted_diagnosis_fact_conflicts():
+    bad = _record(
+        encounters=[
+            Encounter(
+                encounter_id="enc-1",
+                start="2026-05-06T08:00:00",
+                setting="inpatient",
+                reason="sepsis",
+                diagnoses=[
+                    Code(
+                        system="synthetic",
+                        code="sepsis",
+                        display="Sepsis",
+                    )
+                ],
+            )
+        ],
+        documents=[
+            ClinicalDocument(
+                document_id="doc-diagnosis-facts",
+                note_type="progress_note",
+                author_role="physician",
+                timestamp="2026-05-06T09:00:00",
+                clean_text="Progress note with diagnosis facts.",
+                extracted_facts={
+                    "diagnoses": [
+                        "Sepsis",
+                        {
+                            "system": "synthetic",
+                            "code": "stroke",
+                            "display": "Stroke",
+                        },
+                    ],
+                },
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "documents.extracted_facts.diagnoses" for issue in report.issues)
+
+
 def test_validator_rejects_document_extracted_procedure_fact_conflicts():
     bad = _record(
         encounters=[
