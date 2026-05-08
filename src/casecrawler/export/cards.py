@@ -6,7 +6,9 @@ from statistics import mean
 
 from casecrawler.imaging.file_metadata import raster_dimensions
 from casecrawler.models.dataset import DatasetManifest
+from casecrawler.models.evaluation import DatasetQualityReport
 from casecrawler.models.synthetic import SyntheticRecord
+from casecrawler.validation.quality import build_dataset_quality_report
 
 
 def build_dataset_card(
@@ -26,6 +28,7 @@ def build_dataset_card(
     diagnosis_code_system_counts = _diagnosis_code_system_counts(records)
     diagnosis_code_counts = _diagnosis_code_counts(records)
     phi_entity_counts = _phi_entity_counts(records)
+    quality_report = _quality_report_for_card(manifest, records)
     review_counts = Counter(
         record.metadata.get("human_review", {}).get("status", "unreviewed")
         for record in records
@@ -51,6 +54,7 @@ def build_dataset_card(
             "",
             f"- Approved fraction: {_fraction(manifest.approved_count, manifest.generated_count)}",
             *_score_lines(validation_scores),
+            *_multimodal_release_lines(quality_report),
             *_benchmark_plan_lines(manifest),
             *_task_export_reference_lines(manifest),
             "",
@@ -153,6 +157,7 @@ def build_model_card(
     diagnosis_code_system_counts = _diagnosis_code_system_counts(records)
     diagnosis_code_counts = _diagnosis_code_counts(records)
     phi_entity_counts = _phi_entity_counts(records)
+    quality_report = _quality_report_for_card(manifest, records)
     return "\n".join(
         [
             f"# Model Card: {manifest.name} synthetic generation pipeline",
@@ -222,6 +227,11 @@ def build_model_card(
             "- PHI-like privacy scanning",
             "- Optional image-text alignment validation",
             "- Optional human review decisions before export",
+            "- Multimodal release readiness across clinical text, structured EHR, labs, vitals, medications, time series, imaging, model policy, and benchmark references",
+            "",
+            "## Multimodal Release Readiness",
+            "",
+            *_multimodal_release_status_lines(quality_report),
             "",
             "## Responsible Use",
             "",
@@ -257,6 +267,87 @@ def _score_lines(scores: dict[str, float]) -> list[str]:
     if not scores:
         return ["- Validation scores: not available"]
     return [f"- Mean {name.replace('_', ' ')}: {score:.3f}" for name, score in scores.items()]
+
+
+def _quality_report_for_card(
+    manifest: DatasetManifest,
+    records: list[SyntheticRecord],
+) -> DatasetQualityReport:
+    return build_dataset_quality_report(
+        manifest.dataset_id,
+        records,
+        benchmark_plan=_benchmark_plan_for_quality(manifest),
+    )
+
+
+def _benchmark_plan_for_quality(manifest: DatasetManifest) -> dict | None:
+    reference_keys = manifest.metadata.get("recommended_reference_keys", [])
+    if not isinstance(reference_keys, list) or not reference_keys:
+        return None
+    resolved_reference_dataset_id = _resolved_benchmark_reference_dataset_id(manifest)
+    missing_reference_keys = []
+    if resolved_reference_dataset_id is None:
+        missing_reference_keys = [str(key) for key in reference_keys if str(key).strip()]
+    return {
+        "recommended_reference_keys": reference_keys,
+        "ready": resolved_reference_dataset_id is not None,
+        "resolved_reference_dataset_id": resolved_reference_dataset_id,
+        "missing_reference_keys": missing_reference_keys,
+        "thresholds": manifest.metadata.get("benchmark_thresholds", {}),
+        "task_export_reference_readiness": {},
+    }
+
+
+def _resolved_benchmark_reference_dataset_id(manifest: DatasetManifest) -> str | None:
+    direct = manifest.metadata.get("resolved_reference_dataset_id")
+    if isinstance(direct, str) and direct.strip():
+        return direct
+    exports = manifest.metadata.get("latest_exports", [])
+    if not isinstance(exports, list):
+        return None
+    for export in exports:
+        if not isinstance(export, dict):
+            continue
+        metadata = export.get("metadata", {})
+        if not isinstance(metadata, dict):
+            continue
+        if metadata.get("benchmark_passed") is not True:
+            continue
+        reference_id = metadata.get("benchmark_reference_dataset_id")
+        if isinstance(reference_id, str) and reference_id.strip():
+            return reference_id
+    return None
+
+
+def _multimodal_release_lines(report: DatasetQualityReport) -> list[str]:
+    return [
+        "",
+        "## Multimodal Release Readiness",
+        "",
+        *_multimodal_release_status_lines(report),
+        "",
+        "### Core Artifact Coverage",
+        "",
+        *_coverage_lines(report.core_artifact_coverage),
+    ]
+
+
+def _multimodal_release_status_lines(report: DatasetQualityReport) -> list[str]:
+    missing = (
+        ", ".join(report.multimodal_release_missing)
+        if report.multimodal_release_missing
+        else "none"
+    )
+    return [
+        f"- Ready: {report.multimodal_release_ready}",
+        f"- Missing: {missing}",
+    ]
+
+
+def _coverage_lines(coverage: dict[str, bool]) -> list[str]:
+    if not coverage:
+        return ["- none: False"]
+    return [f"- {key}: {value}" for key, value in sorted(coverage.items())]
 
 
 def _counter_lines(counter: Counter[str]) -> list[str]:
