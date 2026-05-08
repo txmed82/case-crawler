@@ -1,6 +1,7 @@
 from casecrawler.models.synthetic import (
     AllergyIntolerance,
     ClinicalDocument,
+    ClinicalOrder,
     Code,
     Encounter,
     ImagingAsset,
@@ -492,6 +493,40 @@ def test_validator_rejects_invalid_allergy_entries_and_active_medication_conflic
     assert any(
         issue.field == "allergies.medication_conflict" for issue in report.issues
     )
+
+
+def test_validator_rejects_invalid_clinical_orders():
+    bad = _record(
+        encounters=[
+            Encounter(
+                encounter_id="enc-1",
+                start="2026-05-06T08:00:00",
+                setting="emergency",
+                reason="sepsis",
+            )
+        ],
+        orders=[
+            ClinicalOrder(
+                order_id="ord-1",
+                order_type="telepathy",
+                display="",
+                status="maybe",
+                intent="wish",
+                ordered_at="not-a-date",
+                encounter_id="missing-encounter",
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "orders.display" for issue in report.issues)
+    assert any(issue.field == "orders.order_type" for issue in report.issues)
+    assert any(issue.field == "orders.status" for issue in report.issues)
+    assert any(issue.field == "orders.intent" for issue in report.issues)
+    assert any(issue.field == "orders.ordered_at" for issue in report.issues)
+    assert any(issue.field == "orders.encounter_id" for issue in report.issues)
 
 
 def test_validator_rejects_medication_lab_safety_conflicts():

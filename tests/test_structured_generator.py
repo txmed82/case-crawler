@@ -164,6 +164,21 @@ def test_structured_generator_emits_allergy_intolerance_artifacts():
     )
 
 
+def test_structured_generator_emits_clinical_orders_for_structured_ehr():
+    req = GenerationRequest(
+        topic="pneumonia",
+        modalities=[Modality.STRUCTURED_EHR, Modality.LABS],
+        cohort_constraints={"base_time": "2026-02-03T04:05:06"},
+    )
+
+    record = StructuredGenerator().generate("ds-one", req, 0)
+
+    order_types = {order.order_type for order in record.orders}
+    assert {"laboratory", "medication", "imaging", "nursing"}.issubset(order_types)
+    assert record.orders[0].ordered_at == record.encounters[0].start
+    assert record.orders[0].encounter_id == record.encounters[0].encounter_id
+
+
 def test_structured_generator_emits_only_requested_observation_modalities():
     generator = StructuredGenerator()
 
@@ -192,12 +207,14 @@ def test_structured_generator_emits_only_requested_observation_modalities():
     assert imaging_only.vitals == []
     assert imaging_only.medication_history == []
     assert imaging_only.allergies == []
+    assert imaging_only.orders == []
     assert labs_only.labs
     assert labs_only.vitals == []
     assert vitals_only.labs == []
     assert vitals_only.vitals
     assert structured_only.medication_history
     assert structured_only.allergies
+    assert structured_only.orders
     assert structured_only.labs == []
     assert structured_only.vitals == []
 

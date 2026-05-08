@@ -834,6 +834,78 @@ def validate_allergies(record: SyntheticRecord) -> list[ValidationIssue]:
     return issues
 
 
+def validate_orders(record: SyntheticRecord) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    valid_types = {"laboratory", "medication", "imaging", "procedure", "nursing"}
+    valid_statuses = {
+        "active",
+        "completed",
+        "draft",
+        "entered-in-error",
+        "on-hold",
+        "revoked",
+        "unknown",
+    }
+    valid_intents = {"order", "plan", "proposal"}
+    encounter_ids = {encounter.encounter_id for encounter in record.encounters}
+    for order in record.orders:
+        if not order.display.strip():
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="orders.display",
+                    message="Clinical order has an empty display.",
+                )
+            )
+        if order.order_type.lower() not in valid_types:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="orders.order_type",
+                    message=f"Order {order.order_id} has an unsupported type.",
+                )
+            )
+        if order.status.lower() not in valid_statuses:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="orders.status",
+                    message=f"Order {order.order_id} has an invalid status.",
+                )
+            )
+        if order.intent.lower() not in valid_intents:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="orders.intent",
+                    message=f"Order {order.order_id} has an invalid intent.",
+                )
+            )
+        if _parse_datetime(order.ordered_at) is None:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="orders.ordered_at",
+                    message=f"Order {order.order_id} has an invalid ordered_at time.",
+                )
+            )
+        if order.encounter_id and order.encounter_id not in encounter_ids:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="orders.encounter_id",
+                    message=f"Order {order.order_id} references a missing encounter.",
+                )
+            )
+    return issues
+
+
 def validate_medication_safety(record: SyntheticRecord) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     egfr = _first_numeric_lab(record, {"egfr", "estimated-gfr"})

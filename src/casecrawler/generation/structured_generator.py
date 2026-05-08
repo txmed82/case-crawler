@@ -10,6 +10,7 @@ from uuid import NAMESPACE_URL, uuid5
 from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import (
     AllergyIntolerance,
+    ClinicalOrder,
     Code,
     ComplexityProfile,
     Encounter,
@@ -84,6 +85,26 @@ class StructuredGenerator:
             *profile.vitals,
             *_complexity_vitals(req.complexity, req.topic),
         ]
+        labs = _timeline_labs(lab_templates, encounters, index) if include_labs else []
+        vitals = (
+            _timeline_vitals(vital_templates, encounters, index) if include_vitals else []
+        )
+        medication_history = (
+            [
+                _medication_statement(medication, now[:10])
+                for medication in [
+                    *profile.medications,
+                    *_complexity_medications(req.complexity, req.topic),
+                ]
+            ]
+            if include_medications
+            else []
+        )
+        allergies = (
+            _allergies_for_index(req.cohort_constraints, index, now[:10])
+            if include_medications
+            else []
+        )
         return SyntheticRecord(
             record_id=f"rec-{uuid5(NAMESPACE_URL, f'{stable_prefix}:record')}",
             dataset_id=dataset_id,
@@ -92,18 +113,17 @@ class StructuredGenerator:
             modalities=req.modalities,
             patient=patient,
             encounters=encounters,
-            labs=_timeline_labs(lab_templates, encounters, index) if include_labs else [],
-            vitals=_timeline_vitals(vital_templates, encounters, index) if include_vitals else [],
-            medication_history=[
-                _medication_statement(medication, now[:10])
-                for medication in [
-                    *profile.medications,
-                    *_complexity_medications(req.complexity, req.topic),
-                ]
-            ]
-            if include_medications
-            else [],
-            allergies=_allergies_for_index(req.cohort_constraints, index, now[:10])
+            labs=labs,
+            vitals=vitals,
+            medication_history=medication_history,
+            allergies=allergies,
+            orders=_orders_for_record(
+                encounters=encounters,
+                labs=labs,
+                medications=medication_history,
+                procedures=encounters[0].procedures if encounters else [],
+                topic=req.topic,
+            )
             if include_medications
             else [],
             provenance=Provenance(generator="structured-generator", created_at=now),
@@ -373,6 +393,7 @@ def _metadata_cohort_constraints(cohort_constraints: dict) -> dict:
         "alcohol_use",
         "housing",
         "allergies",
+        "orders",
         "base_time",
         "topic_mix",
         "topic_mix_weights",
@@ -669,6 +690,107 @@ def _allergies_for_index(
     ]
 
 
+def _orders_for_record(
+    *,
+    encounters: list[Encounter],
+    labs: list[LabObservation],
+    medications: list[MedicationStatement],
+    procedures: list[Code],
+    topic: str,
+) -> list[ClinicalOrder]:
+    if not encounters:
+        return []
+    encounter = encounters[0]
+    ordered_at = encounter.start
+    orders: list[ClinicalOrder] = []
+    orders.extend(
+        ClinicalOrder(
+            order_id=f"{encounter.encounter_id}-order-lab-{_slug(lab.name)}",
+            order_type="laboratory",
+            display=lab.name,
+            code=lab.loinc,
+            system="LOINC" if lab.loinc else "synthetic",
+            status="completed",
+            priority="routine",
+            ordered_at=ordered_at,
+            encounter_id=encounter.encounter_id,
+        )
+        for lab in labs[:4]
+    )
+    orders.extend(
+        ClinicalOrder(
+            order_id=f"{encounter.encounter_id}-order-med-{_slug(medication.name)}",
+            order_type="medication",
+            display=medication.name,
+            code=medication.rxnorm,
+            system="RxNorm" if medication.rxnorm else "synthetic",
+            status="active",
+            priority="stat" if medication.route and medication.route.lower() == "iv" else "routine",
+            ordered_at=ordered_at,
+            encounter_id=encounter.encounter_id,
+        )
+        for medication in medications[:4]
+    )
+    orders.extend(
+        ClinicalOrder(
+            order_id=f"{encounter.encounter_id}-order-procedure-{_slug(procedure.code)}",
+            order_type="procedure",
+            display=procedure.display,
+            code=procedure.code,
+            system=procedure.system,
+            status="completed",
+            priority="routine",
+            ordered_at=ordered_at,
+            encounter_id=encounter.encounter_id,
+        )
+        for procedure in procedures
+    )
+    if _topic_needs_imaging_order(topic):
+        orders.append(
+            ClinicalOrder(
+                order_id=f"{encounter.encounter_id}-order-imaging-{_slug(topic)}",
+                order_type="imaging",
+                display=f"{topic} imaging study",
+                code="synthetic_imaging_study",
+                system="synthetic",
+                status="completed",
+                priority="urgent",
+                ordered_at=ordered_at,
+                encounter_id=encounter.encounter_id,
+            )
+        )
+    orders.append(
+        ClinicalOrder(
+            order_id=f"{encounter.encounter_id}-order-nursing-monitoring",
+            order_type="nursing",
+            display="vital signs and intake/output monitoring",
+            code="nursing_monitoring",
+            system="synthetic",
+            status="active",
+            priority="routine",
+            ordered_at=ordered_at,
+            encounter_id=encounter.encounter_id,
+        )
+    )
+    return orders
+
+
+def _topic_needs_imaging_order(topic: str) -> bool:
+    normalized = topic.lower()
+    return any(
+        keyword in normalized
+        for keyword in (
+            "pneumonia",
+            "pulmonary",
+            "stroke",
+            "appendicitis",
+            "pancreatitis",
+            "trauma",
+            "chest pain",
+        )
+    )
+
+
 def _indexed_value(value: float, index: int, step: float) -> float:
     adjusted = value + (index % 3) * step
     return round(adjusted, 2)
@@ -716,6 +838,10 @@ def _med(
         "route": route,
         "frequency": frequency,
     }
+
+
+def _slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "order"
 
 
 _DEFAULT_ALLERGY_CYCLE = [

@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from casecrawler.models.synthetic import (
     AllergyIntolerance,
     ClinicalDocument,
+    ClinicalOrder,
     Code,
     ComplexityProfile,
     Encounter,
@@ -87,6 +88,18 @@ def test_synthetic_record_with_text_labs_and_vitals():
                 recorded_at="2026-04-01",
             )
         ],
+        orders=[
+            ClinicalOrder(
+                order_id="ord-1",
+                order_type="laboratory",
+                display="BNP",
+                code="30934-4",
+                system="LOINC",
+                status="completed",
+                ordered_at="2026-05-06T08:00:00",
+                encounter_id="enc-1",
+            )
+        ],
         documents=[
             ClinicalDocument(
                 document_id="doc-1",
@@ -115,6 +128,7 @@ def test_synthetic_record_with_text_labs_and_vitals():
     assert record.labs[0].flag == "H"
     assert record.medication_history[0].name == "Furosemide"
     assert record.allergies[0].substance == "Sulfonamide antibiotics"
+    assert record.orders[0].display == "BNP"
     assert record.validation.approved is True
 
 

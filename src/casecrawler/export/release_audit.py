@@ -9,7 +9,7 @@ OBJECTIVE_SUMMARY = (
     "Generate multimodal synthetic healthcare training data with labs, vitals, "
     "medication history, nursing notes, physician notes, radiology reports, "
     "radiology images, allergy/intolerance safety facts, validation references, "
-    "and fine-tuning-ready exports."
+    "clinical orders, and fine-tuning-ready exports."
 )
 
 OBJECTIVE_COVERAGE_KEYS = frozenset(
@@ -21,6 +21,7 @@ OBJECTIVE_COVERAGE_KEYS = frozenset(
         "vitals",
         "medication_history",
         "allergy_intolerances",
+        "clinical_orders",
         "messy_clinical_text",
         "physician_notes",
         "nursing_notes",
@@ -98,6 +99,12 @@ def build_objective_coverage_audit(
             coverage.get("allergy_intolerances") is True,
             ["quality_report.json"],
             {"allergy_count": quality_report.artifact_counts.get("allergies", 0)},
+        ),
+        "clinical_orders": _criterion(
+            "Clinical orders are present.",
+            coverage.get("clinical_orders") is True,
+            ["quality_report.json"],
+            {"order_count": quality_report.artifact_counts.get("orders", 0)},
         ),
         "messy_clinical_text": _criterion(
             "Clinical documents include messy/noisy text variants for robust training.",
