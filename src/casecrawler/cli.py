@@ -166,8 +166,15 @@ def timeseries_models() -> None:
 
 @cli.command("reference-datasets")
 def reference_datasets() -> None:
-    """List configured Hugging Face reference datasets for benchmarking."""
+    """List configured reference datasets for benchmarking."""
     from casecrawler.integrations.huggingface import REFERENCE_DATASETS
+    from casecrawler.integrations.synthea import (
+        SYNTHEA_REFERENCE_DESCRIPTION,
+        SYNTHEA_REFERENCE_KEY,
+    )
+
+    click.echo(f"{SYNTHEA_REFERENCE_KEY}: local Synthea FHIR import license=synthetic-local")
+    click.echo(f"  {SYNTHEA_REFERENCE_DESCRIPTION}")
 
     for key, spec in REFERENCE_DATASETS.items():
         click.echo(

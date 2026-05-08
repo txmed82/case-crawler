@@ -23,6 +23,11 @@ from casecrawler.models.synthetic import (
 
 
 SYNTHEA_TIMEOUT_SECONDS = 600.0
+SYNTHEA_REFERENCE_KEY = "synthea_fhir"
+SYNTHEA_REFERENCE_DESCRIPTION = (
+    "Local Synthea FHIR imports for standards-shaped synthetic patient history "
+    "benchmarking. Use import-synthea-fhir or run-synthea to create this reference."
+)
 
 
 class SyntheaRunner(Protocol):
@@ -161,8 +166,8 @@ class SyntheaAdapter:
             ),
             metadata={
                 "source": "synthea",
-                "reference_key": "synthea_fhir",
-                "reference_dataset": "synthea_fhir",
+                "reference_key": SYNTHEA_REFERENCE_KEY,
+                "reference_dataset": SYNTHEA_REFERENCE_KEY,
             },
         )
 
