@@ -275,6 +275,42 @@ def test_validator_rejects_known_lab_and_vital_unit_conflicts():
     assert any(issue.field == "vitals.unit" for issue in report.issues)
 
 
+def test_validator_rejects_known_lab_alias_unit_conflicts():
+    bad = _record(
+        labs=[
+            LabObservation(
+                name="Na",
+                value=140,
+                unit="mg/dL",
+                reference_low=136,
+                reference_high=145,
+                effective_time="2026-05-06T08:30:00",
+            ),
+            LabObservation(
+                name="pCO2",
+                value=44,
+                unit="mmol/L",
+                reference_low=35,
+                reference_high=45,
+                effective_time="2026-05-06T08:30:00",
+            ),
+            LabObservation(
+                name="pH",
+                value=7.38,
+                unit="mmHg",
+                reference_low=7.35,
+                reference_high=7.45,
+                effective_time="2026-05-06T08:30:00",
+            ),
+        ]
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert sum(issue.field == "labs.unit" for issue in report.issues) == 3
+
+
 def test_validator_rejects_implausible_respiratory_rate_and_blood_pressure():
     bad = _record(
         vitals=[
