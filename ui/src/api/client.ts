@@ -255,6 +255,7 @@ export type ExportFormat =
   | "raw_jsonl"
   | "sft_jsonl"
   | "note_fact_sft_jsonl"
+  | "medication_reconciliation_jsonl"
   | "chat_jsonl"
   | "tool_call_jsonl"
   | "multimodal_jsonl"
