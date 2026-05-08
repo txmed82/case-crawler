@@ -24,9 +24,11 @@ class CohortProfile(BaseModel):
     mean_observations_per_encounter: float | None = None
     modality_artifact_coverage: dict[str, float] = Field(default_factory=dict)
     lab_name_counts: dict[str, int] = Field(default_factory=dict)
+    lab_unit_counts: dict[str, int] = Field(default_factory=dict)
     lab_flag_counts: dict[str, int] = Field(default_factory=dict)
     lab_numeric_summaries: dict[str, dict[str, float | int]] = Field(default_factory=dict)
     vital_name_counts: dict[str, int] = Field(default_factory=dict)
+    vital_unit_counts: dict[str, int] = Field(default_factory=dict)
     vital_numeric_summaries: dict[str, dict[str, float | int]] = Field(default_factory=dict)
     procedure_name_counts: dict[str, int] = Field(default_factory=dict)
     diagnosis_code_system_counts: dict[str, int] = Field(default_factory=dict)

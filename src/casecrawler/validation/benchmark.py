@@ -143,6 +143,16 @@ class DatasetBenchmark:
                 set(generated_profile.lab_name_counts),
                 set(reference_profile.lab_name_counts),
             ),
+            _jaccard_metric(
+                "lab_unit_overlap",
+                set(generated_profile.lab_unit_counts),
+                set(reference_profile.lab_unit_counts),
+            ),
+            _distribution_metric(
+                "lab_unit_distribution",
+                generated_profile.lab_unit_counts,
+                reference_profile.lab_unit_counts,
+            ),
             _distribution_metric(
                 "lab_flag_distribution",
                 generated_profile.lab_flag_counts,
@@ -158,6 +168,16 @@ class DatasetBenchmark:
                 "vital_name_overlap",
                 set(generated_profile.vital_name_counts),
                 set(reference_profile.vital_name_counts),
+            ),
+            _jaccard_metric(
+                "vital_unit_overlap",
+                set(generated_profile.vital_unit_counts),
+                set(reference_profile.vital_unit_counts),
+            ),
+            _distribution_metric(
+                "vital_unit_distribution",
+                generated_profile.vital_unit_counts,
+                reference_profile.vital_unit_counts,
             ),
             *_numeric_summary_metrics(
                 prefix="vital_value_mean",
@@ -520,6 +540,16 @@ def _profile_metrics(
             set(generated_profile.lab_name_counts),
             set(reference_profile.lab_name_counts),
         ),
+        _jaccard_metric(
+            "lab_unit_overlap",
+            set(generated_profile.lab_unit_counts),
+            set(reference_profile.lab_unit_counts),
+        ),
+        _distribution_metric(
+            "lab_unit_distribution",
+            generated_profile.lab_unit_counts,
+            reference_profile.lab_unit_counts,
+        ),
         _distribution_metric(
             "lab_flag_distribution",
             generated_profile.lab_flag_counts,
@@ -535,6 +565,16 @@ def _profile_metrics(
             "vital_name_overlap",
             set(generated_profile.vital_name_counts),
             set(reference_profile.vital_name_counts),
+        ),
+        _jaccard_metric(
+            "vital_unit_overlap",
+            set(generated_profile.vital_unit_counts),
+            set(reference_profile.vital_unit_counts),
+        ),
+        _distribution_metric(
+            "vital_unit_distribution",
+            generated_profile.vital_unit_counts,
+            reference_profile.vital_unit_counts,
         ),
         *_numeric_summary_metrics(
             prefix="vital_value_mean",
@@ -706,8 +746,10 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     extracted_fact_key_counts: Counter[str] = Counter()
     artifact_counts: Counter[str] = Counter()
     lab_name_counts: Counter[str] = Counter()
+    lab_unit_counts: Counter[str] = Counter()
     lab_flag_counts: Counter[str] = Counter()
     vital_name_counts: Counter[str] = Counter()
+    vital_unit_counts: Counter[str] = Counter()
     procedure_name_counts: Counter[str] = Counter()
     diagnosis_code_system_counts: Counter[str] = Counter()
     diagnosis_code_counts: Counter[str] = Counter()
@@ -766,6 +808,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             _count_phi_entities(document.extracted_facts, phi_entity_counts)
         for lab in record.labs:
             lab_name_counts[lab.name] += 1
+            lab_unit_counts[lab.unit] += 1
             if lab.flag:
                 lab_flag_counts[lab.flag] += 1
             if isinstance(lab.value, (int, float)):
@@ -774,6 +817,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
                 )
         for vital in record.vitals:
             vital_name_counts[vital.name] += 1
+            vital_unit_counts[vital.unit] += 1
             vital_numeric_values.setdefault(_metric_key(vital.name), []).append(
                 float(vital.value)
             )
@@ -844,9 +888,11 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             modality_artifact_counts,
         ),
         lab_name_counts=dict(sorted(lab_name_counts.items())),
+        lab_unit_counts=dict(sorted(lab_unit_counts.items())),
         lab_flag_counts=dict(sorted(lab_flag_counts.items())),
         lab_numeric_summaries=_numeric_summaries(lab_numeric_values),
         vital_name_counts=dict(sorted(vital_name_counts.items())),
+        vital_unit_counts=dict(sorted(vital_unit_counts.items())),
         vital_numeric_summaries=_numeric_summaries(vital_numeric_values),
         procedure_name_counts=dict(sorted(procedure_name_counts.items())),
         diagnosis_code_system_counts=dict(sorted(diagnosis_code_system_counts.items())),
