@@ -898,6 +898,13 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
                     prompt="portable chest x-ray pneumonia",
                     file_path=str(image_path),
                     report_text="Pneumonia.",
+                    labels=[
+                        Code(
+                            system="synthetic",
+                            code="pneumonia",
+                            display="Pneumonia",
+                        )
+                    ],
                     generation_backend="diffusers:cxr_pneumonia_dreambooth",
                 )
             ],
@@ -950,6 +957,9 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
     }
     assert report.mean_imaging_width == 96.0
     assert report.mean_imaging_height == 64.0
+    assert report.mean_imaging_prompt_chars == 30.0
+    assert report.mean_imaging_report_chars == 10.0
+    assert report.imaging_report_label_evidence_rate == 1.0
     assert report.imaging_backend_counts == {
         "diffusers:cxr_pneumonia_dreambooth": 1,
     }
