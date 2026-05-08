@@ -960,6 +960,18 @@ def export_dataset(
     click.echo(f"Exported {record_count} record(s) to {output}")
 
 
+@cli.command("verify-fhir-export")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False))
+def verify_fhir_export(path: str) -> None:
+    """Verify a FHIR NDJSON export file."""
+    from casecrawler.export.fine_tuning import verify_fhir_ndjson_export
+
+    report = verify_fhir_ndjson_export(path)
+    click.echo(json.dumps(report, indent=2))
+    if not report["valid"]:
+        raise click.ClickException("FHIR export verification failed.")
+
+
 @cli.command("export-dataset-splits")
 @click.option("--dataset-id", required=True, help="Dataset id to export")
 @click.option("--output-dir", required=True, help="Output directory for split JSONL files")
