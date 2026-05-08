@@ -48,7 +48,7 @@ const llmProviderOptions = ["anthropic", "openai", "openrouter", "ollama"] as co
 const sexOptions = ["female", "male", "other"] as const;
 type SexOption = (typeof sexOptions)[number];
 type LlmProviderOption = (typeof llmProviderOptions)[number];
-type ReferenceImportMode = "registered" | "custom";
+type ReferenceImportMode = "registered" | "custom" | "local";
 
 export default function GeneratePage() {
   const [topic, setTopic] = useState("");
@@ -94,6 +94,7 @@ export default function GeneratePage() {
   const [referenceKey, setReferenceKey] = useState("");
   const [referenceDatasetId, setReferenceDatasetId] = useState("");
   const [referenceRepoId, setReferenceRepoId] = useState("");
+  const [referenceLocalPath, setReferenceLocalPath] = useState("");
   const [referenceSplit, setReferenceSplit] = useState("");
   const [referenceLicense, setReferenceLicense] = useState("");
   const [referenceNoteField, setReferenceNoteField] = useState("note");
@@ -315,12 +316,13 @@ export default function GeneratePage() {
       !referenceDatasetId.trim() ||
       isImportingReference ||
       (referenceImportMode === "registered" && !referenceKey) ||
-      (referenceImportMode === "custom" && !referenceRepoId.trim())
+      (referenceImportMode === "custom" && !referenceRepoId.trim()) ||
+      (referenceImportMode === "local" && !referenceLocalPath.trim())
     ) {
       return;
     }
-    if (referenceImportMode === "custom" && !referenceNoteField.trim()) {
-      setReferenceError("Custom imports require a note field.");
+    if (referenceImportMode !== "registered" && !referenceNoteField.trim()) {
+      setReferenceError("Mapped reference imports require a note field.");
       return;
     }
     const parsedLimit = referenceLimit === "" ? undefined : Number(referenceLimit);
@@ -337,10 +339,12 @@ export default function GeneratePage() {
     try {
       const resp = await importReferenceDataset({
         dataset_id: referenceDatasetId.trim(),
-        ...(referenceImportMode === "registered"
-          ? { reference_key: referenceKey }
-          : {
-              repo_id: referenceRepoId.trim(),
+        ...(referenceImportMode === "registered" ? { reference_key: referenceKey } : {}),
+        ...(referenceImportMode === "custom" ? { repo_id: referenceRepoId.trim() } : {}),
+        ...(referenceImportMode === "local" ? { path: referenceLocalPath.trim() } : {}),
+        ...(referenceImportMode !== "registered"
+          ? {
+              ...(referenceKey.trim() ? { reference_key: referenceKey.trim() } : {}),
               ...(referenceLicense.trim() ? { license: referenceLicense.trim() } : {}),
               note_field: referenceNoteField.trim(),
               ...(referenceQuestionField.trim()
@@ -369,7 +373,8 @@ export default function GeneratePage() {
               ...(referenceTimeSeriesField.trim()
                 ? { time_series_field: referenceTimeSeriesField.trim() }
                 : {}),
-            }),
+            }
+          : {}),
         ...(referenceSplit.trim() ? { split: referenceSplit.trim() } : {}),
         ...(parsedLimit !== undefined ? { limit: parsedLimit } : {}),
       });
@@ -863,12 +868,12 @@ export default function GeneratePage() {
       <div className="border-t border-gray-200 pt-6">
         <h2 className="text-xl font-semibold">Import Reference Dataset</h2>
         <p className="mt-1 text-sm text-gray-600">
-          Pull Hugging Face synthetic clinical reference datasets into the workbench
-          for benchmarking and export.
+          Pull registered, custom Hugging Face, or local JSON/JSONL reference
+          datasets into the workbench for benchmarking and export.
         </p>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {(["registered", "custom"] as const).map((mode) => {
+          {(["registered", "custom", "local"] as const).map((mode) => {
             const selected = referenceImportMode === mode;
             return (
               <button
@@ -905,7 +910,7 @@ export default function GeneratePage() {
                 ))}
               </select>
             </label>
-          ) : (
+          ) : referenceImportMode === "custom" ? (
             <label className="space-y-1 text-sm font-medium text-gray-700">
               <span>Repo id</span>
               <input
@@ -914,6 +919,18 @@ export default function GeneratePage() {
                 value={referenceRepoId}
                 onChange={(event) => setReferenceRepoId(event.target.value)}
                 placeholder="org/custom-synthetic-notes"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+          ) : (
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Local path</span>
+              <input
+                aria-label="Local reference file path"
+                type="text"
+                value={referenceLocalPath}
+                onChange={(event) => setReferenceLocalPath(event.target.value)}
+                placeholder="/data/validation/local-notes.jsonl"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
               />
             </label>
@@ -940,7 +957,7 @@ export default function GeneratePage() {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
             />
           </label>
-          {referenceImportMode === "custom" && (
+          {referenceImportMode !== "registered" && (
             <label className="space-y-1 text-sm font-medium text-gray-700">
               <span>License</span>
               <input
@@ -966,8 +983,23 @@ export default function GeneratePage() {
           </label>
         </div>
 
-        {referenceImportMode === "custom" && (
+        {referenceImportMode !== "registered" && (
           <div className="mt-4 grid gap-4 md:grid-cols-[repeat(4,minmax(0,1fr))]">
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Reference key</span>
+              <input
+                aria-label="Reference key"
+                type="text"
+                value={referenceKey}
+                onChange={(event) => setReferenceKey(event.target.value)}
+                placeholder={
+                  referenceImportMode === "local"
+                    ? "local-validation-notes"
+                    : "org/custom-synthetic-notes"
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
             <label className="space-y-1 text-sm font-medium text-gray-700">
               <span>Note field</span>
               <input
@@ -1118,6 +1150,13 @@ export default function GeneratePage() {
           </div>
         )}
 
+        {referenceImportMode === "local" && (
+          <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
+            Local imports accept JSON arrays, {"{rows: [...]}"}, JSONL, or NDJSON row
+            files already accessible to the API process.
+          </div>
+        )}
+
         <div className="mt-4">
           <button
             type="button"
@@ -1128,7 +1167,9 @@ export default function GeneratePage() {
               (referenceImportMode === "registered" &&
                 (!referenceKey || referenceCatalog.length === 0)) ||
               (referenceImportMode === "custom" &&
-                (!referenceRepoId.trim() || !referenceNoteField.trim()))
+                (!referenceRepoId.trim() || !referenceNoteField.trim())) ||
+              (referenceImportMode === "local" &&
+                (!referenceLocalPath.trim() || !referenceNoteField.trim()))
             }
             className="rounded-lg bg-gray-900 px-6 py-2 text-white hover:bg-gray-800 disabled:opacity-50"
           >
