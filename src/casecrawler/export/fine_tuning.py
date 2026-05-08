@@ -294,13 +294,29 @@ def export_chat_record(record: SyntheticRecord) -> dict[str, Any]:
     }
 
 
-def export_multimodal_record(record: SyntheticRecord) -> dict[str, Any]:
+def export_multimodal_record(
+    record: SyntheticRecord,
+    *,
+    image_package_paths: dict[str, str] | None = None,
+) -> dict[str, Any]:
     clinical_context = _clinical_context(record)
-    images = [_multimodal_image_payload(asset) for asset in record.imaging]
+    image_package_paths = image_package_paths or {}
+    images = [
+        _multimodal_image_payload(
+            asset,
+            package_path=image_package_paths.get(asset.image_id),
+        )
+        for asset in record.imaging
+    ]
     image_payloads = {image["image_id"]: image for image in images}
     image_text_pairs = [
         {
             "image_id": asset.image_id,
+            **(
+                {"package_path": image_package_paths[asset.image_id]}
+                if asset.image_id in image_package_paths
+                else {}
+            ),
             "text": asset.report_text,
             "task": "radiology_image_report_alignment",
             "labels": [label.display for label in asset.labels],
@@ -332,6 +348,7 @@ def _multimodal_supervised_tasks(
         image_payload = image_payloads.get(pair["image_id"], {})
         image_input = {
             "image_id": pair["image_id"],
+            "package_path": image_payload.get("package_path"),
             "clinical_context": clinical_context,
             "image_metadata": image_payload.get("image_metadata"),
         }
@@ -503,10 +520,15 @@ def export_medication_reconciliation_records(
     return examples
 
 
-def _multimodal_image_payload(asset) -> dict[str, Any]:
+def _multimodal_image_payload(
+    asset,
+    *,
+    package_path: str | None = None,
+) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "image_id": asset.image_id,
         "file_path": asset.file_path,
+        "package_path": package_path,
         "modality": asset.modality,
         "body_region": asset.body_region,
         "prompt": asset.prompt,
@@ -1008,7 +1030,12 @@ def export_parquet_bytes(records: Iterable[SyntheticRecord]) -> tuple[bytes, int
     return buffer.getvalue(), len(rows)
 
 
-def export_record(record: SyntheticRecord, export_format: str | ExportFormat) -> dict[str, Any]:
+def export_record(
+    record: SyntheticRecord,
+    export_format: str | ExportFormat,
+    *,
+    image_package_paths: dict[str, str] | None = None,
+) -> dict[str, Any]:
     resolved_format = ExportFormat(export_format)
     if resolved_format == ExportFormat.SFT_JSONL:
         return export_sft_record(record)
@@ -1044,7 +1071,10 @@ def export_record(record: SyntheticRecord, export_format: str | ExportFormat) ->
     if resolved_format == ExportFormat.TOOL_CALL_JSONL:
         return export_tool_call_record(record)
     if resolved_format == ExportFormat.MULTIMODAL_JSONL:
-        return export_multimodal_record(record)
+        return export_multimodal_record(
+            record,
+            image_package_paths=image_package_paths,
+        )
     if resolved_format == ExportFormat.TIME_SERIES_JSONL:
         return {
             "record_id": record.record_id,
@@ -1068,6 +1098,8 @@ def export_record(record: SyntheticRecord, export_format: str | ExportFormat) ->
 def export_record_payloads(
     record: SyntheticRecord,
     export_format: str | ExportFormat,
+    *,
+    image_package_paths: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     resolved_format = ExportFormat(export_format)
     if resolved_format == ExportFormat.NOTE_FACT_SFT_JSONL:
@@ -1078,7 +1110,13 @@ def export_record_payloads(
         return export_medication_reconciliation_records(record)
     if resolved_format == ExportFormat.TIME_SERIES_JSONL:
         return export_time_series_records(record)
-    return [export_record(record, resolved_format)]
+    return [
+        export_record(
+            record,
+            resolved_format,
+            image_package_paths=image_package_paths,
+        )
+    ]
 
 
 def export_jsonl_split_package(
@@ -1102,6 +1140,7 @@ def export_jsonl_split_package(
     split_records = _split_records(record_list, ratios=ratios, seed=seed)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
+    image_artifact_entries, image_artifacts = _copy_image_artifacts(record_list, output_path)
 
     split_entries = {}
     total_examples = 0
@@ -1110,7 +1149,14 @@ def export_jsonl_split_package(
         example_count = 0
         with file_path.open("w") as f:
             for record in split_items:
-                for payload in export_record_payloads(record, resolved_format):
+                for payload in export_record_payloads(
+                    record,
+                    resolved_format,
+                    image_package_paths=_record_image_package_paths(
+                        record,
+                        image_artifacts,
+                    ),
+                ):
                     f.write(json.dumps(payload, sort_keys=True) + "\n")
                     example_count += 1
         total_examples += example_count
@@ -1121,7 +1167,6 @@ def export_jsonl_split_package(
             "record_ids": [record.record_id for record in split_items],
         }
     artifact_entries = _write_audit_artifacts(output_path, audit_artifacts or {})
-    image_artifact_entries, image_artifacts = _copy_image_artifacts(record_list, output_path)
     files = _package_file_metadata(
         {
             **{
@@ -2171,6 +2216,18 @@ def _copy_image_artifacts(
                 "source_path": str(source_path),
             }
     return entries, artifacts
+
+
+def _record_image_package_paths(
+    record: SyntheticRecord,
+    image_artifacts: dict[str, dict[str, str]],
+) -> dict[str, str]:
+    package_paths: dict[str, str] = {}
+    for asset in record.imaging:
+        artifact = image_artifacts.get(f"{record.record_id}:{asset.image_id}")
+        if artifact and artifact.get("package_path"):
+            package_paths[asset.image_id] = artifact["package_path"]
+    return package_paths
 
 
 def _image_package_path(

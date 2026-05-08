@@ -209,6 +209,14 @@ def test_export_jsonl_split_package_copies_file_backed_images(tmp_path):
     assert copied_image.read_bytes() == image_path.read_bytes()
     assert package_path in manifest["files"]
     assert manifest["files"][package_path]["byte_size"] == image_path.stat().st_size
+    exported = json.loads((tmp_path / "package" / "train.jsonl").read_text())
+    assert exported["images"][0]["package_path"] == package_path
+    assert exported["image_text_pairs"][0]["package_path"] == package_path
+    supervised_tasks = {task["task"]: task for task in exported["supervised_tasks"]}
+    assert (
+        supervised_tasks["radiology_image_report_alignment"]["input"]["package_path"]
+        == package_path
+    )
     report = verify_jsonl_split_package(tmp_path / "package")
     assert report["valid"] is True
     assert report["checked_files"][package_path]["exists"] is True
