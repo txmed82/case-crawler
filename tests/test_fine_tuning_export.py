@@ -1400,6 +1400,113 @@ def test_verify_jsonl_split_package_rejects_tampered_checksum_and_counts(tmp_pat
     assert "splits.train.record_ids" in issue_fields
 
 
+def test_verify_jsonl_split_package_requires_release_row_provenance_and_policies(
+    tmp_path,
+):
+    record = _multimodal_record().model_copy(
+        update={
+            "dataset_id": "ds-split",
+            "metadata": {
+                "clinical_text_model_policy": {
+                    "backend": "llm",
+                    "provider": "ollama",
+                    "model_id": "medgemma-local",
+                    "license": "provider_terms",
+                    "gated": False,
+                    "use_policy": (
+                        "synthetic_clinical_text_review_outputs_before_release"
+                    ),
+                },
+                "imaging_model_policy": {
+                    "profile": "cxr_pneumonia_dreambooth",
+                    "backend": "diffusers",
+                    "model_id": "rexgradient/synthetic-chest-xray-pneumonia",
+                    "license": "cc-by-nc-4.0",
+                    "gated": False,
+                    "use_policy": (
+                        "non_commercial_no_derivatives_review_before_release"
+                    ),
+                },
+                "image_validator_policy": {
+                    "profile": "biomedclip",
+                    "backend": "BiomedCLIPImageValidator",
+                    "model_id": (
+                        "hf-hub:microsoft/"
+                        "BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+                    ),
+                    "license": "mit",
+                    "gated": False,
+                    "use_policy": "open_validation_model_review_alignment_scores",
+                },
+                "time_series_model_policy": {
+                    "profile": "timediff",
+                    "backend": "external",
+                    "model_id": "MuhangTian/TimeDiff",
+                    "license": "mit",
+                    "gated": False,
+                    "use_policy": "wrap_external_generator_validate_outputs",
+                },
+            },
+        }
+    )
+    export_jsonl_split_package(
+        [record],
+        tmp_path / "package",
+        "multimodal_jsonl",
+        dataset_id="ds-split",
+        audit_artifacts={
+            "quality_report.json": {
+                "dataset_id": "ds-split",
+                "record_count": 1,
+                "approved_count": 1,
+                "approval_rate": 1.0,
+                "export_ready": True,
+                "core_artifact_coverage": {
+                    key: True for key in REQUIRED_RELEASE_COVERAGE_KEYS
+                },
+                "multimodal_release_ready": False,
+                "multimodal_release_missing": ["radiology_images"],
+                "clinical_text_model_policy_counts": {
+                    (
+                        "backend=llm|provider=ollama|model_id=medgemma-local|"
+                        "gated=false|use_policy=synthetic"
+                    ): 1
+                },
+                "imaging_model_policy_counts": {
+                    "profile=cxr_pneumonia_dreambooth": 1
+                },
+                "image_validator_policy_counts": {"profile=biomedclip": 1},
+                "time_series_model_policy_counts": {"profile=timediff": 1},
+            }
+        },
+    )
+    train_path = tmp_path / "package" / "train.jsonl"
+    payload = json.loads(train_path.read_text())
+    payload["metadata"].pop("provenance")
+    payload["metadata"].pop("clinical_text_model_policy")
+    payload["metadata"].pop("imaging_model_policy")
+    payload["metadata"].pop("image_validator_policy")
+    payload["metadata"].pop("time_series_model_policy")
+    train_path.write_text(json.dumps(payload) + "\n")
+    manifest_path = tmp_path / "package" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files"]["train.jsonl"]["byte_size"] = train_path.stat().st_size
+    manifest["files"]["train.jsonl"]["sha256"] = hashlib.sha256(
+        train_path.read_bytes()
+    ).hexdigest()
+    manifest_path.write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path / "package")
+    issue_fields = {issue["field"] for issue in report["issues"]}
+
+    assert report["valid"] is False
+    assert "train.jsonl.line.1.metadata.provenance" in issue_fields
+    assert "train.jsonl.line.1.metadata.clinical_text_model_policy" in issue_fields
+    assert "train.jsonl.line.1.metadata.imaging_model_policy" in issue_fields
+    assert "train.jsonl.line.1.metadata.image_validator_policy" in issue_fields
+    assert "train.jsonl.line.1.metadata.time_series_model_policy" in issue_fields
+
+
 def test_export_note_fact_sft_records_creates_document_level_examples():
     record = _multimodal_record()
 
