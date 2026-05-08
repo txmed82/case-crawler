@@ -914,7 +914,7 @@ def generate_dataset(
 )
 @click.option(
     "--min-overall-score",
-    default=0.0,
+    default=0.1,
     type=click.FloatRange(0.0, 1.0),
     show_default=True,
     help="Minimum benchmark overall score for the release gate.",
