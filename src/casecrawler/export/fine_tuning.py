@@ -2769,6 +2769,8 @@ def _verify_benchmark_suite_report_artifact(
 def _verify_benchmark_suite_task_results(
     payload: dict[str, Any],
     issues: list[dict[str, str]],
+    *,
+    field_prefix: str = "audit_artifacts.benchmark_suite_report.json",
 ) -> None:
     task_results = payload.get("task_export_results")
     if task_results is None:
@@ -2776,27 +2778,18 @@ def _verify_benchmark_suite_task_results(
     if not isinstance(task_results, dict):
         issues.append(
             {
-                "field": (
-                    "audit_artifacts.benchmark_suite_report.json."
-                    "task_export_results"
-                ),
+                "field": f"{field_prefix}.task_export_results",
                 "message": "Benchmark suite task_export_results must be an object.",
             }
         )
         return
     suite_passed = payload.get("passed") is True
     for export_format, result in sorted(task_results.items()):
-        field_prefix = (
-            "audit_artifacts.benchmark_suite_report.json."
-            f"task_export_results.{export_format}"
-        )
+        task_field_prefix = f"{field_prefix}.task_export_results.{export_format}"
         if not isinstance(export_format, str) or not export_format.strip():
             issues.append(
                 {
-                    "field": (
-                        "audit_artifacts.benchmark_suite_report.json."
-                        "task_export_results"
-                    ),
+                    "field": f"{field_prefix}.task_export_results",
                     "message": "Benchmark suite task export key must be a string.",
                 }
             )
@@ -2804,7 +2797,7 @@ def _verify_benchmark_suite_task_results(
         if not isinstance(result, dict):
             issues.append(
                 {
-                    "field": field_prefix,
+                    "field": task_field_prefix,
                     "message": "Benchmark suite task export result must be an object.",
                 }
             )
@@ -2813,7 +2806,7 @@ def _verify_benchmark_suite_task_results(
         if not isinstance(reference_count, int):
             issues.append(
                 {
-                    "field": f"{field_prefix}.reference_count",
+                    "field": f"{task_field_prefix}.reference_count",
                     "message": (
                         "Benchmark suite task export result reference_count "
                         "must be an integer."
@@ -2823,7 +2816,7 @@ def _verify_benchmark_suite_task_results(
         elif suite_passed and reference_count < 1:
             issues.append(
                 {
-                    "field": f"{field_prefix}.reference_count",
+                    "field": f"{task_field_prefix}.reference_count",
                     "message": (
                         "Benchmark suite marks passed true but task export "
                         "has no reference results."
@@ -2834,7 +2827,7 @@ def _verify_benchmark_suite_task_results(
         if not isinstance(task_passed, bool):
             issues.append(
                 {
-                    "field": f"{field_prefix}.passed",
+                    "field": f"{task_field_prefix}.passed",
                     "message": (
                         "Benchmark suite task export result passed must be a boolean."
                     ),
@@ -2843,7 +2836,7 @@ def _verify_benchmark_suite_task_results(
         elif suite_passed and task_passed is not True:
             issues.append(
                 {
-                    "field": f"{field_prefix}.passed",
+                    "field": f"{task_field_prefix}.passed",
                     "message": (
                         "Benchmark suite marks passed true but task export "
                         "result is not passing."
@@ -2856,7 +2849,7 @@ def _verify_benchmark_suite_task_results(
         ):
             issues.append(
                 {
-                    "field": f"{field_prefix}.missing_reference_keys",
+                    "field": f"{task_field_prefix}.missing_reference_keys",
                     "message": (
                         "Benchmark suite task export result missing_reference_keys "
                         "must be a string list."
@@ -2866,7 +2859,7 @@ def _verify_benchmark_suite_task_results(
         elif suite_passed and missing:
             issues.append(
                 {
-                    "field": f"{field_prefix}.missing_reference_keys",
+                    "field": f"{task_field_prefix}.missing_reference_keys",
                     "message": (
                         "Benchmark suite marks passed true but task export "
                         f"is missing reference keys: {missing}."
@@ -3830,6 +3823,12 @@ def _verify_release_summary_benchmark_suite(
                     "must be an object."
                 ),
             }
+        )
+    else:
+        _verify_benchmark_suite_task_results(
+            benchmark_suite,
+            issues,
+            field_prefix=field_prefix,
         )
 
 

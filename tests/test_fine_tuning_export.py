@@ -1172,6 +1172,85 @@ def test_verify_jsonl_split_package_validates_release_package_summary_artifact(
     ) in issue_fields
 
 
+def test_verify_jsonl_split_package_rejects_passing_release_summary_with_failed_task_benchmarks(
+    tmp_path,
+):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    release_summary = {
+        "dataset_id": "ds-split",
+        "generated": 3,
+        "approved": 3,
+        "seeded_references": {"imported": ["ds-ref"]},
+        "quality_report": {
+            "export_ready": True,
+            "multimodal_release_ready": False,
+            "multimodal_release_missing": [],
+            "core_artifact_coverage": {
+                key: False for key in REQUIRED_RELEASE_COVERAGE_KEYS
+            },
+        },
+        "benchmark": {
+            "reference_dataset_id": "ds-ref",
+            "reference_key": "synthchex_75k",
+            "passed": True,
+            "overall_score": 0.9,
+            "failing_metrics": [],
+            "thresholds": {"min_overall_score": 0.75, "min_metric_score": 0.5},
+        },
+        "benchmark_suite": {
+            "passed": True,
+            "reference_count": 1,
+            "mean_overall_score": 0.9,
+            "task_export_results": {
+                "multimodal_jsonl": {
+                    "recommended_reference_keys": [
+                        "synthchex_75k",
+                        "radiology_report_consistency",
+                    ],
+                    "reference_count": 0,
+                    "missing_reference_keys": ["radiology_report_consistency"],
+                    "passed": False,
+                    "mean_overall_score": None,
+                    "results": [],
+                }
+            },
+        },
+    }
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+        audit_artifacts={"release_package_summary.json": release_summary},
+    )
+
+    report = verify_jsonl_split_package(tmp_path)
+    issue_fields = {issue["field"] for issue in report["issues"]}
+
+    assert report["valid"] is False
+    assert (
+        "audit_artifacts.release_package_summary.json.benchmark_suite."
+        "task_export_results.multimodal_jsonl.reference_count"
+    ) in issue_fields
+    assert (
+        "audit_artifacts.release_package_summary.json.benchmark_suite."
+        "task_export_results.multimodal_jsonl.passed"
+    ) in issue_fields
+    assert (
+        "audit_artifacts.release_package_summary.json.benchmark_suite."
+        "task_export_results.multimodal_jsonl.missing_reference_keys"
+    ) in issue_fields
+
+
 def test_verify_jsonl_split_package_validates_quality_report_dataset_id(tmp_path):
     records = [
         _multimodal_record().model_copy(
