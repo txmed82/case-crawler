@@ -418,6 +418,83 @@ def validate_medication_history(record: SyntheticRecord) -> list[ValidationIssue
     return issues
 
 
+def validate_medication_safety(record: SyntheticRecord) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    egfr = _first_numeric_lab(record, {"egfr", "estimated-gfr"})
+    potassium = _first_numeric_lab(record, {"potassium", "k"})
+    inr = _first_numeric_lab(record, {"inr", "international-normalized-ratio"})
+    systolic_bp = _first_numeric_vital(
+        record,
+        {"sbp", "systolic-bp", "systolic-blood-pressure"},
+    )
+
+    if egfr is not None and egfr < 30 and _has_active_medication(record, {"metformin"}):
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                modality=Modality.STRUCTURED_EHR,
+                field="medication_history.metformin_renal",
+                message="Active metformin conflicts with severe renal impairment.",
+            )
+        )
+
+    hyperkalemia_medications = {
+        "amiloride",
+        "eplerenone",
+        "lisinopril",
+        "losartan",
+        "potassium",
+        "potassium-chloride",
+        "spironolactone",
+        "triamterene",
+    }
+    if (
+        potassium is not None
+        and potassium >= 5.5
+        and _has_active_medication(record, hyperkalemia_medications)
+    ):
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                modality=Modality.STRUCTURED_EHR,
+                field="medication_history.hyperkalemia",
+                message="Active potassium-raising therapy conflicts with hyperkalemia.",
+            )
+        )
+
+    if inr is not None and inr >= 4.0 and _has_active_medication(record, {"warfarin"}):
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                modality=Modality.STRUCTURED_EHR,
+                field="medication_history.warfarin_inr",
+                message="Active warfarin conflicts with a supratherapeutic INR.",
+            )
+        )
+
+    nitrate_medications = {
+        "isosorbide",
+        "isosorbide-dinitrate",
+        "isosorbide-mononitrate",
+        "nitroglycerin",
+    }
+    if (
+        systolic_bp is not None
+        and systolic_bp < 90
+        and _has_active_medication(record, nitrate_medications)
+    ):
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                modality=Modality.STRUCTURED_EHR,
+                field="medication_history.nitrate_hypotension",
+                message="Active nitrate therapy conflicts with hypotension.",
+            )
+        )
+
+    return issues
+
+
 def validate_text_structured_contradictions(
     record: SyntheticRecord,
 ) -> list[ValidationIssue]:
@@ -608,6 +685,24 @@ def _first_numeric_vital(record: SyntheticRecord, names: set[str]) -> float | No
         if _normalize_name(vital.name) in names:
             return float(vital.value)
     return None
+
+
+def _first_numeric_lab(record: SyntheticRecord, names: set[str]) -> float | None:
+    for lab in record.labs:
+        if _normalize_name(lab.name) in names and isinstance(lab.value, int | float):
+            return float(lab.value)
+    return None
+
+
+def _has_active_medication(record: SyntheticRecord, names: set[str]) -> bool:
+    inactive_statuses = {"completed", "entered-in-error", "stopped"}
+    for medication in record.medication_history:
+        if medication.status.lower() in inactive_statuses:
+            continue
+        normalized = _normalize_name(medication.name)
+        if any(normalized == name or normalized.startswith(f"{name}-") for name in names):
+            return True
+    return False
 
 
 def _first_channel_value(channel) -> float | None:
