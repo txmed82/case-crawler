@@ -563,6 +563,42 @@ def test_dataset_cli_release_package_passes_llm_clinical_text_options(
     assert "Unknown provider: unknown-provider" in result.output
 
 
+def test_dataset_cli_release_package_passes_modalities_and_complexity(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    class FakePipeline:
+        async def generate(self, req: GenerationRequest):
+            captured.append(req)
+            raise ValueError("stop after capture")
+
+    monkeypatch.setattr("casecrawler.generation.synthetic_pipeline.SyntheticPipeline", FakePipeline)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "generate-release-package",
+            "sepsis",
+            "--count",
+            "1",
+            "--output-dir",
+            "release-package",
+            "--complexity",
+            "rare",
+            "--modalities",
+            "clinical_text,labs",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert captured[0].complexity == ComplexityProfile.RARE
+    assert captured[0].modalities == [Modality.CLINICAL_TEXT, Modality.LABS]
+
+
 def test_dataset_cli_requires_release_audit_artifacts_for_release_verification(
     tmp_path,
     monkeypatch,

@@ -137,6 +137,8 @@ export interface ReleasePackageRequest {
   topic: string;
   count?: number;
   recipe?: string;
+  complexity?: "simple" | "moderate" | "complex" | "rare";
+  modalities?: SyntheticModality[];
   export_format?: ExportFormat;
   seed?: string;
   cohort_constraints?: Record<string, unknown>;

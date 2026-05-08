@@ -811,6 +811,20 @@ def generate_dataset(
     ),
 )
 @click.option("--seed", default="casecrawler", show_default=True)
+@click.option(
+    "--modalities",
+    default=None,
+    help=(
+        "Comma-separated modalities: structured_ehr,clinical_text,labs,vitals,"
+        "time_series,imaging"
+    ),
+)
+@click.option(
+    "--complexity",
+    default=None,
+    type=click.Choice(["simple", "moderate", "complex", "rare"]),
+    help="Synthetic record complexity profile.",
+)
 @click.option("--age-min", default=None, type=int, help="Minimum generated patient age.")
 @click.option("--age-max", default=None, type=int, help="Maximum generated patient age.")
 @click.option("--sexes", default=None, help="Comma-separated sex cycle.")
@@ -911,6 +925,8 @@ def generate_release_package(
     recipe: str,
     export_format: str,
     seed: str,
+    modalities: str | None,
+    complexity: str | None,
     age_min: int | None,
     age_max: int | None,
     sexes: str | None,
@@ -947,6 +963,7 @@ def generate_release_package(
         seed_recommended_reference_fixtures,
     )
     from casecrawler.models.dataset import ExportFormat, GenerationRequest
+    from casecrawler.models.synthetic import ComplexityProfile, Modality
     from casecrawler.storage.dataset_store import DatasetStore
     from casecrawler.validation.benchmark import (
         DatasetBenchmark,
@@ -995,10 +1012,25 @@ def generate_release_package(
             if time_series_command
             else None
         )
+        selected_modalities = (
+            [Modality(value.strip()) for value in modalities.split(",") if value.strip()]
+            if modalities
+            else None
+        )
         req = GenerationRequest(
             topic=topic,
             count=count,
             recipe=recipe,
+            complexity=(
+                ComplexityProfile(complexity)
+                if complexity is not None
+                else GenerationRequest(topic=topic).complexity
+            ),
+            modalities=(
+                selected_modalities
+                if selected_modalities is not None
+                else GenerationRequest(topic=topic).modalities
+            ),
             cohort_constraints=cohort_constraints,
             export_formats=[ExportFormat(export_format)],
             clinical_text_backend=clinical_text_backend,

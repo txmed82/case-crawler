@@ -475,6 +475,36 @@ def test_dataset_api_release_package_passes_llm_clinical_text_options(
     assert "Unknown provider: unknown-provider" in response.json()["detail"]
 
 
+def test_dataset_api_release_package_passes_modalities_and_complexity(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    class FakePipeline:
+        async def generate(self, req):
+            captured.append(req)
+            raise ValueError("stop after capture")
+
+    monkeypatch.setattr(datasets_routes, "SyntheticPipeline", FakePipeline)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/release-package",
+        json={
+            "topic": "sepsis",
+            "count": 1,
+            "complexity": "rare",
+            "modalities": ["clinical_text", "labs"],
+        },
+    )
+
+    assert response.status_code == 422
+    assert captured[0].complexity == ComplexityProfile.RARE
+    assert captured[0].modalities == [Modality.CLINICAL_TEXT, Modality.LABS]
+
+
 def test_dataset_api_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)
