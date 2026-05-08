@@ -153,6 +153,7 @@ casecrawler import-reference-dataset \
   --note-field caption \
   --image-field image \
   --image-label-field label \
+  --image-label-map '{"0":"normal","1":"pneumonia"}' \
   --split train \
   --limit 100
 casecrawler benchmark-dataset \

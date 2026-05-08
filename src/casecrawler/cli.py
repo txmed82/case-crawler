@@ -246,6 +246,11 @@ def generation_recipes() -> None:
 @click.option("--patient-id-field", default=None, help="Optional source patient id field")
 @click.option("--image-field", default=None, help="Optional image field for multimodal references")
 @click.option("--image-label-field", default=None, help="Optional image label field")
+@click.option(
+    "--image-label-map",
+    default=None,
+    help='Optional JSON object mapping source image labels, e.g. \'{"0":"normal"}\'',
+)
 @click.option("--image-modality", default="XR", help="Imaging modality for image references")
 @click.option("--image-body-region", default="chest", help="Body region for image references")
 @click.option("--lab-values-field", default=None, help="Optional structured lab array field")
@@ -271,6 +276,7 @@ def import_reference_dataset(
     patient_id_field: str | None,
     image_field: str | None,
     image_label_field: str | None,
+    image_label_map: str | None,
     image_modality: str,
     image_body_region: str,
     lab_values_field: str | None,
@@ -299,6 +305,7 @@ def import_reference_dataset(
         )
     if limit < 1:
         raise click.ClickException("limit must be at least 1.")
+    parsed_image_label_map = _parse_image_label_map(image_label_map)
     try:
         if repo_id:
             effective_split = split or "train"
@@ -313,6 +320,7 @@ def import_reference_dataset(
                 patient_id_field=patient_id_field,
                 image_field=image_field,
                 image_label_field=image_label_field,
+                image_label_map=parsed_image_label_map,
                 image_modality=image_modality,
                 image_body_region=image_body_region,
                 lab_values_field=lab_values_field,
@@ -360,6 +368,21 @@ def import_reference_dataset(
         f"Imported {len(records)} reference record(s) from {source_name} "
         f"into {dataset_id}"
     )
+
+
+def _parse_image_label_map(value: str | None) -> dict[str, str] | None:
+    if value is None:
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise click.ClickException("--image-label-map must be valid JSON.") from exc
+    if not isinstance(parsed, dict) or not all(
+        isinstance(key, str) and isinstance(item, str)
+        for key, item in parsed.items()
+    ):
+        raise click.ClickException("--image-label-map must be a JSON object of strings.")
+    return parsed
 
 
 @cli.command("import-reference-fixture")

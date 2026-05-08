@@ -1578,6 +1578,8 @@ def test_dataset_cli_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
                         ],
                     }
                 ],
+                "image": "cxr-ref.png",
+                "image_label": "1",
             }
         ]
 
@@ -1616,6 +1618,12 @@ def test_dataset_cli_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
             "medications",
             "--time-series-field",
             "signals",
+            "--image-field",
+            "image",
+            "--image-label-field",
+            "image_label",
+            "--image-label-map",
+            '{"1":"pneumonia"}',
             "--limit",
             "1",
         ],
@@ -1632,6 +1640,28 @@ def test_dataset_cli_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     assert record.vitals[0].name == "SpO2"
     assert record.medication_history[0].name == "Albuterol"
     assert record.time_series[0].name == "respiratory_rate"
+    assert record.imaging[0].labels[0].display == "Pneumonia"
+
+
+def test_dataset_cli_rejects_invalid_custom_image_label_map(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "import-reference-dataset",
+            "--repo-id",
+            "org/custom-image-reference",
+            "--dataset-id",
+            "ds-custom-reference",
+            "--image-label-map",
+            "[]",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--image-label-map must be a JSON object of strings." in result.output
 
 
 def test_dataset_cli_benchmark_reports_missing_reference_cleanly(tmp_path, monkeypatch):
