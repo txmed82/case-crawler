@@ -179,6 +179,23 @@ class SyntheaAdapter:
         labs: list[LabObservation] = []
         vitals: list[VitalObservation] = []
         for resource in observation_resources:
+            components = _observation_components(resource)
+            if components:
+                if _is_vital_observation(resource):
+                    vitals.extend(
+                        vital
+                        for vital in (
+                            _component_to_vital(resource, component, created_at)
+                            for component in components
+                        )
+                        if vital is not None
+                    )
+                else:
+                    labs.extend(
+                        _component_to_lab(resource, component, created_at)
+                        for component in components
+                    )
+                continue
             if _is_vital_observation(resource):
                 vital = _observation_to_vital(resource, created_at)
                 if vital is not None:
@@ -547,6 +564,71 @@ def _observation_to_lab(resource: dict, created_at: str) -> LabObservation:
         unit=quantity.get("unit", ""),
         effective_time=resource.get("effectiveDateTime", created_at),
     )
+
+
+def _observation_components(resource: dict) -> list[Mapping]:
+    return [
+        component
+        for component in resource.get("component") or []
+        if isinstance(component, Mapping)
+        and isinstance(component.get("valueQuantity"), Mapping)
+    ]
+
+
+def _component_to_lab(
+    resource: dict,
+    component: Mapping,
+    created_at: str,
+) -> LabObservation:
+    quantity = component.get("valueQuantity") or {}
+    code = component.get("code") or {}
+    primary_code = _primary_coding(code)
+    quantity_value = quantity.get("value")
+    value = quantity_value if quantity_value is not None else ""
+    return LabObservation(
+        name=_component_name(code, primary_code, fallback="Observation component"),
+        loinc=primary_code.get("code"),
+        value=value,
+        unit=quantity.get("unit", ""),
+        effective_time=resource.get("effectiveDateTime", created_at),
+    )
+
+
+def _component_to_vital(
+    resource: dict,
+    component: Mapping,
+    created_at: str,
+) -> VitalObservation | None:
+    quantity = component.get("valueQuantity") or {}
+    value = quantity.get("value")
+    if not isinstance(value, (int, float)):
+        return None
+    code = component.get("code") or {}
+    primary_code = _primary_coding(code)
+    return VitalObservation(
+        name=_component_name(code, primary_code, fallback="Vital sign component"),
+        value=float(value),
+        unit=quantity.get("unit", ""),
+        effective_time=resource.get("effectiveDateTime", created_at),
+    )
+
+
+def _primary_coding(codeable: object) -> Mapping:
+    if not isinstance(codeable, Mapping):
+        return {}
+    coding = codeable.get("coding") or []
+    return next((item for item in coding if isinstance(item, Mapping)), {})
+
+
+def _component_name(
+    codeable: object,
+    primary_code: Mapping,
+    *,
+    fallback: str,
+) -> str:
+    if isinstance(codeable, Mapping) and codeable.get("text"):
+        return str(codeable["text"])
+    return str(primary_code.get("display") or primary_code.get("code") or fallback)
 
 
 def _modalities(
