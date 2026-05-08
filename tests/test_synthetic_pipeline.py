@@ -53,6 +53,51 @@ async def test_synthetic_pipeline_applies_generation_recipe():
         "radiology_cxr_report"
     )
     assert result["records"][0].imaging
+    assert result["records"][0].metadata["imaging_model_policy"] == {
+        "profile": "stable_diffusion_chest_xray",
+        "model_id": "danyalmalik/stable-diffusion-chest-xray",
+        "license": "creativeml-openrail-m",
+        "gated": False,
+        "use_policy": "openrail_review_outputs_before_release",
+    }
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_full_multimodal_recipe_records_general_image_policy(
+    tmp_path,
+):
+    pipeline = SyntheticPipeline(
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="acute care",
+            recipe="full_multimodal_acute_care",
+            count=1,
+        )
+    )
+
+    record = result["records"][0]
+    assert {
+        Modality.STRUCTURED_EHR,
+        Modality.CLINICAL_TEXT,
+        Modality.LABS,
+        Modality.VITALS,
+        Modality.TIME_SERIES,
+        Modality.IMAGING,
+    }.issubset(set(record.modalities))
+    assert record.imaging
+    assert record.time_series
+    assert record.metadata["imaging_model_policy"] == {
+        "profile": "prompt2medimage",
+        "model_id": "Nihirc/Prompt2MedImage",
+        "license": "wtfpl",
+        "gated": False,
+        "use_policy": "open_model_review_outputs_before_release",
+    }
 
 
 @pytest.mark.asyncio
