@@ -601,6 +601,40 @@ def test_dataset_cli_release_package_passes_modalities_and_complexity(
     assert result.exit_code != 0
     assert captured[0].complexity == ComplexityProfile.RARE
     assert captured[0].modalities == [Modality.CLINICAL_TEXT, Modality.LABS]
+    assert "complexity" in captured[0].model_fields_set
+    assert "modalities" in captured[0].model_fields_set
+
+
+def test_dataset_cli_release_package_omits_unprovided_recipe_overrides(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    class FakePipeline:
+        async def generate(self, req: GenerationRequest):
+            captured.append(req)
+            raise ValueError("stop after capture")
+
+    monkeypatch.setattr("casecrawler.generation.synthetic_pipeline.SyntheticPipeline", FakePipeline)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "generate-release-package",
+            "sepsis",
+            "--count",
+            "1",
+            "--output-dir",
+            "release-package",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "complexity" not in captured[0].model_fields_set
+    assert "modalities" not in captured[0].model_fields_set
 
 
 def test_dataset_cli_requires_release_audit_artifacts_for_release_verification(

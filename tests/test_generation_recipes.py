@@ -80,6 +80,32 @@ def test_apply_generation_recipe_preserves_explicit_overrides():
     assert req.cohort_constraints["age_max"] == 88
 
 
+def test_apply_generation_recipe_preserves_explicit_default_value_overrides():
+    default_modalities = [
+        Modality.STRUCTURED_EHR,
+        Modality.CLINICAL_TEXT,
+        Modality.LABS,
+        Modality.VITALS,
+    ]
+
+    req = apply_generation_recipe(
+        GenerationRequest(
+            topic="acute care",
+            recipe="full_multimodal_acute_care",
+            modalities=default_modalities,
+            export_formats=[ExportFormat.SFT_JSONL],
+            complexity=ComplexityProfile.MODERATE,
+            validation_threshold=0.8,
+        )
+    )
+
+    assert req.modalities == default_modalities
+    assert req.export_formats == [ExportFormat.SFT_JSONL]
+    assert req.complexity == ComplexityProfile.MODERATE
+    assert req.validation_threshold == 0.8
+    assert req.cohort_constraints["age_min"] == 45
+
+
 def test_icu_recipe_recommends_note_fact_sft_export():
     req = apply_generation_recipe(
         GenerationRequest(topic="sepsis", recipe="icu_timeseries_notes")

@@ -163,28 +163,31 @@ async def generate_release_package(req: ReleasePackageRequest):
             detail="Release package export writes JSONL split packages, not parquet.",
         )
     try:
-        generation_request = GenerationRequest(
-            topic=req.topic,
-            count=req.count,
-            recipe=req.recipe,
-            complexity=req.complexity or GenerationRequest(topic=req.topic).complexity,
-            modalities=req.modalities or GenerationRequest(topic=req.topic).modalities,
-            cohort_constraints=req.cohort_constraints,
-            export_formats=[req.export_format],
-            clinical_text_backend=req.clinical_text_backend,
-            clinical_text_model_profile=req.clinical_text_model_profile,
-            clinical_text_command=req.clinical_text_command,
-            llm_provider=req.llm_provider,
-            llm_model=req.llm_model,
-            ollama_base_url=req.ollama_base_url,
-            imaging_backend=req.imaging_backend,
-            imaging_model_profile=req.imaging_model_profile,
-            diffusers_model_id=req.diffusers_model_id,
-            imaging_command=req.imaging_command,
-            time_series_backend=req.time_series_backend,
-            time_series_model_profile=req.time_series_model_profile,
-            time_series_command=req.time_series_command,
-        )
+        request_kwargs = {
+            "topic": req.topic,
+            "count": req.count,
+            "recipe": req.recipe,
+            "cohort_constraints": req.cohort_constraints,
+            "export_formats": [req.export_format],
+            "clinical_text_backend": req.clinical_text_backend,
+            "clinical_text_model_profile": req.clinical_text_model_profile,
+            "clinical_text_command": req.clinical_text_command,
+            "llm_provider": req.llm_provider,
+            "llm_model": req.llm_model,
+            "ollama_base_url": req.ollama_base_url,
+            "imaging_backend": req.imaging_backend,
+            "imaging_model_profile": req.imaging_model_profile,
+            "diffusers_model_id": req.diffusers_model_id,
+            "imaging_command": req.imaging_command,
+            "time_series_backend": req.time_series_backend,
+            "time_series_model_profile": req.time_series_model_profile,
+            "time_series_command": req.time_series_command,
+        }
+        if req.complexity is not None:
+            request_kwargs["complexity"] = req.complexity
+        if req.modalities is not None:
+            request_kwargs["modalities"] = req.modalities
+        generation_request = GenerationRequest(**request_kwargs)
         result = await SyntheticPipeline().generate(generation_request)
     except ValueError as err:
         raise HTTPException(status_code=422, detail=str(err)) from err
