@@ -56,6 +56,8 @@ class StructuredGenerator:
             patient_id=f"pat-{uuid5(NAMESPACE_URL, f'{stable_prefix}:patient')}",
             age=age,
             sex=sex,
+            demographics=_patient_demographics(req.cohort_constraints, age, sex, index),
+            social_history=_social_history_for_index(req.cohort_constraints, index),
         )
         encounter = Encounter(
             encounter_id=f"enc-{uuid5(NAMESPACE_URL, f'{stable_prefix}:encounter')}",
@@ -184,6 +186,89 @@ def _sex_for_index(cohort_constraints: dict, index: int) -> str:
     if not sexes:
         raise ValueError("cohort_constraints.sexes must contain at least one value.")
     return sexes[index % len(sexes)]
+
+
+def _patient_demographics(
+    cohort_constraints: dict,
+    age: int,
+    sex: str,
+    index: int,
+) -> dict:
+    return {
+        "age_group": _age_group(age),
+        "sex_at_generation": sex,
+        "race": _cycle_constraint(
+            cohort_constraints,
+            "races",
+            ["synthetic_white", "synthetic_black", "synthetic_asian", "synthetic_other"],
+            index,
+        ),
+        "ethnicity": _cycle_constraint(
+            cohort_constraints,
+            "ethnicities",
+            ["synthetic_not_hispanic_or_latino", "synthetic_hispanic_or_latino"],
+            index,
+        ),
+        "insurance": _cycle_constraint(
+            cohort_constraints,
+            "insurance",
+            ["synthetic_medicare", "synthetic_private", "synthetic_medicaid"],
+            index,
+        ),
+    }
+
+
+def _social_history_for_index(cohort_constraints: dict, index: int) -> dict:
+    return {
+        "smoking_status": _cycle_constraint(
+            cohort_constraints,
+            "smoking_statuses",
+            ["never", "former", "current"],
+            index,
+        ),
+        "alcohol_use": _cycle_constraint(
+            cohort_constraints,
+            "alcohol_use",
+            ["none", "occasional", "moderate"],
+            index,
+        ),
+        "housing": _cycle_constraint(
+            cohort_constraints,
+            "housing",
+            ["stable", "unstable"],
+            index,
+        ),
+    }
+
+
+def _cycle_constraint(
+    cohort_constraints: dict,
+    key: str,
+    fallback: list[str],
+    index: int,
+) -> str:
+    configured = cohort_constraints.get(key)
+    if configured is None:
+        values = fallback
+    elif isinstance(configured, str):
+        values = [part.strip() for part in configured.split(",") if part.strip()]
+    elif isinstance(configured, list):
+        values = [str(part).strip() for part in configured if str(part).strip()]
+    else:
+        raise ValueError(f"cohort_constraints.{key} must be a list or comma-separated string.")
+    if not values:
+        raise ValueError(f"cohort_constraints.{key} must contain at least one value.")
+    return values[index % len(values)]
+
+
+def _age_group(age: int) -> str:
+    if age < 18:
+        return "pediatric"
+    if age < 45:
+        return "adult"
+    if age < 65:
+        return "middle_aged"
+    return "older_adult"
 
 
 def _coerce_int(value, field_name: str) -> int:
