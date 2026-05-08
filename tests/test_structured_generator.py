@@ -48,6 +48,44 @@ def test_structured_generator_canonicalizes_base_time_for_seed():
     assert first.provenance.created_at == second.provenance.created_at
 
 
+def test_structured_generator_can_emit_longitudinal_encounter_timeline():
+    req = GenerationRequest(
+        topic="heart failure",
+        cohort_constraints={
+            "base_time": "2026-02-03T04:05:06",
+            "encounter_count": 3,
+        },
+    )
+
+    record = StructuredGenerator().generate("ds-one", req, 0)
+
+    assert [encounter.start for encounter in record.encounters] == [
+        "2026-02-03T04:05:06",
+        "2026-02-04T04:05:06",
+        "2026-02-05T04:05:06",
+    ]
+    assert [encounter.end for encounter in record.encounters] == [
+        "2026-02-03T10:05:06",
+        "2026-02-04T10:05:06",
+        "2026-02-05T10:05:06",
+    ]
+    assert record.encounters[0].diagnoses[0].display == "heart failure exacerbation"
+    assert record.encounters[1].diagnoses[0].display == "heart failure exacerbation"
+    assert record.encounters[1].reason == "heart failure follow-up 2"
+    assert record.encounters[2].reason == "heart failure follow-up 3"
+    assert record.metadata["cohort_constraints"]["encounter_count"] == 3
+
+
+def test_structured_generator_rejects_invalid_encounter_count():
+    req = GenerationRequest(
+        topic="sepsis",
+        cohort_constraints={"encounter_count": 0},
+    )
+
+    with pytest.raises(ValueError, match="encounter_count"):
+        StructuredGenerator().generate("ds-one", req, 0)
+
+
 def test_structured_generator_seed_sorts_modalities():
     first_req = GenerationRequest(
         topic="sepsis",
