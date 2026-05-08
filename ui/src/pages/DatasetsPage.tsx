@@ -9,6 +9,7 @@ import {
   fetchDatasetQuality,
   fetchDatasetReviewQueue,
   fetchDatasets,
+  datasetImageUrl,
   saveRecordReview,
 } from "../api/client";
 import type {
@@ -932,6 +933,32 @@ function RecordPreview({ record }: { record: SyntheticRecordPreview }) {
         <div className="mt-3 rounded-md bg-gray-50 p-3">
           <p className="text-xs font-medium uppercase text-gray-500">{note.note_type}</p>
           <p className="mt-1 line-clamp-3 text-sm text-gray-700">{note.clean_text}</p>
+        </div>
+      )}
+      {record.imaging.length > 0 && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {record.imaging.slice(0, 3).map((image) => (
+            <div key={image.image_id} className="overflow-hidden rounded-md border border-gray-200">
+              {image.file_path ? (
+                <img
+                  src={datasetImageUrl(record.dataset_id, image.image_id)}
+                  alt={`${image.modality} ${image.body_region}`}
+                  className="aspect-video w-full bg-gray-100 object-contain"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="flex aspect-video items-center justify-center bg-gray-100 text-xs text-gray-500">
+                  No image file
+                </div>
+              )}
+              <div className="p-2 text-xs text-gray-600">
+                <p className="font-medium text-gray-900">
+                  {image.modality} {image.body_region}
+                </p>
+                <p className="mt-1 truncate">{image.image_id}</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
       {scores && (
