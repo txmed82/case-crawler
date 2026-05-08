@@ -28,6 +28,7 @@ from casecrawler.export.fine_tuning import (
 from casecrawler.models.synthetic import (
     AllergyIntolerance,
     ClinicalDocument,
+    ClinicalOrder,
     Code,
     ComplexityProfile,
     Encounter,
@@ -109,6 +110,7 @@ def test_export_sft_extract_record_targets_full_structured_context():
     assert assistant_payload["vitals"][0]["name"] == "Heart rate"
     assert assistant_payload["medication_history"][0]["name"] == "Ceftriaxone"
     assert assistant_payload["allergies"][0]["substance"] == "Penicillin"
+    assert assistant_payload["orders"][0]["display"] == "Lactate"
     assert assistant_payload["time_series"][0]["name"] == "heart_rate"
     assert assistant_payload["documents"][0]["document_id"] == "doc-1"
     assert assistant_payload["imaging"][0]["image_id"] == "img-1"
@@ -1722,6 +1724,7 @@ def test_export_note_fact_sft_records_creates_document_level_examples():
     assert target["record_context"]["labs"][0]["name"] == "Lactate"
     assert target["record_context"]["vitals"][0]["name"] == "Heart rate"
     assert target["record_context"]["medication_history"][0]["name"] == "Ceftriaxone"
+    assert target["record_context"]["orders"][0]["display"] == "Lactate"
     assert target["record_context"]["diagnoses"][0]["display"] == "Sepsis"
     assert target["record_context"]["procedures"][0]["display"] == (
         "Central venous catheter placement"
@@ -2122,6 +2125,8 @@ def test_export_fhir_record_contains_training_bundle_resources():
     assert "Procedure" in resource_types
     assert "MedicationStatement" in resource_types
     assert "AllergyIntolerance" in resource_types
+    assert "ServiceRequest" in resource_types
+    assert "MedicationRequest" in resource_types
     assert "DocumentReference" in resource_types
     assert "DiagnosticReport" in resource_types
     assert "Provenance" in resource_types
@@ -2154,6 +2159,16 @@ def test_export_fhir_record_contains_training_bundle_resources():
     )
     assert allergy["code"]["coding"][0]["display"] == "Penicillin"
     assert allergy["reaction"][0]["manifestation"][0]["text"] == "hives"
+    service_request = next(
+        resource for resource in resources if resource["resourceType"] == "ServiceRequest"
+    )
+    medication_request = next(
+        resource for resource in resources if resource["resourceType"] == "MedicationRequest"
+    )
+    assert service_request["code"]["coding"][0]["display"] == "Lactate"
+    assert medication_request["medicationCodeableConcept"]["coding"][0]["display"] == (
+        "Ceftriaxone"
+    )
     lab = next(
         resource
         for resource in resources
@@ -2507,6 +2522,30 @@ def _multimodal_record() -> SyntheticRecord:
                 severity="moderate",
                 recorded_at="2026-05-01",
             )
+        ],
+        orders=[
+            ClinicalOrder(
+                order_id="ord-lactate",
+                order_type="laboratory",
+                display="Lactate",
+                code="2524-7",
+                system="LOINC",
+                status="completed",
+                priority="stat",
+                ordered_at="2026-05-06T10:00:00",
+                encounter_id="enc-1",
+            ),
+            ClinicalOrder(
+                order_id="ord-ceftriaxone",
+                order_type="medication",
+                display="Ceftriaxone",
+                code="2193",
+                system="RxNorm",
+                status="active",
+                priority="stat",
+                ordered_at="2026-05-06T10:00:00",
+                encounter_id="enc-1",
+            ),
         ],
         time_series=[
             TimeSeriesChannel(

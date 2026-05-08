@@ -402,6 +402,7 @@ def _count_artifacts(
             medication_frequency_counts[medication.frequency] += 1
         medication_status_counts[medication.status or "unknown"] += 1
     artifact_counts["allergies"] += len(record.allergies)
+    artifact_counts["orders"] += len(record.orders)
     artifact_counts["time_series_channels"] += len(record.time_series)
     for channel in record.time_series:
         time_series_channel_counts[channel.name] += 1
@@ -857,6 +858,7 @@ def _multimodal_release_readiness(
         "vitals": artifact_counts.get("vitals", 0) > 0,
         "medication_history": artifact_counts.get("medications", 0) > 0,
         "allergy_intolerances": artifact_counts.get("allergies", 0) > 0,
+        "clinical_orders": artifact_counts.get("orders", 0) > 0,
         "messy_clinical_text": artifact_counts.get("messy_documents", 0) > 0,
         "physician_notes": _physician_note_count(note_type_counts) > 0,
         "nursing_notes": note_type_counts.get("nursing_note", 0) > 0,

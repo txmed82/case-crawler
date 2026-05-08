@@ -5,6 +5,7 @@ from casecrawler.export.release_audit import build_objective_coverage_audit
 from casecrawler.models.synthetic import (
     AllergyIntolerance,
     ClinicalDocument,
+    ClinicalOrder,
     Code,
     ComplexityProfile,
     Encounter,
@@ -123,6 +124,18 @@ def _record(record_id: str, *, approved: bool = True, issues=None) -> SyntheticR
                 reaction="hives",
                 severity="moderate",
                 recorded_at="2026-01-01",
+            )
+        ],
+        orders=[
+            ClinicalOrder(
+                order_id=f"ord-{record_id}-lab",
+                order_type="laboratory",
+                display="WBC",
+                code="6690-2",
+                system="LOINC",
+                status="completed",
+                ordered_at="2026-01-01T00:00:00",
+                encounter_id=f"enc-{record_id}",
             )
         ],
         provenance=Provenance(generator="unit-test", created_at="2026-01-01T00:00:00"),
@@ -446,6 +459,7 @@ def test_quality_report_marks_multimodal_release_ready_with_core_artifacts(tmp_p
     assert report.core_artifact_coverage["vital_signs_flowsheets"] is True
     assert report.core_artifact_coverage["medication_administration_records"] is True
     assert report.core_artifact_coverage["allergy_intolerances"] is True
+    assert report.core_artifact_coverage["clinical_orders"] is True
     assert report.core_artifact_coverage["discharge_summaries"] is True
 
 
@@ -456,6 +470,15 @@ def test_quality_report_tracks_missing_allergy_intolerance_release_coverage():
 
     assert report.core_artifact_coverage["allergy_intolerances"] is False
     assert "allergy_intolerances" in report.multimodal_release_missing
+
+
+def test_quality_report_tracks_missing_clinical_order_release_coverage():
+    record = _record("rec-1").model_copy(update={"orders": []})
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.core_artifact_coverage["clinical_orders"] is False
+    assert "clinical_orders" in report.multimodal_release_missing
 
 
 def test_quality_report_blocks_release_when_task_reference_coverage_is_missing(

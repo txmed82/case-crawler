@@ -30,6 +30,7 @@ REQUIRED_RELEASE_COVERAGE_KEYS = frozenset(
         "medication_administration_records",
         "medication_history",
         "allergy_intolerances",
+        "clinical_orders",
         "messy_clinical_text",
         "modality_alignment_scores",
         "no_blocking_quality_issues",
@@ -106,6 +107,8 @@ def export_note_fact_sft_records(record: SyntheticRecord) -> list[dict[str, Any]
         "labs": [lab.model_dump() for lab in record.labs],
         "vitals": [vital.model_dump() for vital in record.vitals],
         "medication_history": [med.model_dump() for med in record.medication_history],
+        "allergies": [allergy.model_dump() for allergy in record.allergies],
+        "orders": [order.model_dump() for order in record.orders],
         "imaging_labels": [
             {
                 "image_id": asset.image_id,
@@ -736,6 +739,7 @@ def export_fhir_record(record: SyntheticRecord) -> dict[str, Any]:
         _entry(_allergy_intolerance_resource(record, allergy))
         for allergy in record.allergies
     )
+    entries.extend(_entry(_order_resource(record, order)) for order in record.orders)
     entries.extend(
         _entry(_document_reference_resource(record, document))
         for document in record.documents
@@ -4255,6 +4259,7 @@ def _clinical_context(record: SyntheticRecord) -> dict[str, Any]:
         "vitals": [vital.model_dump() for vital in record.vitals],
         "medication_history": [med.model_dump() for med in record.medication_history],
         "allergies": [allergy.model_dump() for allergy in record.allergies],
+        "orders": [order.model_dump() for order in record.orders],
         "time_series": [channel.model_dump() for channel in record.time_series],
         "documents": [document.model_dump() for document in record.documents],
         "imaging": [asset.model_dump() for asset in record.imaging],
@@ -4378,6 +4383,7 @@ def _tool_schema() -> dict[str, Any]:
             "vitals": {"type": "array", "items": {"type": "object"}},
             "medication_history": {"type": "array", "items": {"type": "object"}},
             "allergies": {"type": "array", "items": {"type": "object"}},
+            "orders": {"type": "array", "items": {"type": "object"}},
             "time_series": {"type": "array", "items": {"type": "object"}},
             "documents": {"type": "array", "items": {"type": "object"}},
             "imaging": {"type": "array", "items": {"type": "object"}},
@@ -4393,6 +4399,7 @@ def _tool_schema() -> dict[str, Any]:
             "vitals",
             "medication_history",
             "allergies",
+            "orders",
             "time_series",
             "documents",
             "imaging",
@@ -4703,6 +4710,57 @@ def _allergy_intolerance_resource(record: SyntheticRecord, allergy) -> dict[str,
         resource["reaction"] = [reaction]
     if allergy.recorded_at:
         resource["recordedDate"] = allergy.recorded_at
+    return resource
+
+
+def _order_resource(record: SyntheticRecord, order) -> dict[str, Any]:
+    if order.order_type == "medication":
+        resource: dict[str, Any] = {
+            "resourceType": "MedicationRequest",
+            "id": order.order_id,
+            "status": order.status,
+            "intent": order.intent,
+            "subject": _patient_reference(record),
+            "medicationCodeableConcept": {"text": order.display},
+            "authoredOn": order.ordered_at,
+        }
+        if order.code:
+            resource["medicationCodeableConcept"] = {
+                "coding": [
+                    {
+                        "system": order.system or "synthetic",
+                        "code": order.code,
+                        "display": order.display,
+                    }
+                ],
+                "text": order.display,
+            }
+    else:
+        resource = {
+            "resourceType": "ServiceRequest",
+            "id": order.order_id,
+            "status": order.status,
+            "intent": order.intent,
+            "category": [{"text": order.order_type}],
+            "code": {"text": order.display},
+            "subject": _patient_reference(record),
+            "authoredOn": order.ordered_at,
+        }
+        if order.code:
+            resource["code"] = {
+                "coding": [
+                    {
+                        "system": order.system or "synthetic",
+                        "code": order.code,
+                        "display": order.display,
+                    }
+                ],
+                "text": order.display,
+            }
+    if order.priority:
+        resource["priority"] = order.priority
+    if order.encounter_id:
+        resource["encounter"] = {"reference": f"Encounter/{order.encounter_id}"}
     return resource
 
 

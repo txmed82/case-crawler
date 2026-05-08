@@ -61,6 +61,7 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     assert "Procedures performed or planned:" in documents_by_type["ed_note"].clean_text
     assert "specialty consultation" in documents_by_type["ed_note"].clean_text
     assert "Allergies:" in documents_by_type["ed_note"].clean_text
+    assert "Orders:" in documents_by_type["ed_note"].clean_text
     assert "Relevant diagnoses:" in documents_by_type[
         "medication_administration_record"
     ].clean_text
@@ -91,6 +92,10 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     assert documents_by_type["ed_note"].extracted_facts["allergies"] == [
         "Sulfonamide antibiotics"
     ]
+    assert "Ceftriaxone" in documents_by_type["ed_note"].extracted_facts["orders"]
+    assert documents_by_type["ed_note"].extracted_facts["order_details"][0][
+        "encounter_id"
+    ] == record.encounters[0].encounter_id
     assert documents_by_type["ed_note"].extracted_facts["messy_text_profile"] == "standard"
 
 

@@ -97,6 +97,19 @@ class AllergyIntolerance(StrictModel):
     recorded_at: str | None = None
 
 
+class ClinicalOrder(StrictModel):
+    order_id: str
+    order_type: str
+    display: str
+    code: str | None = None
+    system: str | None = None
+    status: str = "active"
+    intent: str = "order"
+    priority: str | None = None
+    ordered_at: str
+    encounter_id: str | None = None
+
+
 class TimeSeriesPoint(StrictModel):
     timestamp: str
     values: dict[str, float]
@@ -160,6 +173,7 @@ class SyntheticRecord(StrictModel):
     vitals: list[VitalObservation] = Field(default_factory=list)
     medication_history: list[MedicationStatement] = Field(default_factory=list)
     allergies: list[AllergyIntolerance] = Field(default_factory=list)
+    orders: list[ClinicalOrder] = Field(default_factory=list)
     time_series: list[TimeSeriesChannel] = Field(default_factory=list)
     documents: list[ClinicalDocument] = Field(default_factory=list)
     imaging: list[ImagingAsset] = Field(default_factory=list)
