@@ -16,6 +16,34 @@ from casecrawler.models.dataset import ExportFormat
 from casecrawler.models.synthetic import SyntheticRecord
 
 
+REQUIRED_RELEASE_COVERAGE_KEYS = frozenset(
+    {
+        "approved_records",
+        "benchmark_reference",
+        "discharge_summaries",
+        "imaging_model_policy",
+        "lab_reports",
+        "labs",
+        "medication_administration_records",
+        "medication_history",
+        "messy_clinical_text",
+        "modality_alignment_scores",
+        "no_blocking_quality_issues",
+        "nursing_notes",
+        "physician_notes",
+        "radiology_images",
+        "radiology_reports",
+        "records",
+        "structured_ehr",
+        "task_reference_coverage",
+        "time_series",
+        "validation_reports",
+        "vital_signs_flowsheets",
+        "vitals",
+    }
+)
+
+
 def export_sft_record(record: SyntheticRecord, task: str = "summarize") -> dict[str, Any]:
     record_text = _record_text(record)
     if task == "summarize":
@@ -1931,6 +1959,36 @@ def _verify_quality_report_artifact(
                 ),
             }
         )
+    elif payload.get("multimodal_release_ready") is True:
+        if missing_keys := sorted(REQUIRED_RELEASE_COVERAGE_KEYS - set(coverage)):
+            issues.append(
+                {
+                    "field": "audit_artifacts.quality_report.json.core_artifact_coverage",
+                    "message": (
+                        "Quality report artifact is missing required release coverage "
+                        f"keys: {missing_keys}."
+                    ),
+                }
+            )
+        else:
+            failed_keys = sorted(
+                key
+                for key in REQUIRED_RELEASE_COVERAGE_KEYS
+                if coverage.get(key) is not True
+            )
+            if failed_keys:
+                issues.append(
+                    {
+                        "field": (
+                            "audit_artifacts.quality_report.json."
+                            "core_artifact_coverage"
+                        ),
+                        "message": (
+                            "Quality report artifact marks multimodal_release_ready "
+                            f"but has false release coverage keys: {failed_keys}."
+                        ),
+                    }
+                )
     missing = payload.get("multimodal_release_missing")
     if not isinstance(missing, list) or not all(
         isinstance(item, str) for item in missing
