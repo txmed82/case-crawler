@@ -261,6 +261,16 @@ class DatasetBenchmark:
                 set(reference_profile.time_series_channel_counts),
             ),
             _jaccard_metric(
+                "time_series_unit_overlap",
+                set(generated_profile.time_series_unit_counts),
+                set(reference_profile.time_series_unit_counts),
+            ),
+            _distribution_metric(
+                "time_series_unit_distribution",
+                generated_profile.time_series_unit_counts,
+                reference_profile.time_series_unit_counts,
+            ),
+            _jaccard_metric(
                 "time_series_backend_overlap",
                 set(generated_profile.time_series_backend_counts),
                 set(reference_profile.time_series_backend_counts),
@@ -269,6 +279,12 @@ class DatasetBenchmark:
                 "time_series_backend_distribution",
                 generated_profile.time_series_backend_counts,
                 reference_profile.time_series_backend_counts,
+            ),
+            _closeness_metric(
+                "mean_time_series_sampling_rate_hz",
+                generated_profile.mean_time_series_sampling_rate_hz,
+                reference_profile.mean_time_series_sampling_rate_hz,
+                tolerance=5.0,
             ),
             _closeness_metric(
                 "mean_time_series_points",
@@ -673,6 +689,16 @@ def _profile_metrics(
             set(reference_profile.time_series_channel_counts),
         ),
         _jaccard_metric(
+            "time_series_unit_overlap",
+            set(generated_profile.time_series_unit_counts),
+            set(reference_profile.time_series_unit_counts),
+        ),
+        _distribution_metric(
+            "time_series_unit_distribution",
+            generated_profile.time_series_unit_counts,
+            reference_profile.time_series_unit_counts,
+        ),
+        _jaccard_metric(
             "time_series_backend_overlap",
             set(generated_profile.time_series_backend_counts),
             set(reference_profile.time_series_backend_counts),
@@ -681,6 +707,12 @@ def _profile_metrics(
             "time_series_backend_distribution",
             generated_profile.time_series_backend_counts,
             reference_profile.time_series_backend_counts,
+        ),
+        _closeness_metric(
+            "mean_time_series_sampling_rate_hz",
+            generated_profile.mean_time_series_sampling_rate_hz,
+            reference_profile.mean_time_series_sampling_rate_hz,
+            tolerance=5.0,
         ),
         _closeness_metric(
             "mean_time_series_points",
@@ -790,6 +822,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     medication_route_counts: Counter[str] = Counter()
     medication_status_counts: Counter[str] = Counter()
     time_series_channel_counts: Counter[str] = Counter()
+    time_series_unit_counts: Counter[str] = Counter()
     time_series_backend_counts: Counter[str] = Counter()
     imaging_modality_counts: Counter[str] = Counter()
     imaging_body_region_counts: Counter[str] = Counter()
@@ -803,6 +836,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     lab_numeric_values: dict[str, list[float]] = {}
     vital_numeric_values: dict[str, list[float]] = {}
     time_series_numeric_values: dict[str, list[float]] = {}
+    time_series_sampling_rates: list[float] = []
     time_series_point_counts: list[int] = []
     time_series_durations: list[float] = []
     longitudinal_values: list[int] = []
@@ -872,7 +906,10 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             medication_status_counts[medication.status or "unknown"] += 1
         for channel in record.time_series:
             time_series_channel_counts[channel.name] += 1
+            time_series_unit_counts[channel.unit] += 1
             time_series_backend_counts[channel.generation_backend] += 1
+            if channel.sampling_rate_hz is not None:
+                time_series_sampling_rates.append(channel.sampling_rate_hz)
             time_series_point_counts.append(len(channel.points))
             _collect_time_series_numeric_values(channel, time_series_numeric_values)
             duration = _channel_duration_hours(channel)
@@ -940,8 +977,10 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         medication_route_counts=dict(sorted(medication_route_counts.items())),
         medication_status_counts=dict(sorted(medication_status_counts.items())),
         time_series_channel_counts=dict(sorted(time_series_channel_counts.items())),
+        time_series_unit_counts=dict(sorted(time_series_unit_counts.items())),
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
         time_series_numeric_summaries=_numeric_summaries(time_series_numeric_values),
+        mean_time_series_sampling_rate_hz=_mean_float(time_series_sampling_rates),
         mean_time_series_points=_mean(time_series_point_counts),
         mean_time_series_duration_hours=_mean_float(time_series_durations),
         imaging_modality_counts=dict(sorted(imaging_modality_counts.items())),

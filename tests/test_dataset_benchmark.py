@@ -100,6 +100,7 @@ def _record(
                 name="heart_rate",
                 unit="/min",
                 generation_backend="deterministic",
+                sampling_rate_hz=1.0,
                 points=[
                     TimeSeriesPoint(
                         timestamp="2026-01-01T00:00:00",
@@ -241,7 +242,9 @@ def test_profile_records_summarizes_multimodal_cohort():
         "vitals": 1.0,
     }
     assert profile.time_series_channel_counts == {"heart_rate": 2}
+    assert profile.time_series_unit_counts == {"/min": 2}
     assert profile.time_series_backend_counts == {"deterministic": 2}
+    assert profile.mean_time_series_sampling_rate_hz == 1.0
     assert profile.mean_time_series_points == 2
     assert profile.mean_time_series_duration_hours == 6
     assert profile.imaging_modality_counts == {"XR": 2}
@@ -436,8 +439,11 @@ def test_dataset_benchmark_compares_longitudinal_profiles():
         "modality_artifact_coverage:time_series",
         "modality_artifact_coverage:imaging",
         "time_series_channel_overlap",
+        "time_series_unit_overlap",
+        "time_series_unit_distribution",
         "time_series_backend_overlap",
         "time_series_backend_distribution",
+        "mean_time_series_sampling_rate_hz",
         "mean_time_series_points",
         "mean_time_series_duration_hours",
         "imaging_modality_overlap",
@@ -901,6 +907,34 @@ def test_dataset_benchmark_compares_time_series_generation_backends():
     }
     assert backend_metric.score == 0.0
     assert "time_series_backend_overlap" in report.failing_metrics
+
+
+def test_dataset_benchmark_fails_on_time_series_unit_and_sampling_rate_mismatch():
+    generated = [_record("rec-1", "ds-gen")]
+    reference_base = _record("ref-1", "ds-ref")
+    reference = [
+        reference_base.model_copy(
+            update={
+                "time_series": [
+                    reference_base.time_series[0].model_copy(
+                        update={
+                            "unit": "bpm",
+                            "sampling_rate_hz": 10.0,
+                        }
+                    )
+                ]
+            }
+        )
+    ]
+
+    report = DatasetBenchmark(min_metric_score=0.5).compare(generated, reference)
+    metrics = {metric.name: metric for metric in report.metrics}
+
+    assert metrics["time_series_unit_overlap"].score == 0.0
+    assert metrics["time_series_unit_distribution"].score == 0.0
+    assert metrics["mean_time_series_sampling_rate_hz"].score == 0.0
+    assert "time_series_unit_overlap" in report.failing_metrics
+    assert "mean_time_series_sampling_rate_hz" in report.failing_metrics
 
 
 def test_dataset_benchmark_supports_custom_pass_thresholds():
