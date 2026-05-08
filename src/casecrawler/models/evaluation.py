@@ -80,6 +80,7 @@ class DatasetQualityReport(BaseModel):
     extracted_fact_key_counts: dict[str, int] = Field(default_factory=dict)
     time_series_backend_counts: dict[str, int] = Field(default_factory=dict)
     imaging_backend_counts: dict[str, int] = Field(default_factory=dict)
+    imaging_model_policy_counts: dict[str, int] = Field(default_factory=dict)
     blocking_issue_count: int = 0
     warning_issue_count: int = 0
     issue_counts_by_field: dict[str, int] = Field(default_factory=dict)
