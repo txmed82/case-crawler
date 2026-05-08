@@ -199,7 +199,7 @@ class FakeImageAlignmentValidator:
 
 def test_validator_records_modality_alignment_score_for_images(tmp_path):
     image_path = tmp_path / "xray.png"
-    image_path.write_bytes(b"synthetic image bytes")
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nsynthetic image bytes")
     record = _record(
         modalities=[Modality.IMAGING],
         imaging=[

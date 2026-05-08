@@ -3,6 +3,7 @@ from casecrawler.validation.image_alignment import (
     BiomedCLIPImageValidator,
     ImageAlignmentValidator,
     MedGemmaImageTextValidator,
+    validate_image_file_asset,
     validate_radiology_label_consistency,
 )
 
@@ -164,3 +165,21 @@ def test_radiology_label_consistency_flags_negated_label():
 
     assert len(issues) == 1
     assert "negated" in issues[0]
+
+
+def test_validate_image_file_asset_accepts_supported_image_signature(tmp_path):
+    image_path = tmp_path / "image.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nsynthetic-image")
+
+    issues = validate_image_file_asset(_asset(str(image_path)))
+
+    assert issues == []
+
+
+def test_validate_image_file_asset_rejects_invalid_image_signature(tmp_path):
+    image_path = tmp_path / "image.png"
+    image_path.write_bytes(b"not a png")
+
+    issues = validate_image_file_asset(_asset(str(image_path)))
+
+    assert any(issue.field == "imaging.img-1.file_signature" for issue in issues)
