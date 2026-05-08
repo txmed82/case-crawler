@@ -116,6 +116,8 @@ casecrawler reference-datasets
 casecrawler import-reference-dataset asclepius --dataset-id ds-asclepius-ref --limit 100
 casecrawler import-reference-dataset clinical_notes_to_fhir --dataset-id ds-fhir-ref --limit 100
 casecrawler import-reference-dataset radiology_report_consistency --dataset-id ds-rad-ref --limit 100
+casecrawler import-reference-dataset synthchex_75k --dataset-id ds-synthchex-ref --limit 100
+casecrawler import-reference-dataset synthetic_chest_xray_pneumonia --dataset-id ds-cxr-pneumonia-ref --limit 100
 casecrawler import-synthea-fhir ./synthea/output/fhir --dataset-id ds-synthea-ref
 casecrawler run-synthea \
   --synthea-executable ./synthea/run_synthea \
@@ -130,13 +132,27 @@ casecrawler import-reference-dataset \
   --answer-field completion \
   --split eval \
   --limit 100
+casecrawler import-reference-dataset \
+  --repo-id org/custom-image-caption-dataset \
+  --dataset-id ds-custom-image-ref \
+  --note-field caption \
+  --image-field image \
+  --image-label-field label \
+  --split train \
+  --limit 100
 casecrawler benchmark-dataset \
   --dataset-id <dataset_id> \
   --reference-dataset-id ds-asclepius-ref \
   --min-overall-score 0.8 \
   --min-metric-score 0.5
 casecrawler datasets quality <dataset_id>
-casecrawler export-dataset --dataset-id <dataset_id> --format sft_jsonl --output train.jsonl
+casecrawler export-dataset \
+  --dataset-id <dataset_id> \
+  --reference-dataset-id ds-asclepius-ref \
+  --min-overall-score 0.8 \
+  --min-metric-score 0.5 \
+  --format sft_jsonl \
+  --output train.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format tool_call_jsonl --output tools.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format dpo_jsonl --output preference.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format rl_jsonl --output episodes.jsonl
@@ -148,7 +164,15 @@ Benchmark reports compare generated cohorts to stored reference datasets and
 return explicit pass/fail gates plus failing metric names. They compare across
 demographics, note types, artifact density, declared-modality artifact coverage,
 labs, vitals, medication history, time-series channels, imaging findings, and
-approval rates.
+approval rates. Export commands and API downloads can require the same benchmark
+gate by passing a reference dataset id and thresholds, which prevents unbenchmarked
+or underperforming synthetic data from silently becoming fine-tuning input.
+
+Registered Hugging Face reference datasets include synthetic clinical notes,
+clinical-note-to-FHIR rows, radiology consistency rows, Synthea imports, and
+image-reference datasets such as SynthCheX-75K-v2 and synthetic chest X-ray
+pneumonia. Custom Hugging Face imports can map text fields, FHIR answer fields,
+image fields, and image-label fields into the local `SyntheticRecord` schema.
 
 ## REST API
 
