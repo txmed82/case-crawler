@@ -1589,6 +1589,20 @@ def verify_split_package(require_multimodal_release: bool, package_dir: str) -> 
             "Split package is not multimodal-release-ready. "
             f"Missing: {missing or ['quality_report']}."
         )
+    if require_multimodal_release:
+        checked_files = report.get("checked_files")
+        required_artifacts = {
+            "benchmark_report.json",
+            "benchmark_suite_report.json",
+            "quality_report.json",
+        }
+        available = set(checked_files) if isinstance(checked_files, dict) else set()
+        missing_artifacts = sorted(required_artifacts - available)
+        if missing_artifacts:
+            raise click.ClickException(
+                "Split package is missing release audit artifact(s). "
+                f"Missing: {missing_artifacts}."
+            )
 
 
 @cli.command("benchmark-dataset")
