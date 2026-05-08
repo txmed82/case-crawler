@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import tempfile
+import zipfile
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from io import BytesIO
@@ -928,6 +930,70 @@ def export_jsonl_split_package(
 
 def verify_jsonl_split_package(package_dir: str | Path) -> dict[str, Any]:
     package_path = Path(package_dir)
+    if package_path.is_file():
+        return _verify_jsonl_split_package_archive(package_path)
+    return _verify_jsonl_split_package_dir(package_path)
+
+
+def _verify_jsonl_split_package_archive(archive_path: Path) -> dict[str, Any]:
+    if archive_path.suffix.lower() != ".zip":
+        return {
+            "package_dir": str(archive_path),
+            "valid": False,
+            "issues": [
+                {
+                    "field": "package",
+                    "message": "Split package file verification only supports .zip archives.",
+                }
+            ],
+            "checked_files": {},
+            "splits": {},
+        }
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            unsafe_names = [
+                name
+                for name in archive.namelist()
+                if Path(name).is_absolute() or ".." in Path(name).parts
+            ]
+            if unsafe_names:
+                return {
+                    "package_dir": str(archive_path),
+                    "valid": False,
+                    "issues": [
+                        {
+                            "field": "zip",
+                            "message": (
+                                "Split package zip contains unsafe paths: "
+                                f"{', '.join(sorted(unsafe_names))}."
+                            ),
+                        }
+                    ],
+                    "checked_files": {},
+                    "splits": {},
+                }
+            with tempfile.TemporaryDirectory() as temp_dir:
+                archive.extractall(temp_dir)
+                report = _verify_jsonl_split_package_dir(Path(temp_dir))
+    except zipfile.BadZipFile as exc:
+        return {
+            "package_dir": str(archive_path),
+            "valid": False,
+            "issues": [
+                {
+                    "field": "zip",
+                    "message": f"Split package zip is invalid: {exc}.",
+                }
+            ],
+            "checked_files": {},
+            "splits": {},
+        }
+    report["package_dir"] = str(archive_path)
+    report["archive"] = True
+    return report
+
+
+def _verify_jsonl_split_package_dir(package_path: Path) -> dict[str, Any]:
     manifest_path = package_path / "manifest.json"
     issues: list[dict[str, str]] = []
     if not manifest_path.exists():

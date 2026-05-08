@@ -1,6 +1,7 @@
 import json
 import hashlib
 import struct
+import zipfile
 import zlib
 
 from casecrawler.export.fine_tuning import (
@@ -201,6 +202,48 @@ def test_verify_jsonl_split_package_accepts_valid_moved_package(tmp_path):
     assert report["dataset_id"] == "ds-split"
     assert report["checked_files"]["train.jsonl"]["exists"] is True
     assert report["splits"]["train"]["example_count"] == 2
+
+
+def test_verify_jsonl_split_package_accepts_zip_archive(tmp_path):
+    package_dir = tmp_path / "package"
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    export_jsonl_split_package(
+        records,
+        package_dir,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+    )
+    archive_path = tmp_path / "package.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        for path in package_dir.iterdir():
+            archive.write(path, arcname=path.name)
+
+    report = verify_jsonl_split_package(archive_path)
+
+    assert report["valid"] is True
+    assert report["archive"] is True
+    assert report["package_dir"] == str(archive_path)
+    assert report["splits"]["test"]["example_count"] == 1
+
+
+def test_verify_jsonl_split_package_rejects_zip_with_unsafe_path(tmp_path):
+    archive_path = tmp_path / "unsafe.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("../manifest.json", "{}")
+
+    report = verify_jsonl_split_package(archive_path)
+
+    assert report["valid"] is False
+    assert report["issues"][0]["field"] == "zip"
 
 
 def test_verify_jsonl_split_package_rejects_tampered_checksum_and_counts(tmp_path):
