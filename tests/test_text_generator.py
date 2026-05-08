@@ -53,8 +53,8 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     documents_by_type = {document.note_type: document for document in updated.documents}
 
     assert "pt msg:" in documents_by_type["ed_note"].messy_text
-    assert "OCR:" in documents_by_type["radiology_report"].messy_text
     assert "MAR:" in documents_by_type["nursing_note"].messy_text
+    assert "radiology_report" not in documents_by_type
     assert "Encounter diagnoses:" in documents_by_type["ed_note"].clean_text
     assert "pneumonia" in documents_by_type["ed_note"].clean_text
     assert "Procedures performed or planned:" in documents_by_type["ed_note"].clean_text
@@ -86,6 +86,21 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     assert documents_by_type["ed_note"].extracted_facts["medication_details"][0][
         "route"
     ] == "IV"
+
+
+def test_text_generator_adds_radiology_report_when_imaging_modality_is_requested():
+    req = GenerationRequest(
+        topic="pneumonia",
+        modalities=[Modality.CLINICAL_TEXT, Modality.IMAGING],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0)
+
+    updated = TextGenerator().add_documents(record)
+    documents_by_type = {document.note_type: document for document in updated.documents}
+
+    assert "OCR:" in documents_by_type["radiology_report"].messy_text
+    assert "Radiology review for pneumonia" in documents_by_type["radiology_report"].clean_text
 
 
 def test_text_generator_radiology_report_reflects_imaging_assets():
