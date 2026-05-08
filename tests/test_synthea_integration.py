@@ -16,6 +16,38 @@ def test_synthea_adapter_imports_minimal_fhir_patient_bundle(tmp_path):
                     "id": "pat-1",
                     "gender": "female",
                     "birthDate": "1970-01-01",
+                    "maritalStatus": {"text": "Married"},
+                    "communication": [
+                        {"language": {"coding": [{"display": "English"}]}}
+                    ],
+                    "address": [
+                        {
+                            "city": "Austin",
+                            "state": "TX",
+                            "postalCode": "78701",
+                            "country": "US",
+                        }
+                    ],
+                    "extension": [
+                        {
+                            "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race",
+                            "extension": [
+                                {
+                                    "url": "ombCategory",
+                                    "valueCoding": {"display": "White"},
+                                }
+                            ],
+                        },
+                        {
+                            "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity",
+                            "extension": [
+                                {
+                                    "url": "ombCategory",
+                                    "valueCoding": {"display": "Not Hispanic or Latino"},
+                                }
+                            ],
+                        },
+                    ],
                 }
             },
             {
@@ -61,6 +93,17 @@ def test_synthea_adapter_imports_minimal_fhir_patient_bundle(tmp_path):
     record = SyntheaAdapter().import_fhir_bundle(str(path), dataset_id="ds-1")
 
     assert record.patient.patient_id == "pat-1"
+    assert record.patient.demographics["birth_date"] == "1970-01-01"
+    assert record.patient.demographics["marital_status"] == "Married"
+    assert record.patient.demographics["languages"] == ["English"]
+    assert record.patient.demographics["race"] == "White"
+    assert record.patient.demographics["ethnicity"] == "Not Hispanic or Latino"
+    assert record.patient.demographics["address"] == {
+        "city": "Austin",
+        "state": "TX",
+        "postalCode": "78701",
+        "country": "US",
+    }
     assert record.encounters[0].encounter_id == "enc-1"
     assert record.labs[0].name == "Lactate"
     assert record.vitals[0].name == "Heart rate"

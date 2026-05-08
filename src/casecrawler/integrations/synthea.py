@@ -91,7 +91,7 @@ class SyntheaAdapter:
             patient_id=patient_id,
             age=_age(patient_resource.get("birthDate"), created_at),
             sex=patient_resource.get("gender", "unknown"),
-            demographics={"source": "synthea_fhir"},
+            demographics=_patient_demographics(patient_resource),
         )
         diagnoses = [
             diagnosis
@@ -178,6 +178,73 @@ def _run_synthea_command(command: list[str]) -> None:
         check=True,
         timeout=SYNTHEA_TIMEOUT_SECONDS,
     )
+
+
+def _patient_demographics(resource: dict) -> dict:
+    demographics = {"source": "synthea_fhir"}
+    if resource.get("birthDate"):
+        demographics["birth_date"] = resource["birthDate"]
+    if resource.get("maritalStatus"):
+        demographics["marital_status"] = _codeable_text(resource["maritalStatus"])
+    if resource.get("communication"):
+        languages = []
+        for item in resource.get("communication") or []:
+            if not isinstance(item, Mapping):
+                continue
+            language = item.get("language")
+            if isinstance(language, Mapping):
+                languages.append(_codeable_text(language))
+        if languages:
+            demographics["languages"] = [language for language in languages if language]
+    race = _patient_us_core_extension(resource, "us-core-race")
+    ethnicity = _patient_us_core_extension(resource, "us-core-ethnicity")
+    if race:
+        demographics["race"] = race
+    if ethnicity:
+        demographics["ethnicity"] = ethnicity
+    address = next(
+        (item for item in resource.get("address") or [] if isinstance(item, Mapping)),
+        {},
+    )
+    if address:
+        demographics["address"] = {
+            key: address[key]
+            for key in ("city", "state", "postalCode", "country")
+            if address.get(key)
+        }
+    return demographics
+
+
+def _patient_us_core_extension(resource: dict, suffix: str) -> str | None:
+    for extension in resource.get("extension") or []:
+        if not isinstance(extension, Mapping):
+            continue
+        url = str(extension.get("url") or "")
+        if not url.endswith(suffix):
+            continue
+        for nested in extension.get("extension") or []:
+            if not isinstance(nested, Mapping):
+                continue
+            value = nested.get("valueCoding")
+            if isinstance(value, Mapping):
+                return str(value.get("display") or value.get("code") or "")
+            value_string = nested.get("valueString")
+            if isinstance(value_string, str) and value_string:
+                return value_string
+    return None
+
+
+def _codeable_text(value) -> str | None:
+    if not isinstance(value, Mapping):
+        return None
+    if value.get("text"):
+        return str(value["text"])
+    coding = next(
+        (item for item in value.get("coding") or [] if isinstance(item, Mapping)),
+        {},
+    )
+    display = coding.get("display") or coding.get("code")
+    return str(display) if display else None
 
 
 def _condition_to_code(resource: dict) -> Code | None:
