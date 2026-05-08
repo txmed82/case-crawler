@@ -42,6 +42,7 @@ def build_dataset_card(
             "",
             f"- Approved fraction: {_fraction(manifest.approved_count, manifest.generated_count)}",
             *_score_lines(validation_scores),
+            *_benchmark_plan_lines(manifest),
             "",
             "## Human Review",
             "",
@@ -214,6 +215,27 @@ def _export_manifest_lines(manifest: DatasetManifest) -> list[str]:
             f"records={export.get('record_count')}{gate}"
         )
     return lines or ["- No exports recorded"]
+
+
+def _benchmark_plan_lines(manifest: DatasetManifest) -> list[str]:
+    references = manifest.metadata.get("recommended_reference_keys", [])
+    thresholds = manifest.metadata.get("benchmark_thresholds", {})
+    if not isinstance(references, list) or not references:
+        return []
+    lines = ["", "## Recommended Benchmark Plan", ""]
+    recipe = manifest.metadata.get("primary_recipe")
+    if isinstance(recipe, str):
+        lines.append(f"- Recipe: {recipe}")
+    lines.append(f"- Reference datasets: {', '.join(str(item) for item in references)}")
+    if isinstance(thresholds, dict):
+        min_overall = thresholds.get("min_overall_score")
+        min_metric = thresholds.get("min_metric_score")
+        if min_overall is not None and min_metric is not None:
+            lines.append(
+                "- Thresholds: "
+                f"overall >= {min_overall}, metric >= {min_metric}"
+            )
+    return lines
 
 
 def _fraction(numerator: int, denominator: int) -> str:

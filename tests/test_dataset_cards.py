@@ -24,6 +24,8 @@ def test_build_dataset_card_includes_validation_and_use_limits():
     assert "- imaging_backend=diffusers: 1" in card
     assert "benchmark_passed=True" in card
     assert "reference=ds-ref" in card
+    assert "## Recommended Benchmark Plan" in card
+    assert "synthchex_75k" in card
 
 
 def test_build_model_card_documents_generator_and_validation_gates():
@@ -81,6 +83,15 @@ def _manifest() -> DatasetManifest:
         export_formats=[ExportFormat.SFT_JSONL],
         created_at="2026-05-06T10:00:00",
         metadata={
+            "primary_recipe": "radiology_cxr_report",
+            "recommended_reference_keys": [
+                "synthchex_75k",
+                "rexgradient_160k",
+            ],
+            "benchmark_thresholds": {
+                "min_overall_score": 0.7,
+                "min_metric_score": 0.45,
+            },
             "latest_exports": [
                 {
                     "dataset_id": "ds-1",

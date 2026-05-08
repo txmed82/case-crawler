@@ -103,6 +103,36 @@ def test_dataset_store_manifest_prefers_requested_export_formats(tmp_path):
     assert manifest.export_formats == [ExportFormat.SFT_JSONL, ExportFormat.PARQUET]
 
 
+def test_dataset_store_manifest_includes_recipe_benchmark_plan(tmp_path):
+    store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
+    record = SyntheticRecord(
+        record_id="rec-1",
+        dataset_id="ds-1",
+        topic="pneumonia",
+        complexity=ComplexityProfile.MODERATE,
+        modalities=[Modality.CLINICAL_TEXT, Modality.IMAGING],
+        patient=SyntheticPatient(patient_id="pat-1", age=64, sex="female"),
+        encounters=[],
+        provenance=Provenance(
+            generator="unit-test",
+            created_at="2026-05-06T10:00:00",
+        ),
+        metadata={
+            "generation_overrides": {
+                "recipe": "radiology_cxr_report",
+            }
+        },
+    )
+
+    store.save_record(record)
+    manifest = store.get_manifest("ds-1")
+
+    assert manifest.metadata["primary_recipe"] == "radiology_cxr_report"
+    assert manifest.metadata["generation_recipes"] == {"radiology_cxr_report": 1}
+    assert "synthchex_75k" in manifest.metadata["recommended_reference_keys"]
+    assert manifest.metadata["benchmark_thresholds"]["min_overall_score"] == 0.7
+
+
 def test_dataset_store_tracks_human_review_queue_and_effective_approval(tmp_path):
     store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
     record = SyntheticRecord(
