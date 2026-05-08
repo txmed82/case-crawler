@@ -89,7 +89,9 @@ def _record(
         medication_history=[
             MedicationStatement(
                 name="Ceftriaxone",
+                dose="1 g",
                 route="IV",
+                frequency="daily",
                 status="active",
             )
         ],
@@ -186,6 +188,8 @@ def test_profile_records_summarizes_multimodal_cohort():
     }
     assert profile.procedure_name_counts == {"Central venous catheter placement": 2}
     assert profile.medication_route_counts == {"IV": 2}
+    assert profile.medication_dose_counts == {"1 g": 2}
+    assert profile.medication_frequency_counts == {"daily": 2}
     assert profile.medication_status_counts == {"active": 2}
     assert profile.document_author_role_counts == {"physician": 2}
     assert profile.messy_document_rate == 1.0
@@ -399,6 +403,8 @@ def test_dataset_benchmark_compares_longitudinal_profiles():
         "procedure_name_overlap",
         "procedure_name_distribution",
         "medication_name_overlap",
+        "medication_dose_distribution",
+        "medication_frequency_distribution",
         "medication_route_distribution",
         "medication_status_distribution",
         "document_author_role_overlap",
@@ -643,6 +649,33 @@ def test_dataset_benchmark_fails_on_note_type_distribution_mismatch():
     assert metric.details["generated_counts"] == {"progress_note": 1}
     assert metric.details["reference_counts"] == {"nursing_note": 1}
     assert "note_type_distribution" in report.failing_metrics
+
+
+def test_dataset_benchmark_fails_on_medication_regimen_mismatch():
+    generated = [_record("rec-1", "ds-gen")]
+    reference_base = _record("ref-1", "ds-ref")
+    reference = [
+        reference_base.model_copy(
+            update={
+                "medication_history": [
+                    reference_base.medication_history[0].model_copy(
+                        update={
+                            "dose": "2 g",
+                            "frequency": "twice daily",
+                        }
+                    )
+                ]
+            }
+        )
+    ]
+
+    report = DatasetBenchmark(min_metric_score=0.5).compare(generated, reference)
+    metrics = {metric.name: metric for metric in report.metrics}
+
+    assert metrics["medication_dose_distribution"].score == 0.0
+    assert metrics["medication_frequency_distribution"].score == 0.0
+    assert "medication_dose_distribution" in report.failing_metrics
+    assert "medication_frequency_distribution" in report.failing_metrics
 
 
 def test_dataset_benchmark_compares_imaging_generation_backends():

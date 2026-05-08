@@ -35,6 +35,8 @@ class CohortProfile(BaseModel):
     diagnosis_code_counts: dict[str, int] = Field(default_factory=dict)
     phi_entity_counts: dict[str, int] = Field(default_factory=dict)
     medication_name_counts: dict[str, int] = Field(default_factory=dict)
+    medication_dose_counts: dict[str, int] = Field(default_factory=dict)
+    medication_frequency_counts: dict[str, int] = Field(default_factory=dict)
     medication_route_counts: dict[str, int] = Field(default_factory=dict)
     medication_status_counts: dict[str, int] = Field(default_factory=dict)
     time_series_channel_counts: dict[str, int] = Field(default_factory=dict)
