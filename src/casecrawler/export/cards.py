@@ -16,6 +16,7 @@ def build_dataset_card(
         modality.value for record in records for modality in record.modalities
     )
     provenance_counts = Counter(record.provenance.generator for record in records)
+    generation_overrides = _generation_override_counts(records)
     review_counts = Counter(
         record.metadata.get("human_review", {}).get("status", "unreviewed")
         for record in records
@@ -49,6 +50,10 @@ def build_dataset_card(
             "## Provenance",
             "",
             *_counter_lines(provenance_counts),
+            "",
+            "## Generation Overrides",
+            "",
+            *_counter_lines(generation_overrides or Counter({"none": 1})),
             "",
             "## Intended Use",
             "",
@@ -88,6 +93,7 @@ def build_model_card(
         for record in records
         for asset in record.imaging
     )
+    generation_overrides = _generation_override_counts(records)
     return "\n".join(
         [
             f"# Model Card: {manifest.name} synthetic generation pipeline",
@@ -111,6 +117,10 @@ def build_model_card(
             "## Imaging Backends",
             "",
             *_counter_lines(backends or Counter({"none": 1})),
+            "",
+            "## Request-Scoped Overrides",
+            "",
+            *_counter_lines(generation_overrides or Counter({"none": 1})),
             "",
             "## Validation Gates",
             "",
@@ -158,6 +168,21 @@ def _counter_lines(counter: Counter[str]) -> list[str]:
     if not counter:
         return ["- None"]
     return [f"- {name}: {count}" for name, count in sorted(counter.items())]
+
+
+def _generation_override_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        overrides = record.metadata.get("generation_overrides", {})
+        if not isinstance(overrides, dict):
+            continue
+        for key, value in overrides.items():
+            if isinstance(value, list):
+                rendered = " ".join(str(item) for item in value)
+            else:
+                rendered = str(value)
+            counter[f"{key}={rendered}"] += 1
+    return counter
 
 
 def _list_lines(values: list[str]) -> list[str]:

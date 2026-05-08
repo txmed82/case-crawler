@@ -120,6 +120,36 @@ def test_structured_generator_persists_requested_export_formats():
     assert record.metadata["requested_export_formats"] == ["chat_jsonl", "parquet"]
 
 
+def test_structured_generator_persists_generation_overrides():
+    req = GenerationRequest(
+        topic="pneumonia",
+        modalities=[Modality.CLINICAL_TEXT, Modality.IMAGING, Modality.TIME_SERIES],
+        clinical_text_backend="llm",
+        llm_provider="ollama",
+        llm_model="medgemma-local",
+        imaging_backend="diffusers",
+        imaging_model_profile="cxr_pneumonia_dreambooth",
+        time_series_backend="external",
+        time_series_model_profile="timediff",
+        time_series_command=["timediff-sample"],
+        validation_threshold=0.9,
+    )
+
+    record = StructuredGenerator().generate("ds-one", req, 0)
+
+    assert record.metadata["generation_overrides"] == {
+        "clinical_text_backend": "llm",
+        "llm_provider": "ollama",
+        "llm_model": "medgemma-local",
+        "imaging_backend": "diffusers",
+        "imaging_model_profile": "cxr_pneumonia_dreambooth",
+        "time_series_backend": "external",
+        "time_series_model_profile": "timediff",
+        "time_series_command": ["timediff-sample"],
+        "validation_threshold": 0.9,
+    }
+
+
 def test_structured_generator_uses_topic_specific_profiles():
     generator = StructuredGenerator()
 
