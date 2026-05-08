@@ -43,6 +43,69 @@ async def test_synthetic_pipeline_generates_topic_mix_cohorts():
     ]
 
 
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_generates_weighted_topic_mix_cohorts():
+    pipeline = SyntheticPipeline(validator=SyntheticValidator())
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="weighted acute care cohort",
+            count=6,
+            cohort_constraints={
+                "topic_mix": [
+                    {"topic": "sepsis", "weight": 2},
+                    {"topic": "pneumonia", "weight": 1},
+                ]
+            },
+        )
+    )
+
+    assert [record.topic for record in result["records"]] == [
+        "sepsis",
+        "sepsis",
+        "pneumonia",
+        "sepsis",
+        "sepsis",
+        "pneumonia",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_generates_topic_mix_with_weight_map():
+    pipeline = SyntheticPipeline(validator=SyntheticValidator())
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="weighted acute care cohort",
+            count=4,
+            cohort_constraints={
+                "topic_mix": ["sepsis", "pneumonia"],
+                "topic_mix_weights": {"sepsis": 3},
+            },
+        )
+    )
+
+    assert [record.topic for record in result["records"]] == [
+        "sepsis",
+        "sepsis",
+        "sepsis",
+        "pneumonia",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_rejects_invalid_topic_mix_weight():
+    pipeline = SyntheticPipeline(validator=SyntheticValidator())
+
+    with pytest.raises(ValueError, match="topic_mix weights"):
+        await pipeline.generate(
+            GenerationRequest(
+                topic="weighted acute care cohort",
+                cohort_constraints={"topic_mix": [{"topic": "sepsis", "weight": 0}]},
+            )
+        )
+
+
 class FakeImagingGenerator:
     def __init__(self):
         self.diffusers_calls = []

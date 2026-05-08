@@ -305,30 +305,72 @@ def _topic_imaging_spec(topic: str) -> tuple[str, str, str]:
 
 
 def _request_for_record_index(req: GenerationRequest, index: int) -> GenerationRequest:
-    topics = _topic_mix(req.cohort_constraints.get("topic_mix"))
+    topics = _topic_mix(req.cohort_constraints)
     if not topics:
         return req
     return req.model_copy(update={"topic": topics[index % len(topics)]})
 
 
 def _topic_mix(value) -> list[str]:
+    weights = {}
+    if isinstance(value, dict):
+        if "topic_mix" not in value:
+            return []
+        weights = value.get("topic_mix_weights", {})
+        value = value.get("topic_mix")
     if value is None:
         return []
     if isinstance(value, str):
-        topics = [topic.strip() for topic in value.split(",") if topic.strip()]
+        topics = []
+        for item in value.split(","):
+            topics.extend(_topic_mix_entry(item, weights))
     elif isinstance(value, list):
         topics = []
         for item in value:
-            if isinstance(item, str):
-                topic = item.strip()
-            elif isinstance(item, dict):
-                topic = str(item.get("topic", "")).strip()
-            else:
-                topic = str(item).strip()
-            if topic:
-                topics.append(topic)
+            topics.extend(_topic_mix_entry(item, weights))
     else:
         raise ValueError("cohort_constraints.topic_mix must be a string or list.")
     if not topics:
         raise ValueError("cohort_constraints.topic_mix must contain at least one topic.")
     return topics
+
+
+def _topic_mix_entry(value, weights) -> list[str]:
+    weight = 1
+    if isinstance(value, dict):
+        topic = str(value.get("topic", "")).strip()
+        weight = _topic_mix_weight(value.get("weight", _topic_weight(topic, weights)))
+    else:
+        raw = str(value).strip()
+        topic, separator, raw_weight = raw.rpartition(":")
+        if separator and raw_weight.strip():
+            topic = topic.strip()
+            weight = _topic_mix_weight(raw_weight.strip())
+        else:
+            topic = raw
+            weight = _topic_mix_weight(_topic_weight(topic, weights))
+    if not topic:
+        return []
+    return [topic] * weight
+
+
+def _topic_weight(topic: str, weights) -> int:
+    if not topic or weights is None:
+        return 1
+    if not isinstance(weights, dict):
+        raise ValueError("cohort_constraints.topic_mix_weights must be a mapping.")
+    return weights.get(topic, 1)
+
+
+def _topic_mix_weight(value) -> int:
+    if isinstance(value, bool):
+        raise ValueError("cohort_constraints.topic_mix weights must be positive integers.")
+    try:
+        weight = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "cohort_constraints.topic_mix weights must be positive integers."
+        ) from exc
+    if weight < 1:
+        raise ValueError("cohort_constraints.topic_mix weights must be positive integers.")
+    return weight

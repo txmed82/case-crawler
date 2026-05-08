@@ -113,6 +113,7 @@ def list_dataset_capabilities():
             "sexes",
             "sex_cycle",
             "topic_mix",
+            "topic_mix_weights",
             "base_time",
         ],
         "imaging_model_profiles": [
