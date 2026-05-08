@@ -192,7 +192,15 @@ def test_verify_jsonl_split_package_accepts_valid_moved_package(tmp_path):
         validation_ratio=0.25,
         test_ratio=0.25,
         seed="unit-test",
-        audit_artifacts={"quality_report.json": {"export_ready": True}},
+        audit_artifacts={
+            "quality_report.json": {
+                "dataset_id": "ds-split",
+                "record_count": 4,
+                "approved_count": 4,
+                "approval_rate": 1.0,
+                "export_ready": True,
+            }
+        },
     )
     manifest = json.loads((tmp_path / "manifest.json").read_text())
     for file_metadata in manifest["files"].values():
@@ -319,6 +327,85 @@ def test_verify_jsonl_split_package_validates_benchmark_profile_artifact(tmp_pat
     assert any(
         issue["field"]
         == "audit_artifacts.benchmark_profile.json.profile.dataset_id"
+        for issue in report["issues"]
+    )
+
+
+def test_verify_jsonl_split_package_validates_quality_report_dataset_id(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+        audit_artifacts={
+            "quality_report.json": {
+                "dataset_id": "ds-other",
+                "record_count": 3,
+                "approved_count": 3,
+                "approval_rate": 1.0,
+                "export_ready": True,
+            }
+        },
+    )
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    manifest["files"]["quality_report.json"]["byte_size"] = (
+        tmp_path / "quality_report.json"
+    ).stat().st_size
+    manifest["files"]["quality_report.json"]["sha256"] = hashlib.sha256(
+        (tmp_path / "quality_report.json").read_bytes()
+    ).hexdigest()
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path)
+
+    assert report["valid"] is False
+    assert any(
+        issue["field"] == "audit_artifacts.quality_report.json.dataset_id"
+        for issue in report["issues"]
+    )
+
+
+def test_verify_jsonl_split_package_validates_card_headers(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+        audit_artifacts={
+            "dataset_card.md": "# Dataset Card: wrong-dataset\n",
+            "model_card.md": "# Model Card: wrong-dataset synthetic generation pipeline\n",
+        },
+    )
+
+    report = verify_jsonl_split_package(tmp_path)
+
+    assert report["valid"] is False
+    assert any(
+        issue["field"] == "audit_artifacts.dataset_card.md.title"
+        for issue in report["issues"]
+    )
+    assert any(
+        issue["field"] == "audit_artifacts.model_card.md.title"
         for issue in report["issues"]
     )
 

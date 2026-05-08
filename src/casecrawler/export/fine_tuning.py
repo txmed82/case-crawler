@@ -1520,6 +1520,24 @@ def _verify_package_audit_artifacts(
                 manifest,
                 issues,
             )
+        elif file_name == "quality_report.json":
+            _verify_quality_report_artifact(package_path / file_name, manifest, issues)
+        elif file_name == "dataset_card.md":
+            _verify_card_artifact(
+                package_path / file_name,
+                manifest,
+                issues,
+                artifact_name=file_name,
+                title_prefix="# Dataset Card:",
+            )
+        elif file_name == "model_card.md":
+            _verify_card_artifact(
+                package_path / file_name,
+                manifest,
+                issues,
+                artifact_name=file_name,
+                title_prefix="# Model Card:",
+            )
 
 
 def _verify_benchmark_profile_artifact(
@@ -1558,6 +1576,108 @@ def _verify_benchmark_profile_artifact(
                     "Benchmark profile dataset_id "
                     f"{profile.dataset_id!r} does not match package dataset_id "
                     f"{manifest_dataset_id!r}."
+                ),
+            }
+        )
+
+
+def _verify_quality_report_artifact(
+    path: Path,
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json",
+                "message": f"Quality report artifact is invalid JSON: {exc}.",
+            }
+        )
+        return
+    if not isinstance(payload, dict):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json",
+                "message": "Quality report artifact must be a JSON object.",
+            }
+        )
+        return
+    manifest_dataset_id = manifest.get("dataset_id")
+    quality_dataset_id = payload.get("dataset_id")
+    if (
+        isinstance(manifest_dataset_id, str)
+        and isinstance(quality_dataset_id, str)
+        and quality_dataset_id != manifest_dataset_id
+    ):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json.dataset_id",
+                "message": (
+                    "Quality report dataset_id "
+                    f"{quality_dataset_id!r} does not match package dataset_id "
+                    f"{manifest_dataset_id!r}."
+                ),
+            }
+        )
+    elif not isinstance(quality_dataset_id, str):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json.dataset_id",
+                "message": "Quality report artifact is missing dataset_id.",
+            }
+        )
+    for key in ("record_count", "approved_count"):
+        if not isinstance(payload.get(key), int):
+            issues.append(
+                {
+                    "field": f"audit_artifacts.quality_report.json.{key}",
+                    "message": f"Quality report artifact has no integer {key}.",
+                }
+            )
+    if not isinstance(payload.get("export_ready"), bool):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json.export_ready",
+                "message": "Quality report artifact has no boolean export_ready.",
+            }
+        )
+
+
+def _verify_card_artifact(
+    path: Path,
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+    *,
+    artifact_name: str,
+    title_prefix: str,
+) -> None:
+    text = path.read_text()
+    title = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    field = f"audit_artifacts.{artifact_name}.title"
+    if not title.startswith(title_prefix):
+        issues.append(
+            {
+                "field": field,
+                "message": f"{artifact_name} is missing a {title_prefix!r} heading.",
+            }
+        )
+        return
+    package_name = manifest.get("name")
+    package_dataset_id = manifest.get("dataset_id")
+    expected_tokens = [
+        token
+        for token in (package_name, package_dataset_id)
+        if isinstance(token, str) and token.strip()
+    ]
+    if expected_tokens and not any(token in text for token in expected_tokens):
+        issues.append(
+            {
+                "field": field,
+                "message": (
+                    f"{artifact_name} does not reference package name or "
+                    "dataset_id."
                 ),
             }
         )
