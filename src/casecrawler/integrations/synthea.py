@@ -11,6 +11,7 @@ from typing import Protocol
 from casecrawler.models.synthetic import (
     AllergyIntolerance,
     ClinicalDocument,
+    ClinicalOrder,
     Code,
     ComplexityProfile,
     Encounter,
@@ -243,6 +244,8 @@ class SyntheaAdapter:
         diagnostic_report_resources = _resources(resources, "DiagnosticReport")
         observation_resources = _resources(resources, "Observation")
         medication_resources = _resources(resources, "MedicationStatement")
+        medication_request_resources = _resources(resources, "MedicationRequest")
+        service_request_resources = _resources(resources, "ServiceRequest")
         allergy_resources = _resources(resources, "AllergyIntolerance")
 
         patient_id = patient_resource.get("id", "synthea-patient")
@@ -318,6 +321,22 @@ class SyntheaAdapter:
             for allergy in (_allergy_intolerance(resource) for resource in allergy_resources)
             if allergy is not None
         ]
+        orders = [
+            order
+            for order in (
+                [
+                    *(
+                        _medication_request_order(resource, created_at)
+                        for resource in medication_request_resources
+                    ),
+                    *(
+                        _service_request_order(resource, created_at)
+                        for resource in service_request_resources
+                    ),
+                ]
+            )
+            if order is not None
+        ]
         documents = [
             document
             for document in (
@@ -344,6 +363,7 @@ class SyntheaAdapter:
             documents=documents,
             medication_history=medications,
             allergies=allergies,
+            orders=orders,
             provenance=Provenance(
                 generator="synthea-fhir-import",
                 created_at=created_at,
@@ -1065,3 +1085,74 @@ def _allergy_intolerance(resource: dict) -> AllergyIntolerance | None:
         status=_codeable_text(resource.get("clinicalStatus")) or "active",
         recorded_at=resource.get("recordedDate"),
     )
+
+
+def _medication_request_order(resource: dict, created_at: str) -> ClinicalOrder | None:
+    concept = resource.get("medicationCodeableConcept") or {}
+    if not isinstance(concept, Mapping):
+        return None
+    display = _codeable_text(concept)
+    if not display:
+        return None
+    code = _codeable_concept_to_code(concept, fallback_code=resource.get("id"))
+    return ClinicalOrder(
+        order_id=resource.get("id", f"medication-request-{display}"),
+        order_type="medication",
+        display=display,
+        code=code.code if code else None,
+        system=code.system if code else None,
+        status=resource.get("status", "unknown"),
+        intent=resource.get("intent", "order"),
+        priority=resource.get("priority"),
+        ordered_at=resource.get("authoredOn") or created_at,
+        encounter_id=_resource_reference_id(resource.get("encounter")),
+    )
+
+
+def _service_request_order(resource: dict, created_at: str) -> ClinicalOrder | None:
+    codeable = resource.get("code") or {}
+    if not isinstance(codeable, Mapping):
+        return None
+    display = _codeable_text(codeable)
+    if not display:
+        return None
+    code = _codeable_concept_to_code(codeable, fallback_code=resource.get("id"))
+    return ClinicalOrder(
+        order_id=resource.get("id", f"service-request-{display}"),
+        order_type=_service_request_order_type(resource),
+        display=display,
+        code=code.code if code else None,
+        system=code.system if code else None,
+        status=resource.get("status", "unknown"),
+        intent=resource.get("intent", "order"),
+        priority=resource.get("priority"),
+        ordered_at=resource.get("authoredOn") or created_at,
+        encounter_id=_resource_reference_id(resource.get("encounter")),
+    )
+
+
+def _service_request_order_type(resource: dict) -> str:
+    categories = resource.get("category") or []
+    for category in categories:
+        text = _codeable_text(category)
+        if text:
+            normalized = text.lower()
+            if "lab" in normalized:
+                return "laboratory"
+            if "image" in normalized or "radiology" in normalized:
+                return "imaging"
+            if "procedure" in normalized:
+                return "procedure"
+            if "nursing" in normalized:
+                return "nursing"
+            return normalized.replace(" ", "_")
+    return "procedure"
+
+
+def _resource_reference_id(value) -> str | None:
+    if not isinstance(value, Mapping):
+        return None
+    reference = value.get("reference")
+    if not isinstance(reference, str) or not reference:
+        return None
+    return reference.rsplit("/", 1)[-1]

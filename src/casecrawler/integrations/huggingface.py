@@ -12,6 +12,7 @@ from uuid import NAMESPACE_URL, uuid5
 from casecrawler.models.synthetic import (
     AllergyIntolerance,
     ClinicalDocument,
+    ClinicalOrder,
     Code,
     ComplexityProfile,
     Encounter,
@@ -416,6 +417,7 @@ def reference_row_to_record(
         vitals,
         medications,
         allergies,
+        orders,
         diagnoses,
         procedures,
         diagnostic_documents,
@@ -450,6 +452,7 @@ def reference_row_to_record(
         vitals=vitals,
         medications=medications,
         allergies=allergies,
+        orders=orders,
         diagnoses=diagnoses,
         procedures=procedures,
         imaging=imaging,
@@ -472,6 +475,7 @@ def reference_row_to_record(
             vitals=vitals,
             medications=medications,
             allergies=allergies,
+            orders=orders,
             diagnoses=diagnoses,
             procedures=procedures,
             imaging=imaging,
@@ -507,6 +511,7 @@ def reference_row_to_record(
         vitals=vitals,
         medication_history=medications,
         allergies=allergies,
+        orders=orders,
         time_series=time_series,
         documents=[document, *diagnostic_documents],
         imaging=imaging,
@@ -568,13 +573,14 @@ def _reference_modalities(
     vitals: list[VitalObservation],
     medications: list[MedicationStatement],
     allergies: list[AllergyIntolerance],
+    orders: list[ClinicalOrder],
     diagnoses: list[Code],
     procedures: list[Code],
     imaging: list[ImagingAsset],
     time_series: list[TimeSeriesChannel],
 ) -> list[Modality]:
     modalities = [Modality.CLINICAL_TEXT]
-    if labs or vitals or medications or allergies or diagnoses or procedures:
+    if labs or vitals or medications or allergies or orders or diagnoses or procedures:
         modalities.insert(0, Modality.STRUCTURED_EHR)
     if labs:
         modalities.append(Modality.LABS)
@@ -641,6 +647,7 @@ def _reference_extracted_facts(
     vitals: list[VitalObservation],
     medications: list[MedicationStatement],
     allergies: list[AllergyIntolerance],
+    orders: list[ClinicalOrder],
     diagnoses: list[Code],
     procedures: list[Code],
     imaging: list[ImagingAsset],
@@ -716,6 +723,23 @@ def _reference_extracted_facts(
                 "recorded_at": allergy.recorded_at,
             }
             for allergy in allergies
+        ]
+    if orders:
+        facts["orders"] = [order.display for order in orders]
+        facts["order_details"] = [
+            {
+                "order_id": order.order_id,
+                "order_type": order.order_type,
+                "display": order.display,
+                "code": order.code,
+                "system": order.system,
+                "status": order.status,
+                "intent": order.intent,
+                "priority": order.priority,
+                "ordered_at": order.ordered_at,
+                "encounter_id": order.encounter_id,
+            }
+            for order in orders
         ]
     if time_series:
         facts["time_series_channels"] = [
@@ -968,21 +992,23 @@ def _fhir_artifacts(
     list[VitalObservation],
     list[MedicationStatement],
     list[AllergyIntolerance],
+    list[ClinicalOrder],
     list[Code],
     list[Code],
     list[ClinicalDocument],
 ]:
     if not fhir_text:
-        return [], [], [], [], [], [], []
+        return [], [], [], [], [], [], [], []
     try:
         parsed = json.loads(fhir_text)
     except json.JSONDecodeError:
-        return [], [], [], [], [], [], []
+        return [], [], [], [], [], [], [], []
     resources = _fhir_resources(parsed)
     labs: list[LabObservation] = []
     vitals: list[VitalObservation] = []
     medications: list[MedicationStatement] = []
     allergies: list[AllergyIntolerance] = []
+    orders: list[ClinicalOrder] = []
     diagnoses: list[Code] = []
     procedures: list[Code] = []
     diagnostic_documents: list[ClinicalDocument] = []
@@ -1027,6 +1053,14 @@ def _fhir_artifacts(
             allergy = _fhir_allergy_intolerance(resource)
             if allergy is not None:
                 allergies.append(allergy)
+        elif resource_type == "MedicationRequest":
+            order = _fhir_medication_request_order(resource)
+            if order is not None:
+                orders.append(order)
+        elif resource_type == "ServiceRequest":
+            order = _fhir_service_request_order(resource)
+            if order is not None:
+                orders.append(order)
         elif resource_type == "Condition":
             diagnosis = _fhir_codeable_concept_to_code(resource.get("code"), fallback="Condition")
             if diagnosis is not None:
@@ -1039,7 +1073,7 @@ def _fhir_artifacts(
             document = _fhir_diagnostic_report_document(resource, stable_seed=stable_seed)
             if document is not None:
                 diagnostic_documents.append(document)
-    return labs, vitals, medications, allergies, diagnoses, procedures, diagnostic_documents
+    return labs, vitals, medications, allergies, orders, diagnoses, procedures, diagnostic_documents
 
 
 def _fhir_resources(parsed) -> list[dict]:
@@ -1197,6 +1231,87 @@ def _fhir_allergy_intolerance(resource: dict) -> AllergyIntolerance | None:
         else _coerce_text(resource.get("clinicalStatus")) or "active",
         recorded_at=_coerce_text(resource.get("recordedDate")),
     )
+
+
+def _fhir_medication_request_order(resource: dict) -> ClinicalOrder | None:
+    concept = resource.get("medicationCodeableConcept")
+    if not isinstance(concept, dict):
+        return None
+    display = _coerce_text(concept.get("text")) or _fhir_code_text({"code": concept})
+    if not display:
+        return None
+    code = _fhir_codeable_concept_to_code(
+        concept,
+        fallback=resource.get("id") or display,
+    )
+    return ClinicalOrder(
+        order_id=_coerce_text(resource.get("id")) or f"medication-request-{display}",
+        order_type="medication",
+        display=display,
+        code=code.code if code else None,
+        system=code.system if code else None,
+        status=_coerce_text(resource.get("status")) or "unknown",
+        intent=_coerce_text(resource.get("intent")) or "order",
+        priority=_coerce_text(resource.get("priority")),
+        ordered_at=_coerce_text(resource.get("authoredOn")) or "2026-01-01T00:00:00",
+        encounter_id=_fhir_reference_id(resource.get("encounter")),
+    )
+
+
+def _fhir_service_request_order(resource: dict) -> ClinicalOrder | None:
+    codeable = resource.get("code")
+    if not isinstance(codeable, dict):
+        return None
+    display = _coerce_text(codeable.get("text")) or _fhir_code_text({"code": codeable})
+    if not display:
+        return None
+    code = _fhir_codeable_concept_to_code(
+        codeable,
+        fallback=resource.get("id") or display,
+    )
+    return ClinicalOrder(
+        order_id=_coerce_text(resource.get("id")) or f"service-request-{display}",
+        order_type=_fhir_service_request_order_type(resource),
+        display=display,
+        code=code.code if code else None,
+        system=code.system if code else None,
+        status=_coerce_text(resource.get("status")) or "unknown",
+        intent=_coerce_text(resource.get("intent")) or "order",
+        priority=_coerce_text(resource.get("priority")),
+        ordered_at=_coerce_text(resource.get("authoredOn")) or "2026-01-01T00:00:00",
+        encounter_id=_fhir_reference_id(resource.get("encounter")),
+    )
+
+
+def _fhir_service_request_order_type(resource: dict) -> str:
+    for category in resource.get("category") or []:
+        if not isinstance(category, dict):
+            continue
+        text = _coerce_text(category.get("text")) or _fhir_code_text(
+            {"code": category}
+        )
+        if not text:
+            continue
+        normalized = text.lower()
+        if "lab" in normalized:
+            return "laboratory"
+        if "image" in normalized or "radiology" in normalized:
+            return "imaging"
+        if "nursing" in normalized:
+            return "nursing"
+        if "procedure" in normalized:
+            return "procedure"
+        return normalized.replace(" ", "_")
+    return "procedure"
+
+
+def _fhir_reference_id(value) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    reference = _coerce_text(value.get("reference"))
+    if not reference:
+        return None
+    return reference.rsplit("/", 1)[-1]
 
 
 def _fhir_diagnostic_report_document(

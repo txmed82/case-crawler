@@ -108,6 +108,31 @@ def test_synthea_adapter_imports_minimal_fhir_patient_bundle(tmp_path):
                     "recordedDate": "2026-01-01",
                 }
             },
+            {
+                "resource": {
+                    "resourceType": "ServiceRequest",
+                    "id": "srv-lactate",
+                    "status": "completed",
+                    "intent": "order",
+                    "priority": "stat",
+                    "category": [{"text": "Laboratory"}],
+                    "code": {"text": "Lactate"},
+                    "authoredOn": "2026-01-01T00:10:00",
+                    "encounter": {"reference": "Encounter/enc-1"},
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "MedicationRequest",
+                    "id": "medreq-ceftriaxone",
+                    "status": "active",
+                    "intent": "order",
+                    "priority": "stat",
+                    "medicationCodeableConcept": {"text": "Ceftriaxone"},
+                    "authoredOn": "2026-01-01T00:12:00",
+                    "encounter": {"reference": "Encounter/enc-1"},
+                }
+            },
         ],
     }
     path = tmp_path / "patient.json"
@@ -135,6 +160,10 @@ def test_synthea_adapter_imports_minimal_fhir_patient_bundle(tmp_path):
     assert record.medication_history[0].route == "IV"
     assert record.allergies[0].substance == "Penicillin"
     assert record.allergies[0].reaction == "hives"
+    assert [order.display for order in record.orders] == ["Ceftriaxone", "Lactate"]
+    assert record.orders[0].order_type == "medication"
+    assert record.orders[1].order_type == "laboratory"
+    assert record.orders[1].encounter_id == "enc-1"
     assert record.metadata["reference_key"] == "synthea_fhir"
     assert record.metadata["reference_dataset"] == "synthea_fhir"
     assert Modality.STRUCTURED_EHR in record.modalities

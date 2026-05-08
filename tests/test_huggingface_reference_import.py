@@ -367,6 +367,14 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
             '"text":"Penicillin"},'
             '"reaction":[{"manifestation":[{"text":"hives"}],"severity":"moderate"}],'
             '"recordedDate":"2026-01-01"}},'
+            '{"resource":{"resourceType":"ServiceRequest","id":"srv-hba1c",'
+            '"status":"completed","intent":"order","priority":"routine",'
+            '"category":[{"text":"Laboratory"}],"code":{"text":"HbA1c"},'
+            '"authoredOn":"2026-01-01T00:00:00"}},'
+            '{"resource":{"resourceType":"MedicationRequest","id":"medreq-metformin",'
+            '"status":"active","intent":"order","priority":"routine",'
+            '"medicationCodeableConcept":{"text":"Metformin"},'
+            '"authoredOn":"2026-01-01T00:00:00"}},'
             '{"resource":{"resourceType":"Condition","id":"cond-diabetes",'
             '"code":{"coding":[{"system":"http://snomed.info/sct","code":"44054006",'
             '"display":"Diabetes mellitus type 2"}],"text":"Type 2 diabetes mellitus"}}},'
@@ -412,6 +420,10 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
     assert record.documents[0].extracted_facts["allergy_details"][0]["reaction"] == (
         "hives"
     )
+    assert record.documents[0].extracted_facts["orders"] == ["HbA1c", "Metformin"]
+    assert record.documents[0].extracted_facts["order_details"][0]["order_type"] == (
+        "laboratory"
+    )
     assert record.documents[0].extracted_facts["diagnoses"][0] == {
         "system": "http://snomed.info/sct",
         "code": "44054006",
@@ -442,6 +454,8 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
     assert record.medication_history[0].route == "PO"
     assert record.allergies[0].substance == "Penicillin"
     assert record.allergies[0].reaction == "hives"
+    assert [order.display for order in record.orders] == ["HbA1c", "Metformin"]
+    assert record.orders[1].order_type == "medication"
     assert record.encounters[0].diagnoses[0].code == "44054006"
     assert record.encounters[0].procedures[0].display == "Diabetic foot examination"
     assert record.documents[1].note_type == "diagnostic_report"
