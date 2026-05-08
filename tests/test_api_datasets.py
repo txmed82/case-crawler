@@ -206,6 +206,36 @@ def test_dataset_api_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
     assert body["thresholds"] == {"min_overall_score": 0.75, "min_metric_score": 0.5}
 
 
+def test_dataset_api_quality_report_includes_recipe_benchmark_readiness(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post(
+        "/api/datasets/generate",
+        json={"topic": "sepsis", "count": 1, "recipe": "icu_timeseries_notes"},
+    )
+    dataset_id = generated.json()["dataset_id"]
+
+    response = client.get(f"/api/datasets/{dataset_id}/quality")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["benchmark_ready"] is False
+    assert body["recommended_reference_keys"] == [
+        "synthclinicalnotes",
+        "augmented_clinical_notes",
+        "medsynth_dialogue_note",
+        "clinical_notes_to_fhir",
+    ]
+    assert "clinical_notes_to_fhir" in body["missing_reference_keys"]
+    assert body["benchmark_thresholds"] == {
+        "min_overall_score": 0.75,
+        "min_metric_score": 0.5,
+    }
+
+
 def test_dataset_api_runs_recipe_benchmark_suite(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

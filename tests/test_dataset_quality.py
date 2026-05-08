@@ -433,3 +433,32 @@ def test_quality_report_treats_missing_validation_as_blocking():
     assert report.export_ready is False
     assert report.blocking_issue_count == 1
     assert report.issue_counts_by_field == {"validation.missing": 1}
+
+
+def test_quality_report_surfaces_missing_benchmark_reference_plan():
+    report = build_dataset_quality_report(
+        "ds-quality",
+        [_record("rec-1")],
+        benchmark_plan={
+            "recommended_reference_keys": ["synthclinicalnotes", "clinical_notes_to_fhir"],
+            "ready": False,
+            "missing_reference_keys": ["clinical_notes_to_fhir"],
+            "thresholds": {
+                "min_overall_score": 0.75,
+                "min_metric_score": 0.5,
+            },
+        },
+    )
+
+    assert report.export_ready is True
+    assert report.benchmark_ready is False
+    assert report.recommended_reference_keys == [
+        "synthclinicalnotes",
+        "clinical_notes_to_fhir",
+    ]
+    assert report.missing_reference_keys == ["clinical_notes_to_fhir"]
+    assert report.benchmark_thresholds == {
+        "min_overall_score": 0.75,
+        "min_metric_score": 0.5,
+    }
+    assert any("recommended reference dataset" in item for item in report.recommendations)

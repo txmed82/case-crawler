@@ -12,6 +12,7 @@ def build_dataset_quality_report(
     records: list[SyntheticRecord],
     *,
     effective_approved: Callable[[SyntheticRecord], bool | None] | None = None,
+    benchmark_plan: dict | None = None,
 ) -> DatasetQualityReport:
     approval_fn = effective_approved or _validation_approved
     modality_counts: Counter[str] = Counter()
@@ -63,7 +64,9 @@ def build_dataset_quality_report(
         blocking_issue_count=blocking_issue_count,
         issue_counts_by_field=issue_counts_by_field,
         modality_counts=modality_counts,
+        benchmark_plan=benchmark_plan,
     )
+    benchmark_summary = _benchmark_summary(benchmark_plan)
     return DatasetQualityReport(
         dataset_id=dataset_id,
         record_count=record_count,
@@ -72,6 +75,11 @@ def build_dataset_quality_report(
         export_ready=record_count > 0
         and approved_count == record_count
         and blocking_issue_count == 0,
+        benchmark_ready=benchmark_summary["ready"],
+        recommended_reference_keys=benchmark_summary["recommended_reference_keys"],
+        resolved_reference_dataset_id=benchmark_summary["resolved_reference_dataset_id"],
+        missing_reference_keys=benchmark_summary["missing_reference_keys"],
+        benchmark_thresholds=benchmark_summary["thresholds"],
         modality_counts=dict(sorted(modality_counts.items())),
         artifact_counts=dict(sorted(artifact_counts.items())),
         note_type_counts=dict(sorted(note_type_counts.items())),
@@ -228,6 +236,7 @@ def _recommendations(
     blocking_issue_count: int,
     issue_counts_by_field: Counter[str],
     modality_counts: Counter[str],
+    benchmark_plan: dict | None = None,
 ) -> list[str]:
     recommendations: list[str] = []
     if record_count == 0:
@@ -248,4 +257,63 @@ def _recommendations(
         recommendations.append("Fix expected clinical document author roles before fine-tuning export.")
     if "clinical_text" not in modality_counts:
         recommendations.append("Add clinical text records for supervised fine-tuning tasks.")
+    benchmark_summary = _benchmark_summary(benchmark_plan)
+    if (
+        benchmark_summary["recommended_reference_keys"]
+        and benchmark_summary["ready"] is False
+    ):
+        recommendations.append(
+            "Import a recommended reference dataset before benchmark-gated release."
+        )
     return recommendations
+
+
+def _benchmark_summary(benchmark_plan: dict | None) -> dict:
+    if not isinstance(benchmark_plan, dict):
+        return {
+            "ready": None,
+            "recommended_reference_keys": [],
+            "resolved_reference_dataset_id": None,
+            "missing_reference_keys": [],
+            "thresholds": {},
+        }
+    recommended_reference_keys = _string_list(
+        benchmark_plan.get("recommended_reference_keys")
+    )
+    return {
+        "ready": bool(benchmark_plan.get("ready"))
+        if recommended_reference_keys
+        else None,
+        "recommended_reference_keys": recommended_reference_keys,
+        "resolved_reference_dataset_id": _string_or_none(
+            benchmark_plan.get("resolved_reference_dataset_id")
+        ),
+        "missing_reference_keys": _string_list(
+            benchmark_plan.get("missing_reference_keys")
+        ),
+        "thresholds": _thresholds(benchmark_plan.get("thresholds")),
+    }
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _string_or_none(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _thresholds(value: object) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    thresholds = {}
+    for key in ("min_overall_score", "min_metric_score"):
+        score = value.get(key)
+        if isinstance(score, int | float):
+            thresholds[key] = float(score)
+    return thresholds
