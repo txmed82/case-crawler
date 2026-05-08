@@ -489,6 +489,94 @@ def test_validator_rejects_encounter_and_medication_temporal_inversions():
     assert any(issue.field == "medication_history.period" for issue in report.issues)
 
 
+def test_validator_rejects_artifacts_outside_encounter_window():
+    bad = _record(
+        encounters=[
+            Encounter(
+                encounter_id="enc-1",
+                start="2026-05-06T08:00:00",
+                end="2026-05-06T12:00:00",
+                setting="ed",
+                reason="fever",
+            )
+        ],
+        labs=[
+            LabObservation(
+                name="Lactate",
+                value=3.2,
+                unit="mmol/L",
+                reference_low=0.5,
+                reference_high=2.0,
+                flag="high",
+                effective_time="2026-05-06T14:00:00",
+            )
+        ],
+        vitals=[
+            VitalObservation(
+                name="Temperature",
+                value=38.4,
+                unit="C",
+                effective_time="2026-05-06T07:30:00",
+            )
+        ],
+        documents=[
+            ClinicalDocument(
+                document_id="doc-1",
+                note_type="physician_note",
+                author_role="physician",
+                timestamp="2026-05-06T13:00:00",
+                clean_text="Fever evaluation.",
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "labs.effective_time" for issue in report.issues)
+    assert any(issue.field == "vitals.effective_time" for issue in report.issues)
+    assert any(
+        issue.field == "documents.timestamp"
+        and "outside all encounter windows" in issue.message
+        for issue in report.issues
+    )
+
+
+def test_validator_does_not_treat_invalid_encounter_end_as_open_window():
+    bad = _record(
+        encounters=[
+            Encounter(
+                encounter_id="enc-1",
+                start="2026-05-06T08:00:00",
+                end="not-a-date",
+                setting="ed",
+                reason="fever",
+            )
+        ],
+        labs=[
+            LabObservation(
+                name="Lactate",
+                value=3.2,
+                unit="mmol/L",
+                reference_low=0.5,
+                reference_high=2.0,
+                flag="high",
+                effective_time="2026-05-07T14:00:00",
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "encounters.end" for issue in report.issues)
+    assert not any(
+        issue.field == "labs.effective_time"
+        and "outside all encounter windows" in issue.message
+        for issue in report.issues
+    )
+
+
 def test_validator_rejects_non_chronological_time_series():
     bad = _record(
         modalities=[Modality.TIME_SERIES],

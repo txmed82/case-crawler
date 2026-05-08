@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from casecrawler.generation.imaging_templates import get_imaging_template
 from casecrawler.models.synthetic import Modality, SyntheticRecord, ValidationIssue
@@ -9,6 +9,7 @@ from casecrawler.models.synthetic import Modality, SyntheticRecord, ValidationIs
 
 def validate_temporal_consistency(record: SyntheticRecord) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
+    encounter_windows: list[tuple[datetime, datetime | None]] = []
     for encounter in record.encounters:
         start = _parse_datetime(encounter.start)
         end = _parse_datetime(encounter.end) if encounter.end else None
@@ -39,6 +40,10 @@ def validate_temporal_consistency(record: SyntheticRecord) -> list[ValidationIss
                     message=f"Encounter {encounter.encounter_id} ends before it starts.",
                 )
             )
+        if start is not None and (
+            (encounter.end is None and end is None) or (end is not None and end >= start)
+        ):
+            encounter_windows.append((start, end))
 
     for medication in record.medication_history:
         start = _parse_datetime(medication.start) if medication.start else None
@@ -68,6 +73,75 @@ def validate_temporal_consistency(record: SyntheticRecord) -> list[ValidationIss
                     modality=Modality.STRUCTURED_EHR,
                     field="medication_history.period",
                     message=f"Medication {medication.name} ends before it starts.",
+                )
+            )
+
+    for lab in record.labs:
+        observed_at = _parse_datetime(lab.effective_time)
+        if observed_at is None:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.LABS,
+                    field="labs.effective_time",
+                    message=f"Lab {lab.name} has an invalid effective time.",
+                )
+            )
+            continue
+        if _outside_encounter_windows(observed_at, encounter_windows):
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.LABS,
+                    field="labs.effective_time",
+                    message=f"Lab {lab.name} is timestamped outside all encounter windows.",
+                )
+            )
+
+    for vital in record.vitals:
+        observed_at = _parse_datetime(vital.effective_time)
+        if observed_at is None:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.VITALS,
+                    field="vitals.effective_time",
+                    message=f"Vital {vital.name} has an invalid effective time.",
+                )
+            )
+            continue
+        if _outside_encounter_windows(observed_at, encounter_windows):
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.VITALS,
+                    field="vitals.effective_time",
+                    message=f"Vital {vital.name} is timestamped outside all encounter windows.",
+                )
+            )
+
+    for document in record.documents:
+        authored_at = _parse_datetime(document.timestamp)
+        if authored_at is None:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.CLINICAL_TEXT,
+                    field="documents.timestamp",
+                    message=f"Document {document.document_id} has an invalid timestamp.",
+                )
+            )
+            continue
+        if _outside_encounter_windows(authored_at, encounter_windows):
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.CLINICAL_TEXT,
+                    field="documents.timestamp",
+                    message=(
+                        f"Document {document.document_id} is timestamped outside "
+                        "all encounter windows."
+                    ),
                 )
             )
 
@@ -554,9 +628,24 @@ def _parse_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is not None:
+        return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+def _outside_encounter_windows(
+    timestamp: datetime,
+    encounter_windows: list[tuple[datetime, datetime | None]],
+) -> bool:
+    if not encounter_windows:
+        return False
+    return not any(
+        start <= timestamp and (end is None or timestamp <= end)
+        for start, end in encounter_windows
+    )
 
 
 def _validate_ecg_channel(channel) -> list[ValidationIssue]:
