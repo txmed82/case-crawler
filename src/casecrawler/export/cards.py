@@ -115,6 +115,7 @@ def build_model_card(
     )
     procedure_counts = _procedure_counts(records)
     generation_overrides = _generation_override_counts(records)
+    imaging_model_policies = _imaging_model_policy_counts(records)
     return "\n".join(
         [
             f"# Model Card: {manifest.name} synthetic generation pipeline",
@@ -138,6 +139,10 @@ def build_model_card(
             "## Imaging Backends",
             "",
             *_counter_lines(backends or Counter({"none": 1})),
+            "",
+            "## Imaging Model Policies",
+            "",
+            *_counter_lines(imaging_model_policies or Counter({"none": 1})),
             "",
             "## Time-Series Backends",
             "",
@@ -211,6 +216,22 @@ def _generation_override_counts(records: list[SyntheticRecord]) -> Counter[str]:
             else:
                 rendered = str(value)
             counter[f"{key}={rendered}"] += 1
+    return counter
+
+
+def _imaging_model_policy_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        policy = record.metadata.get("imaging_model_policy", {})
+        if not isinstance(policy, dict):
+            continue
+        profile = policy.get("profile") or "unspecified"
+        use_policy = policy.get("use_policy") or "review_license_before_use"
+        license_name = policy.get("license") or "unspecified"
+        gated = policy.get("gated")
+        counter[
+            f"profile={profile} license={license_name} gated={gated} use_policy={use_policy}"
+        ] += 1
     return counter
 
 
