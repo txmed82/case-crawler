@@ -5,6 +5,8 @@ from casecrawler.models.synthetic import (
     ComplexityProfile,
     Modality,
     Provenance,
+    Code,
+    Encounter,
     SyntheticPatient,
     SyntheticRecord,
     TimeSeriesChannel,
@@ -32,6 +34,8 @@ def test_build_dataset_card_includes_validation_and_use_limits():
     assert "## Extracted Fact Targets" in card
     assert "- lab_values: 1" in card
     assert "- medications: 1" in card
+    assert "## Procedures" in card
+    assert "- Central venous catheter placement: 1" in card
 
 
 def test_build_model_card_documents_generator_and_validation_gates():
@@ -46,6 +50,8 @@ def test_build_model_card_documents_generator_and_validation_gates():
     assert "- imaging_model_profile=cxr_pneumonia_dreambooth: 1" in card
     assert "## Time-Series Backends" in card
     assert "- external:timediff-sample: 1" in card
+    assert "## Procedure Coverage" in card
+    assert "- Central venous catheter placement: 1" in card
     assert "PHI-like privacy scanning" in card
 
 
@@ -57,7 +63,21 @@ def _record() -> SyntheticRecord:
         complexity=ComplexityProfile.MODERATE,
         modalities=[Modality.CLINICAL_TEXT],
         patient=SyntheticPatient(patient_id="pat-1", age=64, sex="male"),
-        encounters=[],
+        encounters=[
+            Encounter(
+                encounter_id="enc-1",
+                start="2026-05-06T10:00:00",
+                setting="emergency_department",
+                reason="sepsis",
+                procedures=[
+                    Code(
+                        system="http://snomed.info/sct",
+                        code="232717009",
+                        display="Central venous catheter placement",
+                    )
+                ],
+            )
+        ],
         documents=[
             ClinicalDocument(
                 document_id="doc-1",
