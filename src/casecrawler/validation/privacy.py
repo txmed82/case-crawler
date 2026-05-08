@@ -21,6 +21,16 @@ STREET_ADDRESS_RE = re.compile(
     r"(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct)\b",
     flags=re.IGNORECASE,
 )
+MEMORIZATION_NGRAM_WORDS = 12
+SOURCE_TEXT_KEYS = {
+    "abstract",
+    "chunk",
+    "content",
+    "excerpt",
+    "source_text",
+    "snippet",
+    "text",
+}
 
 
 def _extract_strings(value) -> list[str]:
@@ -45,6 +55,64 @@ def _text_blobs(record: SyntheticRecord) -> list[str]:
     return blobs
 
 
+def _generated_text_blobs(record: SyntheticRecord) -> list[str]:
+    blobs: list[str] = []
+    for document in record.documents:
+        blobs.append(document.clean_text)
+        if document.messy_text:
+            blobs.append(document.messy_text)
+    for asset in record.imaging:
+        blobs.append(asset.report_text)
+    return [blob for blob in blobs if blob]
+
+
+def _source_text_blobs(record: SyntheticRecord) -> list[str]:
+    refs = record.provenance.source_refs
+    blobs: list[str] = []
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        blobs.extend(_source_texts_from_mapping(ref))
+    return [blob for blob in blobs if blob]
+
+
+def _source_texts_from_mapping(value: dict) -> list[str]:
+    blobs: list[str] = []
+    for key, nested in value.items():
+        normalized_key = str(key).lower()
+        if isinstance(nested, str) and normalized_key in SOURCE_TEXT_KEYS:
+            blobs.append(nested)
+            continue
+        if isinstance(nested, dict):
+            blobs.extend(_source_texts_from_mapping(nested))
+        elif isinstance(nested, list):
+            for item in nested:
+                if isinstance(item, dict):
+                    blobs.extend(_source_texts_from_mapping(item))
+    return blobs
+
+
+def _normalized_words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def _ngram_set(text: str, size: int) -> set[tuple[str, ...]]:
+    words = _normalized_words(text)
+    if len(words) < size:
+        return set()
+    return {
+        tuple(words[index:index + size])
+        for index in range(0, len(words) - size + 1)
+    }
+
+
+def _has_long_source_overlap(generated_text: str, source_text: str) -> bool:
+    generated_ngrams = _ngram_set(generated_text, MEMORIZATION_NGRAM_WORDS)
+    if not generated_ngrams:
+        return False
+    return bool(generated_ngrams & _ngram_set(source_text, MEMORIZATION_NGRAM_WORDS))
+
+
 def validate_privacy(record: SyntheticRecord) -> list[ValidationIssue]:
     text = "\n".join(_text_blobs(record))
     issues: list[ValidationIssue] = []
@@ -65,4 +133,23 @@ def validate_privacy(record: SyntheticRecord) -> list[ValidationIssue]:
                     message=f"Potential PHI-like {label} detected.",
                 )
             )
+    source_texts = _source_text_blobs(record)
+    if source_texts:
+        for generated_text in _generated_text_blobs(record):
+            if any(
+                _has_long_source_overlap(generated_text, source_text)
+                for source_text in source_texts
+            ):
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.CLINICAL_TEXT,
+                        field="privacy.memorization_risk",
+                        message=(
+                            "Generated text contains a long verbatim span from "
+                            "a source reference."
+                        ),
+                    )
+                )
+                break
     return issues

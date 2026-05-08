@@ -948,6 +948,40 @@ def test_validator_rejects_common_phi_like_identifiers():
     assert "street address" in messages
 
 
+def test_validator_rejects_long_verbatim_source_copying():
+    source_text = (
+        "Sepsis care requires early recognition broad spectrum antibiotics "
+        "rapid fluid resuscitation lactate reassessment and source control "
+        "within the first hours of presentation."
+    )
+    bad = _record(
+        documents=[
+            ClinicalDocument(
+                document_id="doc-copy",
+                note_type="progress_note",
+                author_role="physician",
+                timestamp="2026-05-06T09:00:00",
+                clean_text=(
+                    "Synthetic note: broad spectrum antibiotics rapid fluid "
+                    "resuscitation lactate reassessment and source control "
+                    "within the first hours of presentation."
+                ),
+            )
+        ],
+        provenance=Provenance(
+            generator="unit-test",
+            source_refs=[{"source_text": source_text}],
+            created_at="2026-05-06T09:00:00",
+        ),
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "privacy.memorization_risk" for issue in report.issues)
+    assert report.privacy_score == 0.0
+
+
 class FakeImageAlignmentValidator:
     def __init__(self, score: float):
         self._score = score
