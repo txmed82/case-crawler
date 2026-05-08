@@ -310,16 +310,21 @@ synthetic:
   clinical_text_backend: "deterministic" # or "llm"
   # GenerationRequest can override clinical_text_backend, llm_provider,
   # llm_model, and ollama_base_url for a single dataset generation run.
-  imaging_backend: "placeholder" # or "diffusers"
+  imaging_backend: "placeholder" # or "diffusers" or "external"
   imaging_model_profile: null # e.g. cxr_pneumonia_dreambooth
   diffusers_model_id: "stabilityai/stable-diffusion-2-1"
+  imaging_command: null # e.g. ["hf-image-sample", "--model", "local-cxr"]
   # Imaging profiles declare prompt inputs, generated ImagingAsset output fields,
   # licensing/use policy, and validation gates for file integrity and alignment.
+  # External imaging commands receive stdin JSON with output_dir, prompt, modality,
+  # and body_region. They must print an ImagingAsset JSON object or
+  # {"asset": ImagingAsset} to stdout.
   time_series_backend: "deterministic" # or "external"
   time_series_model_profile: null # e.g. timediff or rawmed
   time_series_command: null # e.g. ["timediff-sample", "--checkpoint", "local.pt"]
   # External commands receive stdin JSON with record, channels, and points.
-  # They must print a JSON array of TimeSeriesChannel objects to stdout.
+  # They must print a JSON array of TimeSeriesChannel objects or
+  # {"channels": [TimeSeriesChannel, ...]} to stdout.
   synthea_executable: null
   # GenerationRequest.cohort_constraints supports age_min, age_max, sexes,
   # sex_cycle, topic_mix, and base_time for deterministic cohort composition.
