@@ -103,6 +103,7 @@ Optional backends are intentionally lazy:
 - Existing OpenAI, Anthropic, OpenRouter, and Ollama providers remain available for model-backed generation
 - `synthetic.clinical_text_backend: llm` routes clinical document drafting through the configured LLM provider while the default deterministic backend remains no-key
 - `synthetic.clinical_text_backend: external` wraps local or Hugging Face note generators as stdin/stdout commands and validates their returned `ClinicalDocument[]` records
+- Clinical text model profiles include MedGemma (`google/medgemma-4b-it`), Meditron (`epfl-llm/meditron-7b`), and a generic external note-generator contract; `casecrawler clinical-text-models` lists the adapter metadata
 
 ## CLI Reference
 
@@ -309,9 +310,11 @@ llm:
 
 synthetic:
   clinical_text_backend: "deterministic" # or "llm" or "external"
+  clinical_text_model_profile: null # e.g. medgemma_4b_it or meditron_7b
   clinical_text_command: null # e.g. ["hf-note-sample", "--model", "local-notes"]
   # GenerationRequest can override clinical_text_backend, llm_provider,
-  # llm_model, ollama_base_url, and clinical_text_command for one dataset run.
+  # llm_model, ollama_base_url, clinical_text_model_profile, and
+  # clinical_text_command for one dataset run.
   # External clinical text commands receive stdin JSON with record and must print
   # ClinicalDocument[] or {"documents": ClinicalDocument[]} to stdout.
   imaging_backend: "placeholder" # or "diffusers" or "external"

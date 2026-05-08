@@ -53,6 +53,7 @@ class SyntheticConfig(BaseModel):
     ]
     validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
     clinical_text_backend: str = "deterministic"
+    clinical_text_model_profile: str | None = None
     clinical_text_command: list[str] | None = None
     imaging_backend: str = "placeholder"
     imaging_model_profile: str | None = None

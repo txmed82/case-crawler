@@ -633,10 +633,56 @@ async def test_synthetic_pipeline_allows_request_external_clinical_text_backend(
     assert result["generated"] == 1
     assert result["records"][0].metadata["clinical_text_model_policy"] == {
         "backend": "external",
+        "profile": None,
+        "model_id": None,
         "command": ["hf-note-sample"],
         "license": "external_command_terms",
         "gated": False,
         "use_policy": "wrap_external_clinical_text_generator_validate_outputs",
+    }
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_allows_request_clinical_text_model_profile(
+    monkeypatch,
+    tmp_path,
+):
+    created = []
+
+    class RequestScopedTextGenerator(FakeTextGenerator):
+        def __init__(self, provider=None, external_command=None):
+            super().__init__(provider=provider)
+            created.append(external_command)
+
+    monkeypatch.setattr(
+        "casecrawler.generation.synthetic_pipeline.TextGenerator",
+        RequestScopedTextGenerator,
+    )
+    pipeline = SyntheticPipeline(
+        text_generator=FakeTextGenerator(),
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="sepsis",
+            count=1,
+            modalities=[Modality.CLINICAL_TEXT],
+            clinical_text_model_profile="medgemma_4b_it",
+        )
+    )
+
+    assert created == [["hf-note-sample", "--model", "google/medgemma-4b-it"]]
+    assert result["records"][0].metadata["clinical_text_model_policy"] == {
+        "backend": "external",
+        "profile": "medgemma_4b_it",
+        "model_id": "google/medgemma-4b-it",
+        "command": ["hf-note-sample", "--model", "google/medgemma-4b-it"],
+        "license": "health-ai-developer-foundations",
+        "gated": False,
+        "use_policy": "health_ai_terms_review_outputs_before_release",
     }
 
 
