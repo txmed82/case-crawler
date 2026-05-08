@@ -98,6 +98,16 @@ def test_dataset_cli_lists_generation_recipes():
     assert "references=" in result.output
 
 
+def test_dataset_cli_lists_imaging_model_use_policies():
+    result = CliRunner().invoke(cli, ["imaging-models"])
+
+    assert result.exit_code == 0
+    assert "medisyn" in result.output
+    assert "use_policy=non_commercial_no_derivatives_review_before_release" in result.output
+    assert "roentgen_v2_gated" in result.output
+    assert "gated=True" in result.output
+
+
 def test_dataset_cli_reports_unknown_generation_recipe(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(
