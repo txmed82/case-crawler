@@ -72,6 +72,25 @@ class DatasetBenchmark:
                 generated_profile.sex_counts,
                 reference_profile.sex_counts,
             ),
+            _distribution_metric(
+                "race_distribution",
+                generated_profile.race_counts,
+                reference_profile.race_counts,
+            ),
+            _distribution_metric(
+                "ethnicity_distribution",
+                generated_profile.ethnicity_counts,
+                reference_profile.ethnicity_counts,
+            ),
+            _distribution_metric(
+                "insurance_distribution",
+                generated_profile.insurance_counts,
+                reference_profile.insurance_counts,
+            ),
+            *_social_history_distribution_metrics(
+                generated_profile.social_history_counts,
+                reference_profile.social_history_counts,
+            ),
             _closeness_metric(
                 "mean_document_chars",
                 generated_profile.mean_document_chars,
@@ -555,13 +574,32 @@ def _profile_metrics(
             reference_profile.mean_age,
             tolerance=25.0,
         ),
-        _distribution_metric(
-            "sex_distribution",
-            generated_profile.sex_counts,
-            reference_profile.sex_counts,
-        ),
-        _closeness_metric(
-            "mean_document_chars",
+            _distribution_metric(
+                "sex_distribution",
+                generated_profile.sex_counts,
+                reference_profile.sex_counts,
+            ),
+            _distribution_metric(
+                "race_distribution",
+                generated_profile.race_counts,
+                reference_profile.race_counts,
+            ),
+            _distribution_metric(
+                "ethnicity_distribution",
+                generated_profile.ethnicity_counts,
+                reference_profile.ethnicity_counts,
+            ),
+            _distribution_metric(
+                "insurance_distribution",
+                generated_profile.insurance_counts,
+                reference_profile.insurance_counts,
+            ),
+            *_social_history_distribution_metrics(
+                generated_profile.social_history_counts,
+                reference_profile.social_history_counts,
+            ),
+            _closeness_metric(
+                "mean_document_chars",
             generated_profile.mean_document_chars,
             reference_profile.mean_document_chars,
             tolerance=2500.0,
@@ -924,6 +962,10 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         )
     modality_counts: Counter[str] = Counter()
     sex_counts: Counter[str] = Counter()
+    race_counts: Counter[str] = Counter()
+    ethnicity_counts: Counter[str] = Counter()
+    insurance_counts: Counter[str] = Counter()
+    social_history_counts: dict[str, Counter[str]] = {}
     note_type_counts: Counter[str] = Counter()
     document_author_role_counts: Counter[str] = Counter()
     clinical_text_model_policy_counts: Counter[str] = Counter()
@@ -979,6 +1021,21 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     for record in records:
         ages.append(record.patient.age)
         sex_counts[record.patient.sex or "unknown"] += 1
+        _count_optional_demographic(record.patient.demographics, "race", race_counts)
+        _count_optional_demographic(
+            record.patient.demographics,
+            "ethnicity",
+            ethnicity_counts,
+        )
+        _count_optional_demographic(
+            record.patient.demographics,
+            "insurance",
+            insurance_counts,
+        )
+        for key, value in record.patient.social_history.items():
+            if value is None:
+                continue
+            social_history_counts.setdefault(key, Counter())[str(value)] += 1
         for modality in record.modalities:
             modality_counts[modality.value] += 1
             modality_declared_counts[modality.value] += 1
@@ -1096,6 +1153,13 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         modality_counts=dict(sorted(modality_counts.items())),
         mean_age=_mean(ages),
         sex_counts=dict(sorted(sex_counts.items())),
+        race_counts=dict(sorted(race_counts.items())),
+        ethnicity_counts=dict(sorted(ethnicity_counts.items())),
+        insurance_counts=dict(sorted(insurance_counts.items())),
+        social_history_counts={
+            key: dict(sorted(counts.items()))
+            for key, counts in sorted(social_history_counts.items())
+        },
         mean_document_chars=_mean(document_lengths),
         note_type_counts=dict(sorted(note_type_counts.items())),
         document_author_role_counts=dict(sorted(document_author_role_counts.items())),
@@ -1325,6 +1389,32 @@ def _distribution_metric(
             "reference_counts": reference_counts,
         },
     )
+
+
+def _social_history_distribution_metrics(
+    generated_counts: dict[str, dict[str, int]],
+    reference_counts: dict[str, dict[str, int]],
+) -> list[BenchmarkMetric]:
+    metrics: list[BenchmarkMetric] = []
+    for key in sorted(set(generated_counts) | set(reference_counts)):
+        metrics.append(
+            _distribution_metric(
+                f"social_history_distribution:{key}",
+                generated_counts.get(key, {}),
+                reference_counts.get(key, {}),
+            )
+        )
+    return metrics
+
+
+def _count_optional_demographic(
+    demographics: dict,
+    key: str,
+    counter: Counter[str],
+) -> None:
+    value = demographics.get(key)
+    if value is not None:
+        counter[str(value)] += 1
 
 
 def _numeric_summary_metrics(

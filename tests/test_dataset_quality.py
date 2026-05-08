@@ -30,7 +30,17 @@ def _record(record_id: str, *, approved: bool = True, issues=None) -> SyntheticR
         topic="sepsis",
         complexity=ComplexityProfile.MODERATE,
         modalities=[Modality.STRUCTURED_EHR, Modality.CLINICAL_TEXT, Modality.LABS],
-        patient=SyntheticPatient(patient_id=f"pat-{record_id}", age=64, sex="male"),
+        patient=SyntheticPatient(
+            patient_id=f"pat-{record_id}",
+            age=64,
+            sex="male",
+            demographics={
+                "race": "synthetic_white",
+                "ethnicity": "synthetic_not_hispanic_or_latino",
+                "insurance": "synthetic_medicare",
+            },
+            social_history={"smoking_status": "former", "housing": "stable"},
+        ),
         encounters=[
             Encounter(
                 encounter_id=f"enc-{record_id}",
@@ -125,6 +135,13 @@ def test_quality_report_marks_fully_approved_dataset_export_ready():
     assert report.export_ready is True
     assert report.approval_rate == 1.0
     assert report.modality_counts == {"clinical_text": 2, "labs": 2, "structured_ehr": 2}
+    assert report.race_counts == {"synthetic_white": 2}
+    assert report.ethnicity_counts == {"synthetic_not_hispanic_or_latino": 2}
+    assert report.insurance_counts == {"synthetic_medicare": 2}
+    assert report.social_history_counts == {
+        "housing": {"stable": 2},
+        "smoking_status": {"former": 2},
+    }
     assert report.longitudinal_record_rate == 0
     assert report.mean_encounter_span_hours is None
     assert report.mean_observations_per_encounter == 1
@@ -213,6 +230,10 @@ def test_objective_coverage_requires_cohort_similarity_metrics():
                             {"name": "record_count"},
                             {"name": "mean_age"},
                             {"name": "sex_distribution"},
+                            {"name": "race_distribution"},
+                            {"name": "ethnicity_distribution"},
+                            {"name": "insurance_distribution"},
+                            {"name": "social_history_distribution:smoking_status"},
                             {"name": "modality_overlap"},
                         ]
                     }
