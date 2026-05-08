@@ -603,7 +603,7 @@ def import_synthea_fhir(req: SyntheaImportRequest):
     if not records:
         raise HTTPException(
             status_code=404,
-            detail="no Synthea FHIR JSON bundles or NDJSON files found",
+            detail="no Synthea FHIR JSON, FHIR NDJSON, or CSV files found",
         )
     store = DatasetStore()
     for record in records:

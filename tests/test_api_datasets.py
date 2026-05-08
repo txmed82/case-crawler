@@ -1372,7 +1372,9 @@ def test_dataset_api_reports_empty_synthea_import_directory(tmp_path, monkeypatc
     )
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "no Synthea FHIR JSON bundles or NDJSON files found"
+    assert response.json()["detail"] == (
+        "no Synthea FHIR JSON, FHIR NDJSON, or CSV files found"
+    )
 
 
 def test_dataset_api_reports_unknown_hf_reference_dataset(tmp_path, monkeypatch):

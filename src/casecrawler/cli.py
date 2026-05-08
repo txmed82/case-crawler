@@ -380,24 +380,40 @@ def import_reference_fixture_command(
     )
 
 
-@cli.command("import-synthea-fhir")
-@click.argument("path")
-@click.option("--dataset-id", required=True, help="Dataset id for imported Synthea records")
-def import_synthea_fhir(path: str, dataset_id: str) -> None:
-    """Import Synthea FHIR JSON bundles or NDJSON files into the local dataset store."""
+def _import_synthea_records(path: str, dataset_id: str) -> int:
     from casecrawler.integrations.synthea import SyntheaAdapter
     from casecrawler.storage.dataset_store import DatasetStore
 
     try:
         records = SyntheaAdapter().import_fhir_path(path, dataset_id=dataset_id)
     except (OSError, json.JSONDecodeError) as exc:
-        raise click.ClickException(f"Failed to import Synthea FHIR from {path}: {exc}") from exc
+        raise click.ClickException(f"Failed to import Synthea output from {path}: {exc}") from exc
     if not records:
-        raise click.ClickException(f"No Synthea FHIR JSON bundles or NDJSON files found at {path}.")
+        raise click.ClickException(
+            f"No Synthea FHIR JSON, FHIR NDJSON, or CSV files found at {path}."
+        )
     store = DatasetStore()
     for record in records:
         store.save_record(record)
-    click.echo(f"Imported {len(records)} Synthea FHIR record(s) into {dataset_id}")
+    return len(records)
+
+
+@cli.command("import-synthea")
+@click.argument("path")
+@click.option("--dataset-id", required=True, help="Dataset id for imported Synthea records")
+def import_synthea(path: str, dataset_id: str) -> None:
+    """Import Synthea FHIR JSON, FHIR NDJSON, or CSV output."""
+    count = _import_synthea_records(path, dataset_id)
+    click.echo(f"Imported {count} Synthea record(s) into {dataset_id}")
+
+
+@cli.command("import-synthea-fhir")
+@click.argument("path")
+@click.option("--dataset-id", required=True, help="Dataset id for imported Synthea records")
+def import_synthea_fhir(path: str, dataset_id: str) -> None:
+    """Backward-compatible alias for import-synthea."""
+    count = _import_synthea_records(path, dataset_id)
+    click.echo(f"Imported {count} Synthea record(s) into {dataset_id}")
 
 
 @cli.command("run-synthea")
@@ -405,7 +421,7 @@ def import_synthea_fhir(path: str, dataset_id: str) -> None:
 @click.option(
     "--output-dir",
     required=True,
-    help="Directory where Synthea writes FHIR JSON bundles or NDJSON files",
+    help="Directory where Synthea writes FHIR JSON, FHIR NDJSON, or CSV output",
 )
 @click.option("--population", default=1, type=click.IntRange(1), show_default=True)
 @click.option(
@@ -419,7 +435,7 @@ def run_synthea(
     population: int,
     synthea_executable: str | None,
 ) -> None:
-    """Run a configured Synthea executable and import generated FHIR output."""
+    """Run a configured Synthea executable and import generated output."""
     from casecrawler.integrations.synthea import SyntheaAdapter
     from casecrawler.storage.dataset_store import DatasetStore
 
@@ -439,7 +455,7 @@ def run_synthea(
         raise click.ClickException(f"Failed to run/import Synthea: {exc}") from exc
     if not records:
         raise click.ClickException(
-            f"No Synthea FHIR JSON bundles or NDJSON files found at {output_dir}."
+            f"No Synthea FHIR JSON, FHIR NDJSON, or CSV files found at {output_dir}."
         )
     store = DatasetStore()
     for record in records:
