@@ -44,6 +44,18 @@ IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
         license="wtfpl",
         notes="General medical image diffusion model fine-tuned on ROCO.",
     ),
+    "medisyn": ImagingModelProfile(
+        name="medisyn",
+        model_id="hiesingerlab/MediSyn",
+        modality="medical_image",
+        body_region="multiregion",
+        prompt_prefix="synthetic medical image:",
+        license="cc-by-nc-nd-4.0",
+        notes=(
+            "Generalist text-guided latent diffusion model for public-domain "
+            "medical image synthesis across multiple specialties and image types."
+        ),
+    ),
     "mimic_cxr_editing": ImagingModelProfile(
         name="mimic_cxr_editing",
         model_id="IrohXu/stable-diffusion-mimic-cxr-v0.1",

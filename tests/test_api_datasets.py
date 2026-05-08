@@ -675,6 +675,13 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert "cxr_pneumonia_dreambooth" in {
         profile["name"] for profile in body["imaging_model_profiles"]
     }
+    medisyn = next(
+        profile
+        for profile in body["imaging_model_profiles"]
+        if profile["name"] == "medisyn"
+    )
+    assert medisyn["model_id"] == "hiesingerlab/MediSyn"
+    assert medisyn["license"] == "cc-by-nc-nd-4.0"
     assert "timediff" in {
         profile["name"] for profile in body["time_series_model_profiles"]
     }
