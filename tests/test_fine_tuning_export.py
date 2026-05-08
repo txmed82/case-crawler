@@ -26,6 +26,7 @@ from casecrawler.export.fine_tuning import (
     verify_jsonl_split_package,
 )
 from casecrawler.models.synthetic import (
+    AllergyIntolerance,
     ClinicalDocument,
     Code,
     ComplexityProfile,
@@ -107,6 +108,7 @@ def test_export_sft_extract_record_targets_full_structured_context():
     assert assistant_payload["labs"][0]["name"] == "Lactate"
     assert assistant_payload["vitals"][0]["name"] == "Heart rate"
     assert assistant_payload["medication_history"][0]["name"] == "Ceftriaxone"
+    assert assistant_payload["allergies"][0]["substance"] == "Penicillin"
     assert assistant_payload["time_series"][0]["name"] == "heart_rate"
     assert assistant_payload["documents"][0]["document_id"] == "doc-1"
     assert assistant_payload["imaging"][0]["image_id"] == "img-1"
@@ -2119,6 +2121,7 @@ def test_export_fhir_record_contains_training_bundle_resources():
     assert "Condition" in resource_types
     assert "Procedure" in resource_types
     assert "MedicationStatement" in resource_types
+    assert "AllergyIntolerance" in resource_types
     assert "DocumentReference" in resource_types
     assert "DiagnosticReport" in resource_types
     assert "Provenance" in resource_types
@@ -2144,6 +2147,13 @@ def test_export_fhir_record_contains_training_bundle_resources():
     ]
     assert procedures[0]["code"]["coding"][0]["display"] == "Central venous catheter placement"
     assert procedures[0]["encounter"]["reference"] == "Encounter/enc-1"
+    allergy = next(
+        resource
+        for resource in resources
+        if resource["resourceType"] == "AllergyIntolerance"
+    )
+    assert allergy["code"]["coding"][0]["display"] == "Penicillin"
+    assert allergy["reaction"][0]["manifestation"][0]["text"] == "hives"
     lab = next(
         resource
         for resource in resources
@@ -2486,6 +2496,16 @@ def _multimodal_record() -> SyntheticRecord:
                 frequency="daily",
                 status="active",
                 start="2026-05-06",
+            )
+        ],
+        allergies=[
+            AllergyIntolerance(
+                substance="Penicillin",
+                code="7980",
+                system="RxNorm",
+                reaction="hives",
+                severity="moderate",
+                recorded_at="2026-05-01",
             )
         ],
         time_series=[

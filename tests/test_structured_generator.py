@@ -136,6 +136,34 @@ def test_structured_generator_omits_medications_for_unrelated_topic():
     assert record.medication_history == []
 
 
+def test_structured_generator_emits_allergy_intolerance_artifacts():
+    req = GenerationRequest(
+        topic="sepsis",
+        modalities=[Modality.STRUCTURED_EHR],
+        cohort_constraints={
+            "base_time": "2026-02-03T04:05:06",
+            "allergies": [
+                {
+                    "substance": "Penicillin",
+                    "code": "7980",
+                    "system": "RxNorm",
+                    "reaction": "hives",
+                    "severity": "moderate",
+                }
+            ],
+        },
+    )
+
+    record = StructuredGenerator().generate("ds-one", req, 0)
+
+    assert record.allergies[0].substance == "Penicillin"
+    assert record.allergies[0].reaction == "hives"
+    assert record.allergies[0].recorded_at == "2026-02-03"
+    assert record.metadata["cohort_constraints"]["allergies"][0]["substance"] == (
+        "Penicillin"
+    )
+
+
 def test_structured_generator_emits_only_requested_observation_modalities():
     generator = StructuredGenerator()
 
@@ -163,11 +191,13 @@ def test_structured_generator_emits_only_requested_observation_modalities():
     assert imaging_only.labs == []
     assert imaging_only.vitals == []
     assert imaging_only.medication_history == []
+    assert imaging_only.allergies == []
     assert labs_only.labs
     assert labs_only.vitals == []
     assert vitals_only.labs == []
     assert vitals_only.vitals
     assert structured_only.medication_history
+    assert structured_only.allergies == []
     assert structured_only.labs == []
     assert structured_only.vitals == []
 

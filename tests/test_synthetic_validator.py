@@ -1,4 +1,5 @@
 from casecrawler.models.synthetic import (
+    AllergyIntolerance,
     ClinicalDocument,
     Code,
     Encounter,
@@ -453,6 +454,43 @@ def test_validator_rejects_duplicate_active_medication_statements():
         issue.field == "medication_history.duplicate_active"
         and "metformin" in issue.message
         for issue in report.issues
+    )
+
+
+def test_validator_rejects_invalid_allergy_entries_and_active_medication_conflicts():
+    bad = _record(
+        allergies=[
+            AllergyIntolerance(
+                substance="",
+                status="maybe",
+                severity="catastrophic",
+            ),
+            AllergyIntolerance(
+                substance="Ceftriaxone",
+                reaction="hives",
+                severity="moderate",
+                status="active",
+            ),
+        ],
+        medication_history=[
+            MedicationStatement(
+                name="Ceftriaxone",
+                dose="1 g",
+                route="IV",
+                status="active",
+                start="2026-05-06",
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "allergies.substance" for issue in report.issues)
+    assert any(issue.field == "allergies.status" for issue in report.issues)
+    assert any(issue.field == "allergies.severity" for issue in report.issues)
+    assert any(
+        issue.field == "allergies.medication_conflict" for issue in report.issues
     )
 
 

@@ -9,6 +9,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import (
+    AllergyIntolerance,
     Code,
     ComplexityProfile,
     Encounter,
@@ -100,6 +101,9 @@ class StructuredGenerator:
                     *_complexity_medications(req.complexity, req.topic),
                 ]
             ]
+            if include_medications
+            else [],
+            allergies=_allergies_for_index(req.cohort_constraints, index, now[:10])
             if include_medications
             else [],
             provenance=Provenance(generator="structured-generator", created_at=now),
@@ -368,6 +372,7 @@ def _metadata_cohort_constraints(cohort_constraints: dict) -> dict:
         "smoking_statuses",
         "alcohol_use",
         "housing",
+        "allergies",
         "base_time",
         "topic_mix",
         "topic_mix_weights",
@@ -619,6 +624,51 @@ def _medication_statement(template: dict, start: str) -> MedicationStatement:
     )
 
 
+def _allergies_for_index(
+    cohort_constraints: dict,
+    index: int,
+    recorded_at: str,
+) -> list[AllergyIntolerance]:
+    configured = cohort_constraints.get("allergies")
+    if configured is None:
+        templates = _DEFAULT_ALLERGY_CYCLE
+    elif isinstance(configured, str):
+        values = [part.strip() for part in configured.split(",") if part.strip()]
+        templates = [{"substance": value} for value in values]
+    elif isinstance(configured, list):
+        templates = [
+            item if isinstance(item, dict) else {"substance": str(item).strip()}
+            for item in configured
+            if (isinstance(item, dict) or str(item).strip())
+        ]
+    else:
+        raise ValueError(
+            "cohort_constraints.allergies must be a list or comma-separated string."
+        )
+    if not templates:
+        return []
+    template = templates[index % len(templates)]
+    substance = str(template.get("substance") or template.get("name") or "").strip()
+    if not substance or substance.lower() in {
+        "none",
+        "nkda",
+        "no known allergies",
+        "no known drug allergies",
+    }:
+        return []
+    return [
+        AllergyIntolerance(
+            substance=substance,
+            code=template.get("code"),
+            system=template.get("system") or "synthetic",
+            reaction=template.get("reaction") or "rash",
+            severity=template.get("severity") or "mild",
+            status=template.get("status") or "active",
+            recorded_at=template.get("recorded_at") or recorded_at,
+        )
+    ]
+
+
 def _indexed_value(value: float, index: int, step: float) -> float:
     adjusted = value + (index % 3) * step
     return round(adjusted, 2)
@@ -666,6 +716,25 @@ def _med(
         "route": route,
         "frequency": frequency,
     }
+
+
+_DEFAULT_ALLERGY_CYCLE = [
+    {"substance": "No known drug allergies", "status": "inactive"},
+    {
+        "substance": "Sulfonamide antibiotics",
+        "code": "91939003",
+        "system": "SNOMED-CT",
+        "reaction": "rash",
+        "severity": "moderate",
+    },
+    {
+        "substance": "Morphine",
+        "code": "7052",
+        "system": "RxNorm",
+        "reaction": "nausea",
+        "severity": "mild",
+    },
+]
 
 
 _TOPIC_PROFILES: list[tuple[tuple[str, ...], ClinicalProfile]] = [

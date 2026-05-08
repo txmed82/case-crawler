@@ -85,6 +85,29 @@ def test_synthea_adapter_imports_minimal_fhir_patient_bundle(tmp_path):
                     ],
                 }
             },
+            {
+                "resource": {
+                    "resourceType": "AllergyIntolerance",
+                    "clinicalStatus": {"text": "active"},
+                    "code": {
+                        "coding": [
+                            {
+                                "system": "RxNorm",
+                                "code": "7980",
+                                "display": "Penicillin",
+                            }
+                        ],
+                        "text": "Penicillin",
+                    },
+                    "reaction": [
+                        {
+                            "manifestation": [{"text": "hives"}],
+                            "severity": "moderate",
+                        }
+                    ],
+                    "recordedDate": "2026-01-01",
+                }
+            },
         ],
     }
     path = tmp_path / "patient.json"
@@ -110,6 +133,8 @@ def test_synthea_adapter_imports_minimal_fhir_patient_bundle(tmp_path):
     assert record.vitals[0].value == 118
     assert record.medication_history[0].name == "Ceftriaxone"
     assert record.medication_history[0].route == "IV"
+    assert record.allergies[0].substance == "Penicillin"
+    assert record.allergies[0].reaction == "hives"
     assert record.metadata["reference_key"] == "synthea_fhir"
     assert record.metadata["reference_dataset"] == "synthea_fhir"
     assert Modality.STRUCTURED_EHR in record.modalities

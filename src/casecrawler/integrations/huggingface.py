@@ -10,6 +10,7 @@ from typing import Iterable
 from uuid import NAMESPACE_URL, uuid5
 
 from casecrawler.models.synthetic import (
+    AllergyIntolerance,
     ClinicalDocument,
     Code,
     ComplexityProfile,
@@ -410,7 +411,15 @@ def reference_row_to_record(
     patient_sex = _extract_sex(note)
     record_id = f"hf-{uuid5(NAMESPACE_URL, stable_seed)}"
     patient_id = f"pat-{uuid5(NAMESPACE_URL, stable_seed + ':patient')}"
-    labs, vitals, medications, diagnoses, procedures, diagnostic_documents = _fhir_artifacts(
+    (
+        labs,
+        vitals,
+        medications,
+        allergies,
+        diagnoses,
+        procedures,
+        diagnostic_documents,
+    ) = _fhir_artifacts(
         answer,
         stable_seed=stable_seed,
     )
@@ -440,6 +449,7 @@ def reference_row_to_record(
         labs=labs,
         vitals=vitals,
         medications=medications,
+        allergies=allergies,
         diagnoses=diagnoses,
         procedures=procedures,
         imaging=imaging,
@@ -461,6 +471,7 @@ def reference_row_to_record(
             labs=labs,
             vitals=vitals,
             medications=medications,
+            allergies=allergies,
             diagnoses=diagnoses,
             procedures=procedures,
             imaging=imaging,
@@ -495,6 +506,7 @@ def reference_row_to_record(
         labs=labs,
         vitals=vitals,
         medication_history=medications,
+        allergies=allergies,
         time_series=time_series,
         documents=[document, *diagnostic_documents],
         imaging=imaging,
@@ -555,13 +567,14 @@ def _reference_modalities(
     labs: list[LabObservation],
     vitals: list[VitalObservation],
     medications: list[MedicationStatement],
+    allergies: list[AllergyIntolerance],
     diagnoses: list[Code],
     procedures: list[Code],
     imaging: list[ImagingAsset],
     time_series: list[TimeSeriesChannel],
 ) -> list[Modality]:
     modalities = [Modality.CLINICAL_TEXT]
-    if labs or vitals or medications or diagnoses or procedures:
+    if labs or vitals or medications or allergies or diagnoses or procedures:
         modalities.insert(0, Modality.STRUCTURED_EHR)
     if labs:
         modalities.append(Modality.LABS)
@@ -627,6 +640,7 @@ def _reference_extracted_facts(
     labs: list[LabObservation],
     vitals: list[VitalObservation],
     medications: list[MedicationStatement],
+    allergies: list[AllergyIntolerance],
     diagnoses: list[Code],
     procedures: list[Code],
     imaging: list[ImagingAsset],
@@ -688,6 +702,20 @@ def _reference_extracted_facts(
                 "end": medication.end,
             }
             for medication in medications
+        ]
+    if allergies:
+        facts["allergies"] = [allergy.substance for allergy in allergies]
+        facts["allergy_details"] = [
+            {
+                "substance": allergy.substance,
+                "code": allergy.code,
+                "system": allergy.system,
+                "reaction": allergy.reaction,
+                "severity": allergy.severity,
+                "status": allergy.status,
+                "recorded_at": allergy.recorded_at,
+            }
+            for allergy in allergies
         ]
     if time_series:
         facts["time_series_channels"] = [
@@ -939,20 +967,22 @@ def _fhir_artifacts(
     list[LabObservation],
     list[VitalObservation],
     list[MedicationStatement],
+    list[AllergyIntolerance],
     list[Code],
     list[Code],
     list[ClinicalDocument],
 ]:
     if not fhir_text:
-        return [], [], [], [], [], []
+        return [], [], [], [], [], [], []
     try:
         parsed = json.loads(fhir_text)
     except json.JSONDecodeError:
-        return [], [], [], [], [], []
+        return [], [], [], [], [], [], []
     resources = _fhir_resources(parsed)
     labs: list[LabObservation] = []
     vitals: list[VitalObservation] = []
     medications: list[MedicationStatement] = []
+    allergies: list[AllergyIntolerance] = []
     diagnoses: list[Code] = []
     procedures: list[Code] = []
     diagnostic_documents: list[ClinicalDocument] = []
@@ -993,6 +1023,10 @@ def _fhir_artifacts(
             medication = _fhir_medication_statement(resource)
             if medication is not None:
                 medications.append(medication)
+        elif resource_type == "AllergyIntolerance":
+            allergy = _fhir_allergy_intolerance(resource)
+            if allergy is not None:
+                allergies.append(allergy)
         elif resource_type == "Condition":
             diagnosis = _fhir_codeable_concept_to_code(resource.get("code"), fallback="Condition")
             if diagnosis is not None:
@@ -1005,7 +1039,7 @@ def _fhir_artifacts(
             document = _fhir_diagnostic_report_document(resource, stable_seed=stable_seed)
             if document is not None:
                 diagnostic_documents.append(document)
-    return labs, vitals, medications, diagnoses, procedures, diagnostic_documents
+    return labs, vitals, medications, allergies, diagnoses, procedures, diagnostic_documents
 
 
 def _fhir_resources(parsed) -> list[dict]:
@@ -1125,6 +1159,43 @@ def _fhir_medication_statement(resource: dict) -> MedicationStatement | None:
         dose=_coerce_text(dosage.get("text")) or None,
         route=route or None,
         status=_coerce_text(resource.get("status")) or "unknown",
+    )
+
+
+def _fhir_allergy_intolerance(resource: dict) -> AllergyIntolerance | None:
+    codeable = resource.get("code")
+    if not isinstance(codeable, dict):
+        return None
+    substance = _coerce_text(codeable.get("text")) or _fhir_code_text(
+        {"code": codeable}
+    )
+    if not substance:
+        return None
+    code = _fhir_codeable_concept_to_code(codeable, fallback=resource.get("id") or substance)
+    reaction = next(
+        (item for item in resource.get("reaction") or [] if isinstance(item, dict)),
+        {},
+    )
+    manifestation = next(
+        (
+            item
+            for item in reaction.get("manifestation") or []
+            if isinstance(item, dict)
+        ),
+        {},
+    )
+    return AllergyIntolerance(
+        substance=substance,
+        code=code.code if code else None,
+        system=code.system if code else None,
+        reaction=_coerce_text(manifestation.get("text")) or _fhir_code_text(
+            {"code": manifestation}
+        ),
+        severity=_coerce_text(reaction.get("severity")),
+        status=_coerce_text(resource.get("clinicalStatus", {}).get("text"))
+        if isinstance(resource.get("clinicalStatus"), dict)
+        else _coerce_text(resource.get("clinicalStatus")) or "active",
+        recorded_at=_coerce_text(resource.get("recordedDate")),
     )
 
 

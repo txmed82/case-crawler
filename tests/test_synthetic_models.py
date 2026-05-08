@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from casecrawler.models.synthetic import (
+    AllergyIntolerance,
     ClinicalDocument,
     Code,
     ComplexityProfile,
@@ -76,6 +77,16 @@ def test_synthetic_record_with_text_labs_and_vitals():
                 start="2026-04-01",
             )
         ],
+        allergies=[
+            AllergyIntolerance(
+                substance="Sulfonamide antibiotics",
+                code="91939003",
+                system="SNOMED-CT",
+                reaction="rash",
+                severity="moderate",
+                recorded_at="2026-04-01",
+            )
+        ],
         documents=[
             ClinicalDocument(
                 document_id="doc-1",
@@ -103,6 +114,7 @@ def test_synthetic_record_with_text_labs_and_vitals():
     assert record.complexity == ComplexityProfile.MODERATE
     assert record.labs[0].flag == "H"
     assert record.medication_history[0].name == "Furosemide"
+    assert record.allergies[0].substance == "Sulfonamide antibiotics"
     assert record.validation.approved is True
 
 

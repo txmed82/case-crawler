@@ -361,6 +361,12 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
             '{"resource":{"resourceType":"MedicationStatement","id":"med-metformin",'
             '"medicationCodeableConcept":{"text":"Metformin"},'
             '"status":"active","dosage":[{"route":{"text":"PO"},"text":"500 mg twice daily"}]}},'
+            '{"resource":{"resourceType":"AllergyIntolerance","id":"alg-penicillin",'
+            '"clinicalStatus":{"text":"active"},'
+            '"code":{"coding":[{"system":"RxNorm","code":"7980","display":"Penicillin"}],'
+            '"text":"Penicillin"},'
+            '"reaction":[{"manifestation":[{"text":"hives"}],"severity":"moderate"}],'
+            '"recordedDate":"2026-01-01"}},'
             '{"resource":{"resourceType":"Condition","id":"cond-diabetes",'
             '"code":{"coding":[{"system":"http://snomed.info/sct","code":"44054006",'
             '"display":"Diabetes mellitus type 2"}],"text":"Type 2 diabetes mellitus"}}},'
@@ -402,6 +408,10 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
     assert record.documents[0].extracted_facts["vital_values"][0]["value"] == 88.0
     assert record.documents[0].extracted_facts["medications"] == ["Metformin"]
     assert record.documents[0].extracted_facts["medication_details"][0]["route"] == "PO"
+    assert record.documents[0].extracted_facts["allergies"] == ["Penicillin"]
+    assert record.documents[0].extracted_facts["allergy_details"][0]["reaction"] == (
+        "hives"
+    )
     assert record.documents[0].extracted_facts["diagnoses"][0] == {
         "system": "http://snomed.info/sct",
         "code": "44054006",
@@ -430,6 +440,8 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
     assert record.vitals[0].value == 88
     assert record.medication_history[0].name == "Metformin"
     assert record.medication_history[0].route == "PO"
+    assert record.allergies[0].substance == "Penicillin"
+    assert record.allergies[0].reaction == "hives"
     assert record.encounters[0].diagnoses[0].code == "44054006"
     assert record.encounters[0].procedures[0].display == "Diabetic foot examination"
     assert record.documents[1].note_type == "diagnostic_report"
