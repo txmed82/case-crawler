@@ -1423,9 +1423,31 @@ def _verify_release_image_artifact_metadata(
                     ),
                 }
             )
+    expected_record_id, expected_image_id = _image_artifact_key_parts(key)
+    if expected_record_id is not None and artifact.get("record_id") != expected_record_id:
+        issues.append(
+            {
+                "field": f"image_artifacts.{key}.record_id",
+                "message": (
+                    "Release-ready image artifact record_id does not match "
+                    "its manifest key."
+                ),
+            }
+        )
+    if expected_image_id is not None and artifact.get("image_id") != expected_image_id:
+        issues.append(
+            {
+                "field": f"image_artifacts.{key}.image_id",
+                "message": (
+                    "Release-ready image artifact image_id does not match "
+                    "its manifest key."
+                ),
+            }
+        )
     labels = artifact.get("labels")
     if not isinstance(labels, list) or not all(
-        isinstance(label, dict) for label in labels
+        isinstance(label, dict) and _coded_label_complete(label)
+        for label in labels
     ):
         issues.append(
             {
@@ -1459,6 +1481,22 @@ def _verify_release_image_artifact_metadata(
                         ),
                     }
                 )
+
+
+def _image_artifact_key_parts(key: str) -> tuple[str | None, str | None]:
+    if ":" not in key:
+        return None, None
+    record_id, image_id = key.split(":", 1)
+    if not record_id or not image_id:
+        return None, None
+    return record_id, image_id
+
+
+def _coded_label_complete(label: dict[str, Any]) -> bool:
+    return all(
+        isinstance(label.get(field), str) and label[field].strip()
+        for field in ("system", "code", "display")
+    )
 
 
 def _split_package_quality_report_summary(package_path: Path) -> dict[str, Any] | None:
