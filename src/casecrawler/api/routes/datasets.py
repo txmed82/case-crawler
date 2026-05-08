@@ -25,7 +25,12 @@ from casecrawler.models.dataset import (
 )
 from casecrawler.models.synthetic import ComplexityProfile, Modality
 from casecrawler.storage.dataset_store import DatasetStore
-from casecrawler.validation.benchmark import DatasetBenchmark
+from casecrawler.validation.benchmark import (
+    DatasetBenchmark,
+    benchmark_profile_artifact,
+    parse_benchmark_profile_artifact,
+    profile_records,
+)
 from casecrawler.validation.quality import build_dataset_quality_report, export_profile_blocker
 
 router = APIRouter()
@@ -56,6 +61,13 @@ class ReferenceImportRequest(BaseModel):
 class SyntheaImportRequest(BaseModel):
     path: str = Field(min_length=1)
     dataset_id: str = Field(min_length=1)
+
+
+class BenchmarkProfileCompareRequest(BaseModel):
+    profile: dict
+    reference_profile: dict
+    min_overall_score: float = Field(default=0.75, ge=0.0, le=1.0)
+    min_metric_score: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
 @router.get("/datasets")
@@ -480,6 +492,32 @@ def benchmark_dataset(
             min_overall_score=min_overall_score,
             min_metric_score=min_metric_score,
         ).compare(generated_records, reference_records)
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+    return report.model_dump()
+
+
+@router.get("/datasets/{dataset_id}/benchmark-profile")
+def get_benchmark_profile(dataset_id: str):
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+    records = list(store.iter_records(dataset_id=dataset_id))
+    try:
+        return benchmark_profile_artifact(profile_records(records))
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+
+
+@router.post("/benchmark-profile")
+def benchmark_profile(req: BenchmarkProfileCompareRequest):
+    try:
+        generated_profile = parse_benchmark_profile_artifact(req.profile)
+        reference_profile = parse_benchmark_profile_artifact(req.reference_profile)
+        report = DatasetBenchmark(
+            min_overall_score=req.min_overall_score,
+            min_metric_score=req.min_metric_score,
+        ).compare_profiles(generated_profile, reference_profile)
     except ValueError as err:
         raise HTTPException(status_code=422, detail=str(err)) from err
     return report.model_dump()

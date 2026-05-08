@@ -757,6 +757,54 @@ def test_dataset_api_benchmarks_against_reference_dataset(tmp_path, monkeypatch)
     assert any(metric["name"] == "modality_overlap" for metric in body["metrics"])
 
 
+def test_dataset_api_exports_and_compares_benchmark_profiles(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 2})
+    reference = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 2})
+    dataset_id = generated.json()["dataset_id"]
+    reference_dataset_id = reference.json()["dataset_id"]
+
+    generated_profile = client.get(f"/api/datasets/{dataset_id}/benchmark-profile")
+    reference_profile = client.get(
+        f"/api/datasets/{reference_dataset_id}/benchmark-profile"
+    )
+    compared = client.post(
+        "/api/benchmark-profile",
+        json={
+            "profile": generated_profile.json(),
+            "reference_profile": reference_profile.json(),
+            "min_overall_score": 0.2,
+            "min_metric_score": 0,
+        },
+    )
+
+    assert generated_profile.status_code == 200
+    assert reference_profile.status_code == 200
+    assert generated_profile.json()["artifact_type"] == "casecrawler_benchmark_profile"
+    assert compared.status_code == 200
+    body = compared.json()
+    assert body["generated_dataset_id"] == dataset_id
+    assert body["reference_dataset_id"] == reference_dataset_id
+    assert body["thresholds"] == {"min_overall_score": 0.2, "min_metric_score": 0.0}
+
+
+def test_dataset_api_rejects_invalid_benchmark_profile_artifact(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/benchmark-profile",
+        json={
+            "profile": {"artifact_type": "unknown"},
+            "reference_profile": {"artifact_type": "unknown"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert "unsupported artifact_type" in response.json()["detail"]
+
+
 def test_dataset_api_uses_custom_benchmark_thresholds(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

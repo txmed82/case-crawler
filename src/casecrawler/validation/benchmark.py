@@ -406,6 +406,10 @@ def write_benchmark_profile_artifact(
 
 def load_benchmark_profile_artifact(path: str | Path) -> CohortProfile:
     payload = json.loads(Path(path).read_text())
+    return parse_benchmark_profile_artifact(payload)
+
+
+def parse_benchmark_profile_artifact(payload: object) -> CohortProfile:
     if not isinstance(payload, dict):
         raise ValueError("Benchmark profile artifact must be a JSON object.")
     if payload.get("artifact_type") != "casecrawler_benchmark_profile":
