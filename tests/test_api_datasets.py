@@ -315,6 +315,11 @@ def test_dataset_api_generates_release_package_with_fixture_references(
             "topic": "sepsis",
             "count": 1,
             "seed": "unit-test",
+            "cohort_constraints": {
+                "age_min": 77,
+                "age_max": 77,
+                "encounter_count": 2,
+            },
         },
     )
 
@@ -349,6 +354,12 @@ def test_dataset_api_generates_release_package_with_fixture_references(
         benchmark = json.loads(archive.read("benchmark_report.json"))
         benchmark_suite = json.loads(archive.read("benchmark_suite_report.json"))
         summary = json.loads(archive.read("release_package_summary.json"))
+        payloads = [
+            json.loads(line)
+            for name in ("train.jsonl", "validation.jsonl", "test.jsonl")
+            for line in archive.read(name).decode().splitlines()
+            if line.strip()
+        ]
     exports = DatasetStore().list_export_manifests(dataset_id=dataset_id)
 
     assert manifest["dataset_id"] == dataset_id
@@ -406,6 +417,9 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     )
     assert summary["benchmark_suite"]["results"] == benchmark_suite["results"]
     assert summary["seeded_references"]["imported"]
+    assert payloads[0]["metadata"]["cohort_constraints"]["age_min"] == 77
+    assert payloads[0]["metadata"]["cohort_constraints"]["age_max"] == 77
+    assert payloads[0]["metadata"]["cohort_constraints"]["encounter_count"] == 2
     assert exports[0].metadata["release_package"] is True
     assert exports[0].metadata["multimodal_release_ready"] is True
     assert exports[0].metadata["image_artifact_count"] == 1

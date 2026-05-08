@@ -158,6 +158,47 @@ export default function GeneratePage() {
     };
   }, []);
 
+  const buildCohortConstraints = (): { constraints: Record<string, unknown>; error?: string } => {
+    const parsedAgeMin = ageMin === "" ? undefined : Number(ageMin);
+    const parsedAgeMax = ageMax === "" ? undefined : Number(ageMax);
+    const parsedEncounterCount = encounterCount === "" ? undefined : Number(encounterCount);
+    if (
+      (parsedAgeMin !== undefined && (!Number.isInteger(parsedAgeMin) || parsedAgeMin < 0)) ||
+      (parsedAgeMax !== undefined && (!Number.isInteger(parsedAgeMax) || parsedAgeMax < 0))
+    ) {
+      return { constraints: {}, error: "Age limits must be non-negative whole numbers." };
+    }
+    if (
+      parsedEncounterCount !== undefined &&
+      (!Number.isInteger(parsedEncounterCount) ||
+        parsedEncounterCount < 1 ||
+        parsedEncounterCount > 30)
+    ) {
+      return { constraints: {}, error: "Encounter count must be a whole number from 1 to 30." };
+    }
+    if (
+      parsedAgeMin !== undefined &&
+      parsedAgeMax !== undefined &&
+      parsedAgeMin > parsedAgeMax
+    ) {
+      return { constraints: {}, error: "Minimum age cannot be greater than maximum age." };
+    }
+    const constraints: Record<string, unknown> = {};
+    if (parsedAgeMin !== undefined) constraints.age_min = parsedAgeMin;
+    if (parsedAgeMax !== undefined) constraints.age_max = parsedAgeMax;
+    if (sexes.length > 0) constraints.sexes = sexes;
+    const parsedTopicMix = topicMix
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (parsedTopicMix.length > 0) constraints.topic_mix = parsedTopicMix;
+    if (baseTime) constraints.base_time = baseTime;
+    if (parsedEncounterCount !== undefined) {
+      constraints.encounter_count = parsedEncounterCount;
+    }
+    return { constraints };
+  };
+
   const handleGenerate = async () => {
     if (!topic.trim() || modalities.length === 0 || exportFormats.length === 0 || isGenerating) {
       return;
@@ -166,46 +207,12 @@ export default function GeneratePage() {
       setError("Record count must be a positive integer.");
       return;
     }
-    const parsedAgeMin = ageMin === "" ? undefined : Number(ageMin);
-    const parsedAgeMax = ageMax === "" ? undefined : Number(ageMax);
-    const parsedEncounterCount = encounterCount === "" ? undefined : Number(encounterCount);
-    if (
-      (parsedAgeMin !== undefined && (!Number.isInteger(parsedAgeMin) || parsedAgeMin < 0)) ||
-      (parsedAgeMax !== undefined && (!Number.isInteger(parsedAgeMax) || parsedAgeMax < 0))
-    ) {
-      setError("Age limits must be non-negative whole numbers.");
+    const cohort = buildCohortConstraints();
+    if (cohort.error) {
+      setError(cohort.error);
       return;
     }
-    if (
-      parsedEncounterCount !== undefined &&
-      (!Number.isInteger(parsedEncounterCount) ||
-        parsedEncounterCount < 1 ||
-        parsedEncounterCount > 30)
-    ) {
-      setError("Encounter count must be a whole number from 1 to 30.");
-      return;
-    }
-    if (
-      parsedAgeMin !== undefined &&
-      parsedAgeMax !== undefined &&
-      parsedAgeMin > parsedAgeMax
-    ) {
-      setError("Minimum age cannot be greater than maximum age.");
-      return;
-    }
-    const cohortConstraints: Record<string, unknown> = {};
-    if (parsedAgeMin !== undefined) cohortConstraints.age_min = parsedAgeMin;
-    if (parsedAgeMax !== undefined) cohortConstraints.age_max = parsedAgeMax;
-    if (sexes.length > 0) cohortConstraints.sexes = sexes;
-    const parsedTopicMix = topicMix
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean);
-    if (parsedTopicMix.length > 0) cohortConstraints.topic_mix = parsedTopicMix;
-    if (baseTime) cohortConstraints.base_time = baseTime;
-    if (parsedEncounterCount !== undefined) {
-      cohortConstraints.encounter_count = parsedEncounterCount;
-    }
+    const cohortConstraints = cohort.constraints;
     const includesImaging = modalities.includes("imaging");
     const includesTimeSeries = modalities.includes("time_series");
     const includesClinicalText = modalities.includes("clinical_text");
@@ -292,6 +299,12 @@ export default function GeneratePage() {
     setReleaseError(null);
     setIsGeneratingRelease(true);
     try {
+      const cohort = buildCohortConstraints();
+      if (cohort.error) {
+        setReleaseError(cohort.error);
+        return;
+      }
+      const cohortConstraints = cohort.constraints;
       const parsedTimeSeriesCommand = timeSeriesCommand
         .split(",")
         .map((value) => value.trim())
@@ -302,6 +315,9 @@ export default function GeneratePage() {
         recipe: recipe || "full_multimodal_acute_care",
         export_format: "multimodal_jsonl",
         seed: "casecrawler",
+        ...(Object.keys(cohortConstraints).length > 0
+          ? { cohort_constraints: cohortConstraints }
+          : {}),
         clinical_text_backend: clinicalTextBackend,
         ...(clinicalTextBackend === "llm" ? { llm_provider: llmProvider } : {}),
         ...(clinicalTextBackend === "llm" && llmModel.trim()

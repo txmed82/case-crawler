@@ -197,7 +197,10 @@ casecrawler generate-release-package "mixed acute care cohort" \
   --count 25 \
   --output-dir release-package \
   --format multimodal_jsonl \
-  --seed casecrawler
+  --seed casecrawler \
+  --age-min 45 \
+  --age-max 88 \
+  --encounter-count 3
 casecrawler verify-split-package --require-multimodal-release release-package
 ```
 

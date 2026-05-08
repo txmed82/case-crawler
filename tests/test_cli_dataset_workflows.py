@@ -389,6 +389,12 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
             "release-package",
             "--seed",
             "unit-test",
+            "--age-min",
+            "77",
+            "--age-max",
+            "77",
+            "--encounter-count",
+            "2",
         ],
     )
 
@@ -426,6 +432,12 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     release_summary = json.loads(
         (tmp_path / "release-package" / "release_package_summary.json").read_text()
     )
+    payloads = [
+        json.loads(line)
+        for split_name in ("train.jsonl", "validation.jsonl", "test.jsonl")
+        for line in (tmp_path / "release-package" / split_name).read_text().splitlines()
+        if line.strip()
+    ]
     image_artifact = next(iter(manifest["image_artifacts"].values()))
     assert image_artifact["package_path"].startswith("images/")
     assert (tmp_path / "release-package" / image_artifact["package_path"]).is_file()
@@ -477,6 +489,9 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
         == benchmark_suite["recommended_reference_keys"]
     )
     assert release_summary["benchmark_suite"]["results"] == benchmark_suite["results"]
+    assert payloads[0]["metadata"]["cohort_constraints"]["age_min"] == 77
+    assert payloads[0]["metadata"]["cohort_constraints"]["age_max"] == 77
+    assert payloads[0]["metadata"]["cohort_constraints"]["encounter_count"] == 2
     assert body["benchmark_suite"]["passed"] is True
     assert body["benchmark_suite"]["reference_count"] == benchmark_suite["reference_count"]
     assert release_verified.exit_code == 0, release_verified.output
