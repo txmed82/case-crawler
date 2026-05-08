@@ -702,6 +702,203 @@ def export_fhir_record(record: SyntheticRecord) -> dict[str, Any]:
     }
 
 
+def verify_fhir_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
+    issues: list[dict[str, str]] = []
+    if bundle.get("resourceType") != "Bundle":
+        return {
+            "valid": False,
+            "issues": [
+                {
+                    "field": "resourceType",
+                    "message": "FHIR export payload is not a Bundle.",
+                }
+            ],
+            "resource_counts": {},
+        }
+    entries = bundle.get("entry")
+    if not isinstance(entries, list) or not entries:
+        return {
+            "valid": False,
+            "issues": [
+                {
+                    "field": "entry",
+                    "message": "FHIR Bundle must contain at least one entry.",
+                }
+            ],
+            "resource_counts": {},
+        }
+    resources = [
+        entry.get("resource")
+        for entry in entries
+        if isinstance(entry, dict) and isinstance(entry.get("resource"), dict)
+    ]
+    if len(resources) != len(entries):
+        issues.append(
+            {
+                "field": "entry.resource",
+                "message": "Every FHIR Bundle entry must contain a resource object.",
+            }
+        )
+    resource_counts: dict[str, int] = {}
+    resource_ids: set[tuple[str, str]] = set()
+    duplicate_ids: set[str] = set()
+    patient_ids: set[str] = set()
+    for resource in resources:
+        resource_type = str(resource.get("resourceType", ""))
+        resource_counts[resource_type] = resource_counts.get(resource_type, 0) + 1
+        resource_id = resource.get("id")
+        if not isinstance(resource_id, str) or not resource_id:
+            issues.append(
+                {
+                    "field": f"{resource_type or '<unknown>'}.id",
+                    "message": "FHIR resource is missing a non-empty id.",
+                }
+            )
+        else:
+            identity = (resource_type, resource_id)
+            if identity in resource_ids:
+                duplicate_ids.add(f"{resource_type}/{resource_id}")
+            resource_ids.add(identity)
+        if resource_type == "Patient" and isinstance(resource_id, str):
+            patient_ids.add(resource_id)
+    if resource_counts.get("Patient", 0) != 1:
+        issues.append(
+            {
+                "field": "Patient",
+                "message": "FHIR Bundle must contain exactly one Patient resource.",
+            }
+        )
+    if resource_counts.get("Provenance", 0) < 1:
+        issues.append(
+            {
+                "field": "Provenance",
+                "message": "FHIR Bundle must contain synthetic provenance.",
+            }
+        )
+    if duplicate_ids:
+        issues.append(
+            {
+                "field": "entry.resource.id",
+                "message": (
+                    "FHIR Bundle contains duplicate resource IDs: "
+                    f"{', '.join(sorted(duplicate_ids))}."
+                ),
+            }
+        )
+    expected_patient_reference = (
+        f"Patient/{next(iter(patient_ids))}" if len(patient_ids) == 1 else None
+    )
+    for resource in resources:
+        _verify_fhir_resource(resource, expected_patient_reference, issues)
+    return {
+        "valid": not issues,
+        "issues": issues,
+        "resource_counts": dict(sorted(resource_counts.items())),
+    }
+
+
+def verify_fhir_ndjson_export(path: str | Path) -> dict[str, Any]:
+    issues: list[dict[str, str]] = []
+    bundle_count = 0
+    resource_counts: dict[str, int] = {}
+    for line_number, line in enumerate(Path(path).read_text().splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            issues.append(
+                {
+                    "field": f"line.{line_number}",
+                    "message": f"Invalid JSON: {exc}.",
+                }
+            )
+            continue
+        if not isinstance(payload, dict):
+            issues.append(
+                {
+                    "field": f"line.{line_number}",
+                    "message": "FHIR export line must be a JSON object.",
+                }
+            )
+            continue
+        bundle_report = verify_fhir_bundle(payload)
+        bundle_count += 1
+        for resource_type, count in bundle_report["resource_counts"].items():
+            resource_counts[resource_type] = resource_counts.get(resource_type, 0) + count
+        for issue in bundle_report["issues"]:
+            issues.append(
+                {
+                    "field": f"line.{line_number}.{issue['field']}",
+                    "message": issue["message"],
+                }
+            )
+    if bundle_count == 0:
+        issues.append(
+            {
+                "field": "file",
+                "message": "FHIR NDJSON export contains no bundle records.",
+            }
+        )
+    return {
+        "valid": not issues,
+        "bundle_count": bundle_count,
+        "issues": issues,
+        "resource_counts": dict(sorted(resource_counts.items())),
+    }
+
+
+def _verify_fhir_resource(
+    resource: dict[str, Any],
+    expected_patient_reference: str | None,
+    issues: list[dict[str, str]],
+) -> None:
+    resource_type = str(resource.get("resourceType", ""))
+    if expected_patient_reference and resource_type not in {"Patient", "Provenance"}:
+        subject = resource.get("subject")
+        if not isinstance(subject, dict) or subject.get("reference") != expected_patient_reference:
+            issues.append(
+                {
+                    "field": f"{resource_type}.subject",
+                    "message": (
+                        f"{resource_type} must reference {expected_patient_reference}."
+                    ),
+                }
+            )
+    if resource_type == "Observation":
+        if resource.get("status") != "final":
+            issues.append(
+                {
+                    "field": "Observation.status",
+                    "message": "Observation resources must have final status.",
+                }
+            )
+        if "valueQuantity" not in resource and "valueString" not in resource and "component" not in resource:
+            issues.append(
+                {
+                    "field": "Observation.value",
+                    "message": "Observation must include a value or components.",
+                }
+            )
+    if resource_type == "MedicationStatement":
+        if not resource.get("medicationCodeableConcept"):
+            issues.append(
+                {
+                    "field": "MedicationStatement.medicationCodeableConcept",
+                    "message": "MedicationStatement must include medication coding or text.",
+                }
+            )
+    if resource_type == "DocumentReference":
+        content = resource.get("content")
+        if not isinstance(content, list) or not content:
+            issues.append(
+                {
+                    "field": "DocumentReference.content",
+                    "message": "DocumentReference must include document content.",
+                }
+            )
+
+
 def export_parquet_record(record: SyntheticRecord) -> dict[str, Any]:
     """Export one synthetic record as a scalar-friendly tabular row."""
     validation = record.validation.model_dump() if record.validation else None

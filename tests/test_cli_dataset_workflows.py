@@ -67,6 +67,9 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     assert fhir_exported.exit_code == 0
     assert "Exported" in fhir_exported.output
     assert "Bundle" in (tmp_path / "synthetic.fhir.ndjson").read_text()
+    fhir_verified = runner.invoke(cli, ["verify-fhir-export", "synthetic.fhir.ndjson"])
+    assert fhir_verified.exit_code == 0
+    assert json.loads(fhir_verified.output)["valid"] is True
 
     note_fact_exported = runner.invoke(
         cli,

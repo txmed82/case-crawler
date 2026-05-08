@@ -20,6 +20,8 @@ from casecrawler.export.fine_tuning import (
     export_sft_record,
     export_time_series_records,
     export_tool_call_record,
+    verify_fhir_bundle,
+    verify_fhir_ndjson_export,
     verify_jsonl_split_package,
 )
 from casecrawler.models.synthetic import (
@@ -724,6 +726,34 @@ def test_export_fhir_record_contains_training_bundle_resources():
         "url": "https://casecrawler.dev/fhir/StructureDefinition/sample-encounter",
         "valueReference": {"reference": "Encounter/enc-1"},
     }
+    assert verify_fhir_bundle(exported)["valid"] is True
+
+
+def test_verify_fhir_bundle_rejects_missing_subject_and_observation_value():
+    bundle = export_fhir_record(_multimodal_record())
+    resources = [entry["resource"] for entry in bundle["entry"]]
+    observation = next(resource for resource in resources if resource["resourceType"] == "Observation")
+    observation.pop("subject")
+    observation.pop("valueQuantity", None)
+    observation.pop("valueString", None)
+
+    report = verify_fhir_bundle(bundle)
+
+    assert report["valid"] is False
+    issue_fields = {issue["field"] for issue in report["issues"]}
+    assert "Observation.subject" in issue_fields
+    assert "Observation.value" in issue_fields
+
+
+def test_verify_fhir_ndjson_export_reports_invalid_lines(tmp_path):
+    path = tmp_path / "fhir.ndjson"
+    path.write_text(json.dumps(export_fhir_record(_multimodal_record())) + "\nnot-json\n")
+
+    report = verify_fhir_ndjson_export(path)
+
+    assert report["valid"] is False
+    assert report["bundle_count"] == 1
+    assert any(issue["field"] == "line.2" for issue in report["issues"])
 
 
 def test_export_fhir_record_links_longitudinal_observations_to_encounters():
