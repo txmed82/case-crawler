@@ -229,6 +229,63 @@ def test_export_fhir_record_contains_training_bundle_resources():
     ]
     assert procedures[0]["code"]["coding"][0]["display"] == "Central venous catheter placement"
     assert procedures[0]["encounter"]["reference"] == "Encounter/enc-1"
+    time_series = next(
+        resource
+        for resource in resources
+        if resource["resourceType"] == "Observation"
+        and resource["id"] == "rec-1-timeseries-heart-rate"
+    )
+    assert time_series["effectivePeriod"] == {
+        "start": "2026-05-06T10:00:00",
+        "end": "2026-05-06T10:00:00",
+    }
+    assert time_series["component"][0]["code"]["text"] == "heart_rate"
+    assert time_series["component"][0]["extension"][0] == {
+        "url": "https://casecrawler.dev/fhir/StructureDefinition/sample-timestamp",
+        "valueDateTime": "2026-05-06T10:00:00",
+    }
+
+
+def test_export_fhir_record_preserves_waveform_sampling_metadata():
+    record = _multimodal_record().model_copy(
+        update={
+            "time_series": [
+                TimeSeriesChannel(
+                    name="ecg_lead_ii",
+                    unit="mV",
+                    sampling_rate_hz=125,
+                    points=[
+                        TimeSeriesPoint(
+                            timestamp="2026-05-06T10:00:00",
+                            values={"millivolts": 0.12},
+                        ),
+                        TimeSeriesPoint(
+                            timestamp="2026-05-06T10:00:01",
+                            values={"millivolts": 0.09},
+                        ),
+                    ],
+                )
+            ]
+        }
+    )
+
+    exported = export_fhir_record(record)
+    resources = [entry["resource"] for entry in exported["entry"]]
+    waveform = next(
+        resource
+        for resource in resources
+        if resource["resourceType"] == "Observation"
+        and resource["id"] == "rec-1-timeseries-ecg-lead-ii"
+    )
+
+    assert waveform["effectivePeriod"] == {
+        "start": "2026-05-06T10:00:00",
+        "end": "2026-05-06T10:00:01",
+    }
+    assert waveform["extension"][0] == {
+        "url": "https://casecrawler.dev/fhir/StructureDefinition/sampling-rate-hz",
+        "valueDecimal": 125,
+    }
 
 
 def test_export_parquet_record_flattens_modalities_for_tabular_storage():
