@@ -1014,7 +1014,10 @@ def datasets_quality(dataset_id: str) -> None:
 @datasets_group.command("capabilities")
 def datasets_capabilities() -> None:
     """Show dataset generation and strict release capabilities."""
-    from casecrawler.capabilities import release_coverage_requirements
+    from casecrawler.capabilities import (
+        reference_dataset_capabilities,
+        release_coverage_requirements,
+    )
     from casecrawler.generation.recipes import list_generation_recipes
     from casecrawler.models.dataset import ExportFormat
     from casecrawler.models.synthetic import ComplexityProfile, Modality
@@ -1039,6 +1042,7 @@ def datasets_capabilities() -> None:
             for recipe in list_generation_recipes()
         ],
         "release_coverage_requirements": release_coverage_requirements(),
+        "reference_datasets": reference_dataset_capabilities(),
     }
     click.echo(json.dumps(payload, indent=2))
 

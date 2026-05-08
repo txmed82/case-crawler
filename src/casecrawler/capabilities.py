@@ -48,3 +48,58 @@ def release_coverage_requirement_description(key: str) -> str:
         "vitals": "Structured vital observations are present.",
     }
     return descriptions.get(key, key.replace("_", " "))
+
+
+def reference_dataset_capabilities() -> list[dict[str, object]]:
+    """Return configured benchmark/reference datasets for clients."""
+    from casecrawler.integrations.huggingface import REFERENCE_DATASETS
+    from casecrawler.integrations.reference_fixtures import FIXTURE_REFERENCE_KEYS
+    from casecrawler.integrations.synthea import (
+        SYNTHEA_REFERENCE_DESCRIPTION,
+        SYNTHEA_REFERENCE_KEY,
+    )
+
+    datasets: list[dict[str, object]] = [
+        {
+            "key": SYNTHEA_REFERENCE_KEY,
+            "repo_id": None,
+            "split": None,
+            "license": "synthetic-local",
+            "description": SYNTHEA_REFERENCE_DESCRIPTION,
+            "image_field": None,
+            "image_label_field": None,
+            "image_modality": None,
+            "image_body_region": None,
+            "lab_values_field": None,
+            "vital_values_field": None,
+            "medications_field": None,
+            "time_series_field": None,
+            "gated": False,
+            "use_policy": "local_synthea_import",
+            "source": "synthea",
+            "fixture_available": SYNTHEA_REFERENCE_KEY in FIXTURE_REFERENCE_KEYS,
+        }
+    ]
+    datasets.extend(
+        {
+            "key": key,
+            "repo_id": spec.repo_id,
+            "split": spec.split,
+            "license": spec.license,
+            "description": spec.description,
+            "image_field": spec.image_field,
+            "image_label_field": spec.image_label_field,
+            "image_modality": spec.image_modality,
+            "image_body_region": spec.image_body_region,
+            "lab_values_field": spec.lab_values_field,
+            "vital_values_field": spec.vital_values_field,
+            "medications_field": spec.medications_field,
+            "time_series_field": spec.time_series_field,
+            "gated": spec.gated,
+            "use_policy": spec.use_policy,
+            "source": "huggingface",
+            "fixture_available": key in FIXTURE_REFERENCE_KEYS,
+        }
+        for key, spec in REFERENCE_DATASETS.items()
+    )
+    return datasets
