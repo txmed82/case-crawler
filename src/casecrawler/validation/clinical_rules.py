@@ -40,7 +40,9 @@ def validate_temporal_consistency(record: SyntheticRecord) -> list[ValidationIss
                     message=f"Encounter {encounter.encounter_id} ends before it starts.",
                 )
             )
-        if start is not None and (end is None or end >= start):
+        if start is not None and (
+            (encounter.end is None and end is None) or (end is not None and end >= start)
+        ):
             encounter_windows.append((start, end))
 
     for medication in record.medication_history:
