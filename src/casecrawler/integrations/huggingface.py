@@ -251,8 +251,14 @@ def reference_row_to_record(
 ) -> SyntheticRecord:
     effective_split = split or spec.split
     image_label = _image_label(row, spec)
-    note = _coerce_text(row.get(spec.note_field))
-    if spec.image_field and image_label and note == _coerce_text(row.get(spec.note_field)):
+    raw_note = _coerce_text(row.get(spec.note_field))
+    raw_image_label = (
+        _coerce_text(row.get(spec.image_label_field))
+        if spec.image_label_field
+        else ""
+    )
+    note = raw_note
+    if spec.image_field and image_label and (not note or note == raw_image_label):
         note = f"Synthetic reference {spec.image_body_region} {spec.image_modality} labeled {image_label}."
     question = _coerce_text(row.get(spec.question_field)) if spec.question_field else ""
     answer = _coerce_text(row.get(spec.answer_field)) if spec.answer_field else ""
