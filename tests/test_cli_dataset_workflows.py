@@ -43,6 +43,14 @@ def test_dataset_cli_lists_generation_capabilities(tmp_path, monkeypatch):
     assert references["synthchex_75k"]["image_modality"] == "XR"
     assert references["radiology_report_consistency"]["fixture_available"] is True
     assert references["synthea_fhir"]["source"] == "synthea"
+    validators = {validator["key"]: validator for validator in body["validators"]}
+    assert validators["biomedclip"]["model_id"] == (
+        "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+    )
+    assert validators["biomedclip"]["license"] == "mit"
+    assert validators["medgemma"]["model_id"] == "google/medgemma-4b-it"
+    assert validators["medgemma"]["gated"] is True
+    assert "accepted model terms" in validators["medgemma"]["requires"]
 
 
 def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):

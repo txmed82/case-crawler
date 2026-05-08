@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,60 @@ from casecrawler.imaging.file_metadata import (
     raster_dimensions,
 )
 from casecrawler.models.synthetic import ImagingAsset, Modality, ValidationIssue
+
+
+@dataclass(frozen=True)
+class ImageValidatorProfile:
+    key: str
+    backend: str
+    description: str
+    requires: list[str]
+    model_id: str | None = None
+    license: str | None = None
+    gated: bool = False
+    use_policy: str = "review_outputs_before_release"
+    notes: str = ""
+
+
+IMAGE_VALIDATOR_PROFILES: dict[str, ImageValidatorProfile] = {
+    "lexical": ImageValidatorProfile(
+        key="lexical",
+        backend="lexical",
+        description="No-key prompt/report token overlap validator.",
+        requires=[],
+        model_id=None,
+        license="casecrawler",
+        gated=False,
+        use_policy="deterministic_screening_only",
+        notes="Fast deterministic fallback; not a substitute for image-text model review.",
+    ),
+    "biomedclip": ImageValidatorProfile(
+        key="biomedclip",
+        backend="open_clip",
+        description="Optional BiomedCLIP image-text alignment scorer.",
+        requires=["casecrawler[imaging]"],
+        model_id="hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224",
+        license="mit",
+        gated=False,
+        use_policy="open_model_validate_image_text_alignment",
+        notes="Open medical image-text encoder for validating generated image/report alignment.",
+    ),
+    "medgemma": ImageValidatorProfile(
+        key="medgemma",
+        backend="transformers",
+        description="Optional gated MedGemma image/report reasoning validator.",
+        requires=["casecrawler[hf]", "casecrawler[imaging]", "accepted model terms"],
+        model_id="google/medgemma-4b-it",
+        license="health-ai-developer-foundations",
+        gated=True,
+        use_policy="gated_terms_required_validate_before_release",
+        notes="Gated medical VLM validator; use only after accepting model terms.",
+    ),
+}
+
+
+def list_image_validator_profiles() -> list[ImageValidatorProfile]:
+    return list(IMAGE_VALIDATOR_PROFILES.values())
 
 
 class ImageAlignmentValidator:

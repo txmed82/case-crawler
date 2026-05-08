@@ -6,6 +6,7 @@ from casecrawler.validation.image_alignment import (
     BiomedCLIPImageValidator,
     ImageAlignmentValidator,
     MedGemmaImageTextValidator,
+    list_image_validator_profiles,
     validate_image_file_asset,
     validate_radiology_label_consistency,
 )
@@ -27,6 +28,20 @@ def test_lexical_image_alignment_scores_prompt_report_overlap():
     score = ImageAlignmentValidator().score(_asset())
 
     assert 0 < score <= 1
+
+
+def test_image_validator_profile_catalog_exposes_external_model_policies():
+    profiles = {profile.key: profile for profile in list_image_validator_profiles()}
+
+    assert profiles["lexical"].requires == []
+    assert profiles["biomedclip"].model_id == (
+        "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+    )
+    assert profiles["biomedclip"].license == "mit"
+    assert profiles["biomedclip"].use_policy == "open_model_validate_image_text_alignment"
+    assert profiles["medgemma"].model_id == "google/medgemma-4b-it"
+    assert profiles["medgemma"].gated is True
+    assert "accepted model terms" in profiles["medgemma"].requires
 
 
 def test_biomedclip_validator_uses_injected_scorer():

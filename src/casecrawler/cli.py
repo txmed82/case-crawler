@@ -1037,6 +1037,7 @@ def datasets_quality(dataset_id: str) -> None:
 def datasets_capabilities() -> None:
     """Show dataset generation and strict release capabilities."""
     from casecrawler.capabilities import (
+        image_validator_capabilities,
         reference_dataset_capabilities,
         release_coverage_requirements,
     )
@@ -1065,6 +1066,7 @@ def datasets_capabilities() -> None:
         ],
         "release_coverage_requirements": release_coverage_requirements(),
         "reference_datasets": reference_dataset_capabilities(),
+        "validators": image_validator_capabilities(),
     }
     click.echo(json.dumps(payload, indent=2))
 
