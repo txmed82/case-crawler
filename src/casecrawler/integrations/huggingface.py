@@ -48,6 +48,8 @@ class HuggingFaceReferenceDataset:
     image_label_map: dict[str, str] | None = None
     image_modality: str = "XR"
     image_body_region: str = "chest"
+    gated: bool = False
+    use_policy: str = "review_license_before_use"
     description: str = ""
 
 
@@ -140,6 +142,8 @@ REFERENCE_DATASETS: dict[str, HuggingFaceReferenceDataset] = {
         image_field="image",
         image_modality="XR",
         image_body_region="chest",
+        gated=True,
+        use_policy="non_commercial_research_only",
         description=(
             "Gated non-commercial chest radiograph/report reference dataset "
             "for radiology generation benchmarking. Access requires accepting "

@@ -877,9 +877,30 @@ export default function GeneratePage() {
         )}
 
         {referenceImportMode === "registered" && selectedReference && (
-          <p className="mt-3 text-xs text-gray-600">
-            {selectedReference.repo_id} - {selectedReference.license}
-          </p>
+          <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-900">
+                {selectedReference.repo_id}
+              </span>
+              <span className="rounded-md bg-gray-200 px-2 py-1 text-xs text-gray-700">
+                {selectedReference.license}
+              </span>
+              {selectedReference.gated && (
+                <span className="rounded-md bg-yellow-100 px-2 py-1 text-xs text-yellow-800">
+                  gated
+                </span>
+              )}
+              <span className="rounded-md bg-blue-100 px-2 py-1 text-xs text-blue-700">
+                {selectedReference.image_field
+                  ? `${selectedReference.image_modality} ${selectedReference.image_body_region}`
+                  : "text"}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-gray-600">{selectedReference.description}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Use policy: {selectedReference.use_policy.replaceAll("_", " ")}
+            </p>
+          </div>
         )}
 
         <div className="mt-4">

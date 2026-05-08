@@ -48,6 +48,8 @@ def test_reference_dataset_catalog_includes_clinical_note_fhir_and_radiology_ben
     assert catalog["rexgradient_160k"].repo_id == "rajpurkarlab/ReXGradient-160K"
     assert catalog["rexgradient_160k"].license == "rexgradient-non-commercial-gated"
     assert catalog["rexgradient_160k"].image_field == "image"
+    assert catalog["rexgradient_160k"].gated is True
+    assert catalog["rexgradient_160k"].use_policy == "non_commercial_research_only"
     assert "gated" in catalog["rexgradient_160k"].description.lower()
     assert catalog["synthetic_chest_xray_pneumonia"].repo_id == (
         "chimbiwide/synthetic-chest-xray-pneumonia"
