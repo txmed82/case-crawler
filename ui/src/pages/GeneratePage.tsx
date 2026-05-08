@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   fetchDatasetCapabilities,
   fetchReferenceDatasetCatalog,
+  generateReleasePackage,
   importReferenceDataset,
   importSyntheaFhir,
   startDatasetGenerate,
@@ -12,6 +13,7 @@ import type {
   ExportFormat,
   ReferenceDatasetCatalogItem,
   ReferenceDatasetImportResponse,
+  ReleasePackageResponse,
   SyntheaImportResponse,
   SyntheticModality,
 } from "../api/client";
@@ -83,6 +85,9 @@ export default function GeneratePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<DatasetGenerateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isGeneratingRelease, setIsGeneratingRelease] = useState(false);
+  const [releaseResult, setReleaseResult] = useState<ReleasePackageResponse | null>(null);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
   const [referenceCatalog, setReferenceCatalog] = useState<ReferenceDatasetCatalogItem[]>([]);
   const [referenceImportMode, setReferenceImportMode] =
     useState<ReferenceImportMode>("registered");
@@ -249,6 +254,37 @@ export default function GeneratePage() {
       setError(err instanceof Error ? err.message : "Dataset generation failed");
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateReleasePackage = async () => {
+    if (!topic.trim() || isGeneratingRelease) return;
+    if (!Number.isInteger(count) || count < 1) {
+      setReleaseError("Record count must be a positive integer.");
+      return;
+    }
+    setReleaseResult(null);
+    setReleaseError(null);
+    setIsGeneratingRelease(true);
+    try {
+      const resp = await generateReleasePackage({
+        topic: topic.trim(),
+        count,
+        recipe: recipe || "full_multimodal_acute_care",
+        export_format: "multimodal_jsonl",
+        seed: "casecrawler",
+        imaging_backend: imagingBackend,
+        ...(imagingProfile ? { imaging_model_profile: imagingProfile } : {}),
+        ...(diffusersModelId.trim()
+          ? { diffusers_model_id: diffusersModelId.trim() }
+          : {}),
+      });
+      setReleaseResult(resp);
+      downloadBlob(resp.blob, resp.filename);
+    } catch (err) {
+      setReleaseError(err instanceof Error ? err.message : "Release package generation failed");
+    } finally {
+      setIsGeneratingRelease(false);
     }
   };
 
@@ -743,24 +779,42 @@ export default function GeneratePage() {
         )}
 
         <div>
-          <button
-            onClick={handleGenerate}
-            disabled={
-              !topic.trim() ||
-              modalities.length === 0 ||
-              exportFormats.length === 0 ||
-              !Number.isInteger(count) ||
-              count < 1 ||
-              isGenerating
-            }
-            className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            Generate
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleGenerate}
+              disabled={
+                !topic.trim() ||
+                modalities.length === 0 ||
+                exportFormats.length === 0 ||
+                !Number.isInteger(count) ||
+                count < 1 ||
+                isGenerating
+              }
+              className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              Generate
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerateReleasePackage}
+              disabled={
+                !topic.trim() ||
+                !Number.isInteger(count) ||
+                count < 1 ||
+                isGeneratingRelease
+              }
+              className="rounded-lg border border-blue-300 px-6 py-2 text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+            >
+              Release Package
+            </button>
+          </div>
         </div>
       </div>
 
       {isGenerating && <div className="text-sm text-gray-600">Generating synthetic records...</div>}
+      {isGeneratingRelease && (
+        <div className="text-sm text-gray-600">Building release package...</div>
+      )}
 
       {result && (
         <div className="rounded-lg border border-green-200 bg-green-50 p-4">
@@ -779,6 +833,30 @@ export default function GeneratePage() {
         <div className="rounded-lg border border-red-200 bg-red-50 p-4">
           <p className="font-medium text-red-800">Generation failed</p>
           <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      {releaseResult && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+          <p className="font-medium text-green-800">Release package ready</p>
+          <p className="text-sm text-green-700">{releaseResult.filename}</p>
+          {releaseResult.datasetId && (
+            <p className="text-xs text-green-700">{releaseResult.datasetId}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => downloadBlob(releaseResult.blob, releaseResult.filename)}
+            className="mt-3 rounded-md border border-green-300 bg-white px-3 py-2 text-sm font-medium text-green-800 hover:bg-green-100"
+          >
+            Download again
+          </button>
+        </div>
+      )}
+
+      {releaseError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="font-medium text-red-800">Release package failed</p>
+          <p className="text-sm text-red-700">{releaseError}</p>
         </div>
       )}
 
@@ -1145,4 +1223,15 @@ export default function GeneratePage() {
       </div>
     </div>
   );
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
