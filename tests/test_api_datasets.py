@@ -322,6 +322,11 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     assert summary["benchmark"]["passed"] is True
     assert summary["benchmark_suite"]["passed"] is True
     assert summary["benchmark_suite"]["reference_count"] == benchmark_suite["reference_count"]
+    assert (
+        summary["benchmark_suite"]["recommended_reference_keys"]
+        == benchmark_suite["recommended_reference_keys"]
+    )
+    assert summary["benchmark_suite"]["results"] == benchmark_suite["results"]
     assert summary["seeded_references"]["imported"]
     assert exports[0].metadata["release_package"] is True
     assert exports[0].metadata["multimodal_release_ready"] is True

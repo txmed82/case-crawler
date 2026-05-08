@@ -988,7 +988,11 @@ def generate_release_package(
                     "passed": benchmark_suite["passed"],
                     "reference_count": benchmark_suite["reference_count"],
                     "mean_overall_score": benchmark_suite["mean_overall_score"],
+                    "recommended_reference_keys": benchmark_suite[
+                        "recommended_reference_keys"
+                    ],
                     "task_export_results": benchmark_suite["task_export_results"],
+                    "results": benchmark_suite["results"],
                 },
             },
         },

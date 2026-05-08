@@ -1159,6 +1159,10 @@ def test_verify_jsonl_split_package_validates_release_package_summary_artifact(
         "task_export_results"
     ) in issue_fields
     assert (
+        "audit_artifacts.release_package_summary.json.benchmark_suite.results"
+        in issue_fields
+    )
+    assert (
         "audit_artifacts.release_package_summary.json.objective_coverage.missing"
         in issue_fields
     )
