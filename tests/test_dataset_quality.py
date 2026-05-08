@@ -1,6 +1,7 @@
 import struct
 import zlib
 
+from casecrawler.export.release_audit import build_objective_coverage_audit
 from casecrawler.models.synthetic import (
     ClinicalDocument,
     Code,
@@ -139,6 +140,31 @@ def test_quality_report_marks_fully_approved_dataset_export_ready():
     assert "radiology_images" in report.multimodal_release_missing
     assert "benchmark_reference" in report.multimodal_release_missing
     assert report.recommendations == []
+
+
+def test_objective_coverage_blocks_privacy_safety_failures():
+    issue = ValidationIssue(
+        severity="error",
+        modality=Modality.CLINICAL_TEXT,
+        field="privacy.memorization_risk",
+        message="Generated text contains a long verbatim span from a source reference.",
+    )
+    report = build_dataset_quality_report(
+        "ds-quality",
+        [_record("rec-1", approved=False, issues=[issue])],
+    )
+
+    audit = build_objective_coverage_audit(
+        quality_report=report,
+        benchmark_suite={"passed": True, "reference_count": 1},
+        manifest={"task_coverage": {"sft": 1}, "audit_artifacts": {}},
+    )
+
+    assert audit["criteria"]["privacy_safety"]["satisfied"] is False
+    assert audit["criteria"]["privacy_safety"]["evidence"]["privacy_issue_counts"] == {
+        "privacy.memorization_risk": 1
+    }
+    assert "privacy_safety" in audit["missing"]
 
 
 def test_quality_report_counts_clinical_text_model_policy():

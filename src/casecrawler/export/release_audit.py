@@ -23,6 +23,7 @@ OBJECTIVE_COVERAGE_KEYS = frozenset(
         "time_series",
         "radiology_reports",
         "radiology_images",
+        "privacy_safety",
         "validation_references",
         "fine_tuning_exports",
         "release_audit_artifacts",
@@ -125,6 +126,15 @@ def build_objective_coverage_audit(
                 "mean_height": quality_report.mean_imaging_height,
             },
         ),
+        "privacy_safety": _criterion(
+            "Privacy and memorization-risk validation has no blocking findings.",
+            _privacy_safety_satisfied(quality_report),
+            ["quality_report.json"],
+            {
+                "blocking_issue_count": quality_report.blocking_issue_count,
+                "privacy_issue_counts": _privacy_issue_counts(quality_report),
+            },
+        ),
         "validation_references": _criterion(
             "Generated data is compared to imported validation references.",
             quality_report.benchmark_ready is True
@@ -171,6 +181,22 @@ def _criterion(
         "satisfied": bool(satisfied),
         "artifacts": artifacts,
         "evidence": evidence,
+    }
+
+
+def _privacy_safety_satisfied(quality_report: DatasetQualityReport) -> bool:
+    return (
+        quality_report.record_count > 0
+        and quality_report.blocking_issue_count == 0
+        and not _privacy_issue_counts(quality_report)
+    )
+
+
+def _privacy_issue_counts(quality_report: DatasetQualityReport) -> dict[str, int]:
+    return {
+        field: count
+        for field, count in quality_report.issue_counts_by_field.items()
+        if field.startswith("privacy")
     }
 
 
