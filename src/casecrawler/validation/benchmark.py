@@ -196,6 +196,16 @@ class DatasetBenchmark:
                 set(reference_profile.imaging_body_region_counts),
             ),
             _jaccard_metric(
+                "imaging_backend_overlap",
+                set(generated_profile.imaging_backend_counts),
+                set(reference_profile.imaging_backend_counts),
+            ),
+            _distribution_metric(
+                "imaging_backend_distribution",
+                generated_profile.imaging_backend_counts,
+                reference_profile.imaging_backend_counts,
+            ),
+            _jaccard_metric(
                 "imaging_label_overlap",
                 set(generated_profile.imaging_label_counts),
                 set(reference_profile.imaging_label_counts),
@@ -277,6 +287,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     time_series_backend_counts: Counter[str] = Counter()
     imaging_modality_counts: Counter[str] = Counter()
     imaging_body_region_counts: Counter[str] = Counter()
+    imaging_backend_counts: Counter[str] = Counter()
     imaging_label_counts: Counter[str] = Counter()
     imaging_label_pair_counts: Counter[str] = Counter()
     ages: list[int] = []
@@ -334,6 +345,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         for asset in record.imaging:
             imaging_modality_counts[asset.modality] += 1
             imaging_body_region_counts[asset.body_region] += 1
+            imaging_backend_counts[asset.generation_backend] += 1
             asset_labels = sorted(
                 {
                     _imaging_label_key(label.display, label.code)
@@ -381,6 +393,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         mean_time_series_duration_hours=_mean_float(time_series_durations),
         imaging_modality_counts=dict(sorted(imaging_modality_counts.items())),
         imaging_body_region_counts=dict(sorted(imaging_body_region_counts.items())),
+        imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
         imaging_label_counts=dict(sorted(imaging_label_counts.items())),
         imaging_label_pair_counts=dict(sorted(imaging_label_pair_counts.items())),
         approved_rate=_mean([int(value) for value in approved_values])

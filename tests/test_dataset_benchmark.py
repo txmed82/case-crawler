@@ -216,6 +216,7 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.mean_time_series_duration_hours == 6
     assert profile.imaging_modality_counts == {"XR": 2}
     assert profile.imaging_body_region_counts == {"chest": 2}
+    assert profile.imaging_backend_counts == {"placeholder": 2}
     assert profile.imaging_label_counts == {"effusion": 2, "opacity": 2}
     assert profile.imaging_label_pair_counts == {"effusion|opacity": 2}
     assert profile.approved_rate == 1.0
@@ -280,6 +281,8 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "mean_time_series_duration_hours",
         "imaging_modality_overlap",
         "imaging_body_region_overlap",
+        "imaging_backend_overlap",
+        "imaging_backend_distribution",
         "imaging_label_overlap",
         "imaging_label_distribution",
         "imaging_label_pair_overlap",
@@ -349,6 +352,41 @@ def test_dataset_benchmark_compares_imaging_finding_labels():
     assert label_metric.details["reference_only"] == ["pleural effusion"]
     assert distribution_metric.score == 0.0
     assert any("imaging_label_overlap" in warning for warning in report.warnings)
+
+
+def test_dataset_benchmark_compares_imaging_generation_backends():
+    generated = [_record("rec-1", "ds-gen")]
+    reference = [
+        _record("ref-1", "ds-ref").model_copy(
+            update={
+                "imaging": [
+                    ImagingAsset(
+                        image_id="img-ref",
+                        modality="XR",
+                        body_region="chest",
+                        prompt="portable chest x-ray",
+                        report_text="No focal opacity.",
+                        labels=[
+                            Code(system="synthetic", code="opacity", display="Opacity"),
+                        ],
+                        generation_backend="diffusers:cxr_pneumonia_dreambooth",
+                    )
+                ]
+            }
+        )
+    ]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    backend_metric = next(
+        metric for metric in report.metrics if metric.name == "imaging_backend_overlap"
+    )
+
+    assert report.generated_profile.imaging_backend_counts == {"placeholder": 1}
+    assert report.reference_profile.imaging_backend_counts == {
+        "diffusers:cxr_pneumonia_dreambooth": 1
+    }
+    assert backend_metric.score == 0.0
+    assert "imaging_backend_overlap" in report.failing_metrics
 
 
 def test_dataset_benchmark_flags_numeric_lab_and_vital_drift():
