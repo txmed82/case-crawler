@@ -21,7 +21,7 @@ def infer_imaging_labels(prompt: str, modality: str) -> list[Code]:
     normalized = _normalize(prompt)
     labels: list[Code] = []
     for label, terms in _LABEL_TERMS.items():
-        if any(_contains_term(normalized, term) for term in terms):
+        if any(_contains_positive_term(normalized, label, term) for term in terms):
             labels.append(
                 Code(
                     system="https://casecrawler.dev/synthetic-radiology-labels",
@@ -63,6 +63,25 @@ def _normalize(text: str) -> str:
 
 def _contains_term(normalized_text: str, term: str) -> bool:
     return re.search(rf"\b{re.escape(term)}\b", normalized_text) is not None
+
+
+def _contains_positive_term(normalized_text: str, label: str, term: str) -> bool:
+    if not _contains_term(normalized_text, term):
+        return False
+    if label.lower().startswith("no "):
+        return True
+    return not _contains_negated_term(normalized_text, term)
+
+
+def _contains_negated_term(normalized_text: str, term: str) -> bool:
+    return any(
+        re.search(rf"\b{prefix}\s+(?:\w+\s+){{0,4}}{re.escape(term)}\b", normalized_text)
+        or re.search(
+            rf"\b{prefix}\s+(?:\w+\s+){{0,4}}\w+\s+or\s+{re.escape(term)}\b",
+            normalized_text,
+        )
+        for prefix in ("absent", "negative for", "no", "without")
+    )
 
 
 def _slug(value: str) -> str:
