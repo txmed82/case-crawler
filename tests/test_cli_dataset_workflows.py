@@ -350,7 +350,11 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
         "dataset_card.md",
         "model_card.md",
         "quality_report.json",
+        "release_package_summary.json",
     }
+    release_summary = json.loads(
+        (tmp_path / "release-package" / "release_package_summary.json").read_text()
+    )
     image_artifact = next(iter(manifest["image_artifacts"].values()))
     assert image_artifact["package_path"].startswith("images/")
     assert (tmp_path / "release-package" / image_artifact["package_path"]).is_file()
@@ -358,6 +362,9 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     assert quality["multimodal_release_ready"] is True
     assert benchmark["passed"] is True
     assert benchmark_suite["passed"] is True
+    assert release_summary["dataset_id"] == body["dataset_id"]
+    assert release_summary["quality_report"]["multimodal_release_ready"] is True
+    assert release_summary["benchmark_suite"]["passed"] is True
     assert benchmark_suite["reference_count"] >= 1
     assert body["benchmark_suite"]["passed"] is True
     assert body["benchmark_suite"]["reference_count"] == benchmark_suite["reference_count"]
