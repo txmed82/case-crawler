@@ -25,6 +25,9 @@ def build_dataset_quality_report(
     time_series_backend_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
     imaging_model_policy_counts: Counter[str] = Counter()
+    lab_numeric_values: dict[str, list[float]] = {}
+    vital_numeric_values: dict[str, list[float]] = {}
+    time_series_numeric_values: dict[str, list[float]] = {}
     issue_counts_by_field: Counter[str] = Counter()
     approved_count = 0
     blocking_issue_count = 0
@@ -47,6 +50,9 @@ def build_dataset_quality_report(
             time_series_backend_counts,
             imaging_backend_counts,
             imaging_model_policy_counts,
+            lab_numeric_values,
+            vital_numeric_values,
+            time_series_numeric_values,
         )
         blocking_issue_count += _count_missing_declared_artifacts(
             record,
@@ -113,10 +119,13 @@ def build_dataset_quality_report(
         artifact_counts=dict(sorted(artifact_counts.items())),
         note_type_counts=dict(sorted(note_type_counts.items())),
         extracted_fact_key_counts=dict(sorted(extracted_fact_key_counts.items())),
+        lab_numeric_summaries=_numeric_summaries(lab_numeric_values),
+        vital_numeric_summaries=_numeric_summaries(vital_numeric_values),
         diagnosis_code_system_counts=dict(sorted(diagnosis_code_system_counts.items())),
         diagnosis_code_counts=dict(sorted(diagnosis_code_counts.items())),
         phi_entity_counts=dict(sorted(phi_entity_counts.items())),
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
+        time_series_numeric_summaries=_numeric_summaries(time_series_numeric_values),
         imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
         imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
         mean_modality_alignment_score=_mean_float(modality_alignment_scores),
@@ -137,6 +146,20 @@ def _mean_float(values: list[float]) -> float | None:
     return round(sum(values) / len(values), 4)
 
 
+def _numeric_summaries(values_by_name: dict[str, list[float]]) -> dict[str, dict[str, float | int]]:
+    summaries: dict[str, dict[str, float | int]] = {}
+    for name, values in sorted(values_by_name.items()):
+        if not values:
+            continue
+        summaries[name] = {
+            "count": len(values),
+            "max": round(max(values), 4),
+            "mean": round(sum(values) / len(values), 4),
+            "min": round(min(values), 4),
+        }
+    return summaries
+
+
 def _count_artifacts(
     record: SyntheticRecord,
     artifact_counts: Counter[str],
@@ -148,6 +171,9 @@ def _count_artifacts(
     time_series_backend_counts: Counter[str],
     imaging_backend_counts: Counter[str],
     imaging_model_policy_counts: Counter[str],
+    lab_numeric_values: dict[str, list[float]],
+    vital_numeric_values: dict[str, list[float]],
+    time_series_numeric_values: dict[str, list[float]],
 ) -> None:
     documents = len(record.documents)
     artifact_counts["documents"] += documents
@@ -166,11 +192,21 @@ def _count_artifacts(
         len(encounter.procedures) for encounter in record.encounters
     )
     artifact_counts["labs"] += len(record.labs)
+    for lab in record.labs:
+        if isinstance(lab.value, (int, float)):
+            lab_numeric_values.setdefault(_metric_key(lab.name), []).append(
+                float(lab.value)
+            )
     artifact_counts["vitals"] += len(record.vitals)
+    for vital in record.vitals:
+        vital_numeric_values.setdefault(_metric_key(vital.name), []).append(
+            float(vital.value)
+        )
     artifact_counts["medications"] += len(record.medication_history)
     artifact_counts["time_series_channels"] += len(record.time_series)
     for channel in record.time_series:
         time_series_backend_counts[channel.generation_backend or "unknown"] += 1
+        _collect_time_series_numeric_values(channel, time_series_numeric_values)
     artifact_counts["time_series_waveform_channels"] += sum(
         1
         for channel in record.time_series
@@ -365,6 +401,23 @@ def _diagnosis_code_key(diagnosis) -> str:
     system = diagnosis.system or "unspecified"
     code = diagnosis.code or "unspecified"
     return f"{system}:{code}"
+
+
+def _collect_time_series_numeric_values(
+    channel,
+    values_by_name: dict[str, list[float]],
+) -> None:
+    channel_key = _fact_key(channel.name)
+    for point in channel.points:
+        for value_name, value in point.values.items():
+            values_by_name.setdefault(
+                f"{channel_key}.{_fact_key(str(value_name))}",
+                [],
+            ).append(float(value))
+
+
+def _metric_key(value: str) -> str:
+    return " ".join(value.lower().replace("_", " ").split())
 
 
 def _fact_key(value: str) -> str:
