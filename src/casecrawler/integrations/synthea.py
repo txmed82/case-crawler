@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Protocol
 
 from casecrawler.models.synthetic import (
+    ClinicalDocument,
+    Code,
     ComplexityProfile,
     Encounter,
     LabObservation,
@@ -70,6 +72,8 @@ class SyntheaAdapter:
                 resources.append(resource)
         patient_resource = _first_resource(resources, "Patient")
         encounter_resources = _resources(resources, "Encounter")
+        condition_resources = _resources(resources, "Condition")
+        diagnostic_report_resources = _resources(resources, "DiagnosticReport")
         observation_resources = _resources(resources, "Observation")
         medication_resources = _resources(resources, "MedicationStatement")
 
@@ -83,6 +87,11 @@ class SyntheaAdapter:
             sex=patient_resource.get("gender", "unknown"),
             demographics={"source": "synthea_fhir"},
         )
+        diagnoses = [
+            diagnosis
+            for diagnosis in (_condition_to_code(resource) for resource in condition_resources)
+            if diagnosis is not None
+        ]
         encounters = []
         for index, resource in enumerate(encounter_resources):
             raw_period = resource.get("period") or {}
@@ -94,6 +103,7 @@ class SyntheaAdapter:
                     end=period.get("end"),
                     setting="synthea",
                     reason=_reason(resource) or topic,
+                    diagnoses=diagnoses if index == 0 else [],
                 )
             )
         labs: list[LabObservation] = []
@@ -112,17 +122,30 @@ class SyntheaAdapter:
             )
             if medication is not None
         ]
+        documents = [
+            document
+            for document in (
+                _diagnostic_report_to_document(
+                    resource,
+                    created_at=created_at,
+                    diagnoses=diagnoses,
+                )
+                for resource in diagnostic_report_resources
+            )
+            if document is not None
+        ]
 
         return SyntheticRecord(
             record_id=f"synthea-{patient_id}",
             dataset_id=dataset_id,
             topic=topic,
             complexity=ComplexityProfile.MODERATE,
-            modalities=_modalities(labs=labs, vitals=vitals),
+            modalities=_modalities(labs=labs, vitals=vitals, documents=documents),
             patient=patient,
             encounters=encounters,
             labs=labs,
             vitals=vitals,
+            documents=documents,
             medication_history=medications,
             provenance=Provenance(
                 generator="synthea-fhir-import",
@@ -138,6 +161,101 @@ def _run_synthea_command(command: list[str]) -> None:
         command,
         check=True,
         timeout=SYNTHEA_TIMEOUT_SECONDS,
+    )
+
+
+def _condition_to_code(resource: dict) -> Code | None:
+    codeable = resource.get("code")
+    if not isinstance(codeable, Mapping):
+        return None
+    return _codeable_concept_to_code(codeable, fallback_code=resource.get("id"))
+
+
+def _codeable_concept_to_code(
+    codeable: Mapping,
+    *,
+    fallback_code: object = None,
+) -> Code | None:
+    codings = codeable.get("coding") or []
+    primary = next((item for item in codings if isinstance(item, Mapping)), {})
+    display = codeable.get("text") or primary.get("display")
+    code = primary.get("code") or fallback_code
+    if not display and not code:
+        return None
+    return Code(
+        system=str(primary.get("system") or "synthea-fhir"),
+        code=str(code or display),
+        display=str(display or code),
+    )
+
+
+def _diagnostic_report_to_document(
+    resource: dict,
+    *,
+    created_at: str,
+    diagnoses: list[Code],
+) -> ClinicalDocument | None:
+    text = _diagnostic_report_text(resource)
+    if not text:
+        return None
+    note_type, author_role = _diagnostic_report_document_type(resource)
+    code = resource.get("code") if isinstance(resource.get("code"), Mapping) else {}
+    report_name = code.get("text") or _codeable_concept_to_code(code or {}) or "Diagnostic report"
+    if isinstance(report_name, Code):
+        report_name = report_name.display
+    clean_text = f"{report_name}: {text}"
+    return ClinicalDocument(
+        document_id=f"synthea-{resource.get('id', 'diagnostic-report')}",
+        note_type=note_type,
+        author_role=author_role,
+        timestamp=resource.get("effectiveDateTime") or resource.get("issued") or created_at,
+        clean_text=clean_text,
+        messy_text=_synthea_messy_text(clean_text),
+        extracted_facts={
+            "diagnoses": [diagnosis.model_dump() for diagnosis in diagnoses],
+            "report_code": code.get("text") if isinstance(code, Mapping) else None,
+        },
+    )
+
+
+def _diagnostic_report_text(resource: dict) -> str:
+    conclusion = resource.get("conclusion")
+    if isinstance(conclusion, str) and conclusion.strip():
+        return conclusion.strip()
+    presented_forms = resource.get("presentedForm") or []
+    for form in presented_forms:
+        if not isinstance(form, Mapping):
+            continue
+        title = form.get("title")
+        data = form.get("data")
+        if isinstance(title, str) and title.strip():
+            return title.strip()
+        if isinstance(data, str) and data.strip():
+            return data.strip()
+    return ""
+
+
+def _diagnostic_report_document_type(resource: dict) -> tuple[str, str]:
+    for category in resource.get("category") or []:
+        if not isinstance(category, Mapping):
+            continue
+        for coding in category.get("coding") or []:
+            if not isinstance(coding, Mapping):
+                continue
+            code = str(coding.get("code") or "").lower()
+            display = str(coding.get("display") or "").lower()
+            if code in {"rad", "radiology"} or "radiology" in display:
+                return "radiology_report", "radiologist"
+    return "diagnostic_report", "synthea"
+
+
+def _synthea_messy_text(clean_text: str) -> str:
+    return (
+        clean_text.replace("Patient", "Pt")
+        .replace("patient", "pt")
+        .replace("with", "w/")
+        .replace("Right", "R")
+        .replace("left", "L")
     )
 
 
@@ -216,8 +334,11 @@ def _modalities(
     *,
     labs: list[LabObservation],
     vitals: list[VitalObservation],
+    documents: list[ClinicalDocument] | None = None,
 ) -> list[Modality]:
     modalities = [Modality.STRUCTURED_EHR]
+    if documents:
+        modalities.append(Modality.CLINICAL_TEXT)
     if labs:
         modalities.append(Modality.LABS)
     if vitals:

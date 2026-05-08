@@ -72,6 +72,73 @@ def test_synthea_adapter_imports_minimal_fhir_patient_bundle(tmp_path):
     assert Modality.VITALS in record.modalities
 
 
+def test_synthea_adapter_imports_conditions_and_diagnostic_reports(tmp_path):
+    bundle = {
+        "resourceType": "Bundle",
+        "entry": [
+            {
+                "resource": {
+                    "resourceType": "Patient",
+                    "id": "pat-report",
+                    "gender": "male",
+                    "birthDate": "1965-01-01",
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Encounter",
+                    "id": "enc-report",
+                    "period": {"start": "2026-01-01T00:00:00"},
+                    "reasonCode": [{"text": "dyspnea"}],
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Condition",
+                    "id": "cond-1",
+                    "code": {
+                        "coding": [
+                            {
+                                "system": "http://snomed.info/sct",
+                                "code": "233604007",
+                                "display": "Pneumonia",
+                            }
+                        ],
+                        "text": "Community acquired pneumonia",
+                    },
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "DiagnosticReport",
+                    "id": "dr-1",
+                    "category": [
+                        {"coding": [{"code": "RAD", "display": "Radiology"}]}
+                    ],
+                    "code": {"text": "Chest radiograph"},
+                    "effectiveDateTime": "2026-01-01T01:30:00",
+                    "conclusion": "Right lower lobe opacity suspicious for pneumonia.",
+                }
+            },
+        ],
+    }
+    path = tmp_path / "patient-report.json"
+    path.write_text(json.dumps(bundle))
+
+    record = SyntheaAdapter().import_fhir_bundle(str(path), dataset_id="ds-1")
+
+    assert record.encounters[0].diagnoses[0].display == "Community acquired pneumonia"
+    assert record.encounters[0].diagnoses[0].code == "233604007"
+    assert record.documents[0].document_id == "synthea-dr-1"
+    assert record.documents[0].note_type == "radiology_report"
+    assert record.documents[0].author_role == "radiologist"
+    assert "Right lower lobe opacity" in record.documents[0].clean_text
+    assert record.documents[0].extracted_facts["diagnoses"][0]["display"] == (
+        "Community acquired pneumonia"
+    )
+    assert Modality.CLINICAL_TEXT in record.modalities
+
+
 def test_synthea_adapter_handles_partial_fhir_dates(tmp_path):
     bundle = {
         "resourceType": "Bundle",
