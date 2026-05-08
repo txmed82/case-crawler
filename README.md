@@ -161,6 +161,7 @@ casecrawler export-dataset \
   --output train.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format note_fact_sft_jsonl --output note_facts.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format tool_call_jsonl --output tools.jsonl
+casecrawler export-dataset --dataset-id <dataset_id> --format time_series_jsonl --output time_series.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format dpo_jsonl --output preference.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format rl_jsonl --output episodes.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format fhir_ndjson --output fhir.ndjson
@@ -276,6 +277,7 @@ synthetic:
     - chat_jsonl
     - tool_call_jsonl
     - multimodal_jsonl
+    - time_series_jsonl
     - dpo_jsonl
     - rl_jsonl
     - fhir_ndjson

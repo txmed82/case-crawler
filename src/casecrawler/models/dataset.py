@@ -16,6 +16,7 @@ class ExportFormat(str, Enum):
     CHAT_JSONL = "chat_jsonl"
     TOOL_CALL_JSONL = "tool_call_jsonl"
     MULTIMODAL_JSONL = "multimodal_jsonl"
+    TIME_SERIES_JSONL = "time_series_jsonl"
     DPO_JSONL = "dpo_jsonl"
     RL_JSONL = "rl_jsonl"
     FHIR_NDJSON = "fhir_ndjson"

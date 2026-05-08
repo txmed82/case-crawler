@@ -40,6 +40,7 @@ RECIPES: dict[str, GenerationRecipe] = {
             ExportFormat.MULTIMODAL_JSONL,
             ExportFormat.SFT_JSONL,
             ExportFormat.NOTE_FACT_SFT_JSONL,
+            ExportFormat.TIME_SERIES_JSONL,
             ExportFormat.FHIR_NDJSON,
             ExportFormat.PARQUET,
         ],
@@ -110,6 +111,7 @@ RECIPES: dict[str, GenerationRecipe] = {
         export_formats=[
             ExportFormat.SFT_JSONL,
             ExportFormat.NOTE_FACT_SFT_JSONL,
+            ExportFormat.TIME_SERIES_JSONL,
             ExportFormat.PARQUET,
         ],
         cohort_constraints={

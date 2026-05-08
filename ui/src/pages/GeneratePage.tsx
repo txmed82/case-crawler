@@ -31,6 +31,7 @@ const exportFormatOptions: { value: ExportFormat; label: string }[] = [
   { value: "chat_jsonl", label: "Chat" },
   { value: "tool_call_jsonl", label: "Tool calls" },
   { value: "multimodal_jsonl", label: "Multimodal" },
+  { value: "time_series_jsonl", label: "Time series" },
   { value: "dpo_jsonl", label: "DPO" },
   { value: "rl_jsonl", label: "RL" },
   { value: "fhir_ndjson", label: "FHIR" },
