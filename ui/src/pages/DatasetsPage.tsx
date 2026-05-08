@@ -1025,6 +1025,36 @@ function QualityPanel({
               value={Object.keys(quality.time_series_numeric_summaries).length}
             />
           </div>
+          {Object.keys(quality.export_profile_readiness ?? {}).length > 0 && (
+            <div>
+              <p className="text-xs font-medium uppercase text-gray-500">
+                Export profiles
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {Object.entries(quality.export_profile_readiness)
+                  .filter(([format]) => exportProfilePriority.includes(format))
+                  .sort(
+                    ([left], [right]) =>
+                      exportProfilePriority.indexOf(left) -
+                      exportProfilePriority.indexOf(right)
+                  )
+                  .map(([format, readiness]) => (
+                    <span
+                      key={format}
+                      title={readiness.reason}
+                      className={`rounded-md px-2 py-1 text-xs font-medium ${
+                        readiness.ready
+                          ? "bg-green-50 text-green-700"
+                          : "bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      {formatExportProfile(format)}:{" "}
+                      {readiness.ready ? "ready" : readiness.missing.join(", ") || "blocked"}
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
           {quality.recommended_reference_keys.length > 0 && (
             <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1353,6 +1383,29 @@ function formatExportGate(value: unknown) {
   if (value === true) return "passed";
   if (value === false) return "failed";
   return "not run";
+}
+
+const exportProfilePriority = [
+  "sft_jsonl",
+  "note_fact_sft_jsonl",
+  "clinical_observation_jsonl",
+  "medication_reconciliation_jsonl",
+  "multimodal_jsonl",
+  "time_series_jsonl",
+  "fhir_ndjson",
+];
+
+function formatExportProfile(value: string) {
+  const labels: Record<string, string> = {
+    sft_jsonl: "SFT",
+    note_fact_sft_jsonl: "Facts",
+    clinical_observation_jsonl: "Observations",
+    medication_reconciliation_jsonl: "Medications",
+    multimodal_jsonl: "Multimodal",
+    time_series_jsonl: "Time series",
+    fhir_ndjson: "FHIR",
+  };
+  return labels[value] ?? value.replaceAll("_", " ");
 }
 
 function exportGateClass(value: unknown) {

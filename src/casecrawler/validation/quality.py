@@ -5,6 +5,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
+from casecrawler.models.dataset import ExportFormat
 from casecrawler.models.evaluation import DatasetQualityReport
 from casecrawler.models.synthetic import Modality, SyntheticRecord
 
@@ -131,6 +132,13 @@ def build_dataset_quality_report(
         benchmark_thresholds=benchmark_summary["thresholds"],
         modality_counts=dict(sorted(modality_counts.items())),
         artifact_counts=dict(sorted(artifact_counts.items())),
+        export_profile_readiness=_export_profile_readiness(
+            record_count=record_count,
+            approved_count=approved_count,
+            blocking_issue_count=blocking_issue_count,
+            artifact_counts=artifact_counts,
+            extracted_fact_key_counts=extracted_fact_key_counts,
+        ),
         longitudinal_record_rate=_mean_float(longitudinal_values),
         mean_encounter_span_hours=_mean_float(encounter_spans),
         mean_observations_per_encounter=_mean_float(observations_per_encounter),
@@ -545,6 +553,115 @@ def _recommendations(
             "Import a recommended reference dataset before benchmark-gated release."
         )
     return recommendations
+
+
+def _export_profile_readiness(
+    *,
+    record_count: int,
+    approved_count: int,
+    blocking_issue_count: int,
+    artifact_counts: Counter[str],
+    extracted_fact_key_counts: Counter[str],
+) -> dict[str, dict[str, object]]:
+    base_ready = record_count > 0 and approved_count == record_count and blocking_issue_count == 0
+    checks = {
+        ExportFormat.RAW_JSONL: {},
+        ExportFormat.SFT_JSONL: {"documents": 1},
+        ExportFormat.CHAT_JSONL: {"documents": 1},
+        ExportFormat.DPO_JSONL: {"documents": 1},
+        ExportFormat.RL_JSONL: {"documents": 1},
+        ExportFormat.NOTE_FACT_SFT_JSONL: {"documents": 1, "extracted_facts": 1},
+        ExportFormat.CLINICAL_OBSERVATION_JSONL: {"labs_or_vitals": 1},
+        ExportFormat.MEDICATION_RECONCILIATION_JSONL: {"medications": 1},
+        ExportFormat.TOOL_CALL_JSONL: {"documents": 1, "structured_ehr": 1},
+        ExportFormat.FHIR_NDJSON: {"structured_ehr": 1},
+        ExportFormat.PARQUET: {},
+        ExportFormat.TIME_SERIES_JSONL: {
+            "time_series_channels": 1,
+            "time_series_points": 1,
+        },
+        ExportFormat.MULTIMODAL_JSONL: {
+            "imaging_assets": 1,
+            "imaging_file_assets": 1,
+        },
+    }
+    return {
+        export_format.value: _profile_readiness(
+            export_format,
+            required,
+            base_ready=base_ready,
+            artifact_counts=artifact_counts,
+            extracted_fact_key_counts=extracted_fact_key_counts,
+        )
+        for export_format, required in checks.items()
+    }
+
+
+def _profile_readiness(
+    export_format: ExportFormat,
+    required: dict[str, int],
+    *,
+    base_ready: bool,
+    artifact_counts: Counter[str],
+    extracted_fact_key_counts: Counter[str],
+) -> dict[str, object]:
+    missing = [
+        requirement
+        for requirement, minimum in required.items()
+        if _artifact_count(
+            requirement,
+            artifact_counts=artifact_counts,
+            extracted_fact_key_counts=extracted_fact_key_counts,
+        )
+        < minimum
+    ]
+    return {
+        "ready": base_ready and not missing,
+        "required": dict(required),
+        "available": {
+            requirement: _artifact_count(
+                requirement,
+                artifact_counts=artifact_counts,
+                extracted_fact_key_counts=extracted_fact_key_counts,
+            )
+            for requirement in required
+        },
+        "missing": missing,
+        "reason": _profile_readiness_reason(export_format, base_ready, missing),
+    }
+
+
+def _artifact_count(
+    requirement: str,
+    *,
+    artifact_counts: Counter[str],
+    extracted_fact_key_counts: Counter[str],
+) -> int:
+    if requirement == "labs_or_vitals":
+        return artifact_counts.get("labs", 0) + artifact_counts.get("vitals", 0)
+    if requirement == "structured_ehr":
+        return min(
+            artifact_counts.get("encounters", 0),
+            artifact_counts.get("diagnoses", 0),
+        )
+    if requirement == "extracted_facts":
+        return sum(extracted_fact_key_counts.values())
+    return artifact_counts.get(requirement, 0)
+
+
+def _profile_readiness_reason(
+    export_format: ExportFormat,
+    base_ready: bool,
+    missing: list[str],
+) -> str:
+    if not base_ready:
+        return "Dataset must have records, approvals, and no blocking quality issues."
+    if missing:
+        return (
+            f"{export_format.value} requires additional artifacts: "
+            f"{', '.join(missing)}."
+        )
+    return f"{export_format.value} has the required artifacts."
 
 
 def _benchmark_summary(benchmark_plan: dict | None) -> dict:

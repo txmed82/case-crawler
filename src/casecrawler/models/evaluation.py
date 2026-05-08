@@ -84,6 +84,7 @@ class DatasetQualityReport(BaseModel):
     benchmark_thresholds: dict[str, float] = Field(default_factory=dict)
     modality_counts: dict[str, int] = Field(default_factory=dict)
     artifact_counts: dict[str, int] = Field(default_factory=dict)
+    export_profile_readiness: dict[str, dict[str, Any]] = Field(default_factory=dict)
     longitudinal_record_rate: float | None = None
     mean_encounter_span_hours: float | None = None
     mean_observations_per_encounter: float | None = None
