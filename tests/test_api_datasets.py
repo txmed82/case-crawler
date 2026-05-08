@@ -117,6 +117,7 @@ def test_dataset_api_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert exported.headers["content-type"] == "application/zip"
     with zipfile.ZipFile(BytesIO(exported.content)) as archive:
         assert sorted(archive.namelist()) == [
+            "benchmark_profile.json",
             "dataset_card.md",
             "manifest.json",
             "model_card.md",
@@ -132,10 +133,15 @@ def test_dataset_api_exports_split_fine_tuning_package(tmp_path, monkeypatch):
         assert manifest["splits"]["validation"]["record_count"] == 1
         assert manifest["splits"]["test"]["record_count"] == 1
         assert json.loads(archive.read("quality_report.json"))["export_ready"] is True
+        benchmark_profile = json.loads(archive.read("benchmark_profile.json"))
+        assert benchmark_profile["artifact_type"] == "casecrawler_benchmark_profile"
+        assert benchmark_profile["profile"]["dataset_id"] == dataset_id
         assert "Dataset Card" in archive.read("dataset_card.md").decode()
     assert listed.json()["exports"][0]["metadata"]["split_package"] is True
     assert listed.json()["exports"][0]["metadata"]["transport"] == "api"
-    assert "model_card.md" in listed.json()["exports"][0]["metadata"]["audit_artifacts"]
+    assert "benchmark_profile.json" in listed.json()["exports"][0]["metadata"][
+        "audit_artifacts"
+    ]
 
 
 def test_dataset_api_blocks_profile_specific_export_when_artifacts_missing(

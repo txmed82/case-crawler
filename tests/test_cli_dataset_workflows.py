@@ -127,6 +127,7 @@ def test_dataset_cli_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert manifest["splits"]["validation"]["record_count"] == 1
     assert manifest["splits"]["test"]["record_count"] == 1
     assert set(manifest["audit_artifacts"]) == {
+        "benchmark_profile.json",
         "dataset_card.md",
         "model_card.md",
         "quality_report.json",
@@ -136,9 +137,14 @@ def test_dataset_cli_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "split-package" / "quality_report.json").read_text())[
         "export_ready"
     ] is True
+    benchmark_profile = json.loads(
+        (tmp_path / "split-package" / "benchmark_profile.json").read_text()
+    )
+    assert benchmark_profile["artifact_type"] == "casecrawler_benchmark_profile"
+    assert benchmark_profile["profile"]["dataset_id"] == dataset_id
     assert exports[0].metadata["split_package"] is True
     assert exports[0].metadata["seed"] == "unit-test"
-    assert "quality_report.json" in exports[0].metadata["audit_artifacts"]
+    assert "benchmark_profile.json" in exports[0].metadata["audit_artifacts"]
     verified = runner.invoke(cli, ["verify-split-package", "split-package"])
     assert verified.exit_code == 0
     verify_report = json.loads(verified.output)

@@ -1041,7 +1041,11 @@ def export_dataset_splits(
     from casecrawler.export.cards import build_dataset_card, build_model_card
     from casecrawler.export.fine_tuning import export_jsonl_split_package
     from casecrawler.storage.dataset_store import DatasetStore
-    from casecrawler.validation.benchmark import DatasetBenchmark
+    from casecrawler.validation.benchmark import (
+        DatasetBenchmark,
+        benchmark_profile_artifact,
+        profile_records,
+    )
     from casecrawler.validation.benchmark_selection import resolve_benchmark_gate
     from casecrawler.validation.quality import build_dataset_quality_report, export_profile_blocker
 
@@ -1122,6 +1126,9 @@ def export_dataset_splits(
             seed=seed,
             audit_artifacts={
                 "quality_report.json": report.model_dump(mode="json"),
+                "benchmark_profile.json": benchmark_profile_artifact(
+                    profile_records(records)
+                ),
                 "dataset_card.md": build_dataset_card(manifest_snapshot, records),
                 "model_card.md": build_model_card(manifest_snapshot, records),
                 **benchmark_audit,
