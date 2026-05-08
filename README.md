@@ -102,6 +102,7 @@ Optional backends are intentionally lazy:
   expected `TimeSeriesChannel[]` stdout, and validation requirements
 - Existing OpenAI, Anthropic, OpenRouter, and Ollama providers remain available for model-backed generation
 - `synthetic.clinical_text_backend: llm` routes clinical document drafting through the configured LLM provider while the default deterministic backend remains no-key
+- `synthetic.clinical_text_backend: external` wraps local or Hugging Face note generators as stdin/stdout commands and validates their returned `ClinicalDocument[]` records
 
 ## CLI Reference
 
@@ -307,9 +308,12 @@ llm:
   model: "claude-sonnet-4-6"
 
 synthetic:
-  clinical_text_backend: "deterministic" # or "llm"
+  clinical_text_backend: "deterministic" # or "llm" or "external"
+  clinical_text_command: null # e.g. ["hf-note-sample", "--model", "local-notes"]
   # GenerationRequest can override clinical_text_backend, llm_provider,
-  # llm_model, and ollama_base_url for a single dataset generation run.
+  # llm_model, ollama_base_url, and clinical_text_command for one dataset run.
+  # External clinical text commands receive stdin JSON with record and must print
+  # ClinicalDocument[] or {"documents": ClinicalDocument[]} to stdout.
   imaging_backend: "placeholder" # or "diffusers" or "external"
   imaging_model_profile: null # e.g. cxr_pneumonia_dreambooth
   diffusers_model_id: "stabilityai/stable-diffusion-2-1"

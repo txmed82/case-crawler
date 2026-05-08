@@ -47,6 +47,7 @@ class SyntheticPipeline:
             config.llm.provider,
             config.llm.model,
             config.llm.ollama_base_url,
+            config.synthetic.clinical_text_command,
         )
         self._time_series_generator = time_series_generator or _time_series_generator_from_config(
             config.synthetic.time_series_backend,
@@ -120,6 +121,7 @@ class SyntheticPipeline:
                             self._config.synthetic.clinical_text_backend,
                             self._config.llm.provider,
                             self._config.llm.model,
+                            self._config.synthetic.clinical_text_command,
                         )
                     }
                 )
@@ -222,18 +224,24 @@ class SyntheticPipeline:
             or req.llm_provider
             or req.llm_model
             or req.ollama_base_url
+            or req.clinical_text_command
         ):
             return self._text_generator
         backend = req.clinical_text_backend or (
             "llm"
             if (req.llm_provider or req.llm_model)
-            else self._config.synthetic.clinical_text_backend
+            else (
+                "external"
+                if req.clinical_text_command
+                else self._config.synthetic.clinical_text_backend
+            )
         )
         return _text_generator_from_config(
             backend,
             req.llm_provider or self._config.llm.provider,
             req.llm_model or self._config.llm.model,
             req.ollama_base_url or self._config.llm.ollama_base_url,
+            req.clinical_text_command or self._config.synthetic.clinical_text_command,
         )
 
 
@@ -258,12 +266,20 @@ def _text_generator_from_config(
     provider_name: str,
     model: str,
     ollama_base_url: str,
+    command: list[str] | None,
 ) -> TextGenerator:
     if backend == "deterministic":
         return TextGenerator()
     if backend == "llm":
         provider = get_provider(provider_name, model, base_url=ollama_base_url)
         return TextGenerator(provider=provider)
+    if backend == "external":
+        if not command:
+            raise ValueError(
+                "synthetic.clinical_text_command is required when "
+                "clinical_text_backend is 'external'."
+            )
+        return TextGenerator(external_command=command)
     raise ValueError(f"Unknown synthetic clinical text backend: {backend}")
 
 
@@ -319,12 +335,26 @@ def _with_clinical_text_generation_metadata(
     configured_backend: str,
     configured_provider: str,
     configured_model: str,
+    configured_command: list[str] | None,
 ) -> dict:
     backend = req.clinical_text_backend or (
-        "llm" if (req.llm_provider or req.llm_model) else configured_backend
+        "llm"
+        if (req.llm_provider or req.llm_model)
+        else ("external" if req.clinical_text_command else configured_backend)
     )
-    if backend != "llm":
+    if backend not in {"llm", "external"}:
         return metadata
+    if backend == "external":
+        return {
+            **metadata,
+            "clinical_text_model_policy": {
+                "backend": "external",
+                "command": req.clinical_text_command or configured_command,
+                "license": "external_command_terms",
+                "gated": False,
+                "use_policy": "wrap_external_clinical_text_generator_validate_outputs",
+            },
+        }
     provider = req.llm_provider or configured_provider
     model = req.llm_model or configured_model
     return {

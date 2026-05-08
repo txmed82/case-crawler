@@ -181,6 +181,45 @@ def test_text_generator_radiology_report_reflects_imaging_assets():
     assert "Appendicitis" in radiology_report.extracted_facts["imaging_labels"]
 
 
+def test_text_generator_can_use_external_backend_for_documents():
+    req = GenerationRequest(
+        topic="pneumonia",
+        modalities=[Modality.CLINICAL_TEXT],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0)
+    calls = []
+
+    def fake_runner(command, payload):
+        calls.append((command, payload))
+        return (
+            '{"documents":[{"note_type":"ed_note","author_role":"external",'
+            '"clean_text":"External synthetic ED note for pneumonia.",'
+            '"messy_text":"ext ed note pna",'
+            '"extracted_facts":{"source":"fake-external"}}]}'
+        )
+
+    updated = TextGenerator(
+        external_command=["hf-note-sample"],
+        external_runner=fake_runner,
+    ).add_documents(record)
+
+    assert calls[0][0] == ["hf-note-sample"]
+    assert '"topic": "pneumonia"' in calls[0][1]
+    assert updated.documents[0].note_type == "ed_note"
+    assert updated.documents[0].timestamp == "2026-01-01T00:00:00"
+    assert updated.documents[0].extracted_facts["source"] == "fake-external"
+    assert (
+        updated.documents[0].extracted_facts["generation_backend"]
+        == "external:hf-note-sample"
+    )
+
+
+def test_text_generator_rejects_empty_external_command():
+    with pytest.raises(ValueError, match="external_command must not be empty"):
+        TextGenerator(external_command=[])
+
+
 @pytest.mark.asyncio
 async def test_text_generator_can_use_llm_provider_for_documents():
     req = GenerationRequest(

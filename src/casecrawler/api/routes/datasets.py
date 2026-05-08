@@ -89,6 +89,8 @@ class ReleasePackageRequest(BaseModel):
     validation_ratio: float = Field(default=0.1, ge=0.0)
     test_ratio: float = Field(default=0.1, ge=0.0)
     seed: str = "casecrawler"
+    clinical_text_backend: Literal["deterministic", "llm", "external"] | None = None
+    clinical_text_command: list[str] | None = Field(default=None, min_length=1)
     imaging_backend: Literal["placeholder", "diffusers", "external"] = "placeholder"
     imaging_model_profile: str | None = Field(default=None, min_length=1)
     diffusers_model_id: str | None = Field(default=None, min_length=1)
@@ -154,6 +156,8 @@ async def generate_release_package(req: ReleasePackageRequest):
             count=req.count,
             recipe=req.recipe,
             export_formats=[req.export_format],
+            clinical_text_backend=req.clinical_text_backend,
+            clinical_text_command=req.clinical_text_command,
             imaging_backend=req.imaging_backend,
             imaging_model_profile=req.imaging_model_profile,
             diffusers_model_id=req.diffusers_model_id,
