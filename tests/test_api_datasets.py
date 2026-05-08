@@ -251,6 +251,7 @@ def test_dataset_api_generates_release_package_with_fixture_references(
         assert sorted(archive.namelist()) == [
             "benchmark_profile.json",
             "benchmark_report.json",
+            "benchmark_suite_report.json",
             "dataset_card.md",
             "manifest.json",
             "model_card.md",
@@ -263,6 +264,7 @@ def test_dataset_api_generates_release_package_with_fixture_references(
         manifest = json.loads(archive.read("manifest.json"))
         quality = json.loads(archive.read("quality_report.json"))
         benchmark = json.loads(archive.read("benchmark_report.json"))
+        benchmark_suite = json.loads(archive.read("benchmark_suite_report.json"))
         summary = json.loads(archive.read("release_package_summary.json"))
     exports = DatasetStore().list_export_manifests(dataset_id=dataset_id)
 
@@ -271,13 +273,18 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     assert manifest["record_count"] == 1
     assert quality["multimodal_release_ready"] is True
     assert benchmark["passed"] is True
+    assert benchmark_suite["passed"] is True
+    assert benchmark_suite["reference_count"] >= 1
     assert summary["dataset_id"] == dataset_id
     assert summary["quality_report"]["multimodal_release_ready"] is True
     assert summary["benchmark"]["passed"] is True
+    assert summary["benchmark_suite"]["passed"] is True
+    assert summary["benchmark_suite"]["reference_count"] == benchmark_suite["reference_count"]
     assert summary["seeded_references"]["imported"]
     assert exports[0].metadata["release_package"] is True
     assert exports[0].metadata["multimodal_release_ready"] is True
     assert exports[0].metadata["benchmark_passed"] is True
+    assert exports[0].metadata["benchmark_suite_passed"] is True
 
 
 def test_dataset_api_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):

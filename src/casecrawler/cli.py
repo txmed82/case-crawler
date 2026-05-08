@@ -748,7 +748,10 @@ def generate_release_package(
         benchmark_profile_artifact,
         profile_records,
     )
-    from casecrawler.validation.benchmark_selection import build_benchmark_plan_summary
+    from casecrawler.validation.benchmark_selection import (
+        build_benchmark_plan_summary,
+        run_recommended_benchmark_suite,
+    )
     from casecrawler.validation.quality import (
         build_dataset_quality_report,
         export_profile_blocker,
@@ -791,6 +794,12 @@ def generate_release_package(
         min_overall_score=min_overall_score,
         min_metric_score=min_metric_score,
     ).compare(records, reference_records)
+    benchmark_suite = run_recommended_benchmark_suite(
+        store,
+        dataset_id,
+        min_overall_score=min_overall_score,
+        min_metric_score=min_metric_score,
+    )
     benchmark_reference_key = benchmark_plan_summary.get("resolved_reference_key")
     benchmark_plan = {
         "recommended_reference_keys": benchmark_plan_summary["recommended_reference_keys"],
@@ -837,6 +846,7 @@ def generate_release_package(
             "quality_report.json": quality_report.model_dump(mode="json"),
             "benchmark_profile.json": benchmark_profile_artifact(profile_records(records)),
             "benchmark_report.json": benchmark_report.model_dump(mode="json"),
+            "benchmark_suite_report.json": benchmark_suite,
             "dataset_card.md": build_dataset_card(manifest_snapshot, records),
             "model_card.md": build_model_card(manifest_snapshot, records),
         },
@@ -860,6 +870,8 @@ def generate_release_package(
             "benchmark_auto_selected": True,
             "benchmark_overall_score": benchmark_report.overall_score,
             "benchmark_passed": benchmark_report.passed,
+            "benchmark_suite_passed": benchmark_suite["passed"],
+            "benchmark_suite_reference_count": benchmark_suite["reference_count"],
             "benchmark_failing_metrics": benchmark_report.failing_metrics,
             "benchmark_thresholds": benchmark_report.thresholds,
             "splits": {
@@ -897,6 +909,12 @@ def generate_release_package(
                     "overall_score": benchmark_report.overall_score,
                     "failing_metrics": benchmark_report.failing_metrics,
                     "thresholds": benchmark_report.thresholds,
+                },
+                "benchmark_suite": {
+                    "passed": benchmark_suite["passed"],
+                    "reference_count": benchmark_suite["reference_count"],
+                    "mean_overall_score": benchmark_suite["mean_overall_score"],
+                    "task_export_results": benchmark_suite["task_export_results"],
                 },
                 "manifest": manifest,
                 "verification": verification,

@@ -305,6 +305,9 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     benchmark = json.loads(
         (tmp_path / "release-package" / "benchmark_report.json").read_text()
     )
+    benchmark_suite = json.loads(
+        (tmp_path / "release-package" / "benchmark_suite_report.json").read_text()
+    )
     release_verified = runner.invoke(
         cli,
         ["verify-split-package", "--require-multimodal-release", "release-package"],
@@ -320,16 +323,22 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     assert set(manifest["audit_artifacts"]) == {
         "benchmark_profile.json",
         "benchmark_report.json",
+        "benchmark_suite_report.json",
         "dataset_card.md",
         "model_card.md",
         "quality_report.json",
     }
     assert quality["multimodal_release_ready"] is True
     assert benchmark["passed"] is True
+    assert benchmark_suite["passed"] is True
+    assert benchmark_suite["reference_count"] >= 1
+    assert body["benchmark_suite"]["passed"] is True
+    assert body["benchmark_suite"]["reference_count"] == benchmark_suite["reference_count"]
     assert release_verified.exit_code == 0, release_verified.output
     assert exports[0].metadata["release_package"] is True
     assert exports[0].metadata["multimodal_release_ready"] is True
     assert exports[0].metadata["benchmark_passed"] is True
+    assert exports[0].metadata["benchmark_suite_passed"] is True
 
 
 def test_dataset_cli_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):

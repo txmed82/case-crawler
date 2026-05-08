@@ -156,7 +156,10 @@ async def generate_release_package(req: ReleasePackageRequest):
     from casecrawler.integrations.reference_fixtures import (
         seed_recommended_reference_fixtures,
     )
-    from casecrawler.validation.benchmark_selection import build_benchmark_plan_summary
+    from casecrawler.validation.benchmark_selection import (
+        build_benchmark_plan_summary,
+        run_recommended_benchmark_suite,
+    )
 
     store = DatasetStore()
     records = result["records"]
@@ -186,6 +189,15 @@ async def generate_release_package(req: ReleasePackageRequest):
             min_metric_score=req.min_metric_score,
         ).compare(records, reference_records)
     except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+    try:
+        benchmark_suite = run_recommended_benchmark_suite(
+            store,
+            dataset_id,
+            min_overall_score=req.min_overall_score,
+            min_metric_score=req.min_metric_score,
+        )
+    except (LookupError, ValueError) as err:
         raise HTTPException(status_code=422, detail=str(err)) from err
 
     benchmark_reference_key = benchmark_plan_summary.get("resolved_reference_key")
@@ -247,6 +259,7 @@ async def generate_release_package(req: ReleasePackageRequest):
                         profile_records(records)
                     ),
                     "benchmark_report.json": benchmark_report.model_dump(mode="json"),
+                    "benchmark_suite_report.json": benchmark_suite,
                     "dataset_card.md": build_dataset_card(manifest_snapshot, records),
                     "model_card.md": build_model_card(manifest_snapshot, records),
                     "release_package_summary.json": {
@@ -271,6 +284,16 @@ async def generate_release_package(req: ReleasePackageRequest):
                             "overall_score": benchmark_report.overall_score,
                             "failing_metrics": benchmark_report.failing_metrics,
                             "thresholds": benchmark_report.thresholds,
+                        },
+                        "benchmark_suite": {
+                            "passed": benchmark_suite["passed"],
+                            "reference_count": benchmark_suite["reference_count"],
+                            "mean_overall_score": benchmark_suite[
+                                "mean_overall_score"
+                            ],
+                            "task_export_results": benchmark_suite[
+                                "task_export_results"
+                            ],
                         },
                     },
                 },
@@ -308,6 +331,8 @@ async def generate_release_package(req: ReleasePackageRequest):
             "benchmark_auto_selected": True,
             "benchmark_overall_score": benchmark_report.overall_score,
             "benchmark_passed": benchmark_report.passed,
+            "benchmark_suite_passed": benchmark_suite["passed"],
+            "benchmark_suite_reference_count": benchmark_suite["reference_count"],
             "benchmark_failing_metrics": benchmark_report.failing_metrics,
             "benchmark_thresholds": benchmark_report.thresholds,
             "splits": {
