@@ -273,6 +273,13 @@ export interface SyntheticRecordPreview {
   };
   labs: { name: string; value: number | string; unit: string; flag?: string | null }[];
   vitals: { name: string; value: number; unit: string }[];
+  medication_history: {
+    name: string;
+    dose?: string | null;
+    route?: string | null;
+    frequency?: string | null;
+    status: string;
+  }[];
   documents: ClinicalDocument[];
   imaging: { image_id: string; modality: string; body_region: string; file_path?: string | null }[];
   validation?: {

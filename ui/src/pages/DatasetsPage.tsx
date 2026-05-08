@@ -918,12 +918,15 @@ function RecordPreview({ record }: { record: SyntheticRecordPreview }) {
           </span>
         )}
       </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <p className="text-sm text-gray-600">
           Labs: {record.labs.map((lab) => `${lab.name} ${lab.value}${lab.unit}`).join(", ") || "none"}
         </p>
         <p className="text-sm text-gray-600">
           Vitals: {record.vitals.map((vital) => `${vital.name} ${vital.value}${vital.unit}`).join(", ") || "none"}
+        </p>
+        <p className="text-sm text-gray-600">
+          Meds: {formatMedicationSummary(record.medication_history)}
         </p>
         <p className="text-sm text-gray-600">
           Assets: {record.documents.length} notes, {record.imaging.length} images
@@ -971,4 +974,18 @@ function RecordPreview({ record }: { record: SyntheticRecordPreview }) {
       )}
     </div>
   );
+}
+
+function formatMedicationSummary(
+  medications: SyntheticRecordPreview["medication_history"]
+) {
+  if (!medications.length) return "none";
+  return medications
+    .slice(0, 3)
+    .map((medication) =>
+      [medication.name, medication.dose, medication.route]
+        .filter(Boolean)
+        .join(" ")
+    )
+    .join(", ");
 }
