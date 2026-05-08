@@ -158,6 +158,14 @@ casecrawler import-reference-dataset \
   --image-label-map '{"0":"normal","1":"pneumonia"}' \
   --split train \
   --limit 100
+casecrawler import-reference-dataset local-validation-notes \
+  --path ./validation/local-notes.jsonl \
+  --dataset-id ds-local-ref \
+  --note-field clinical_note \
+  --question-field prompt \
+  --answer-field completion \
+  --lab-values-field labs \
+  --limit 100
 casecrawler benchmark-dataset \
   --dataset-id <dataset_id> \
   --reference-dataset-id ds-asclepius-ref \
@@ -225,7 +233,9 @@ datasets such as SynthCheX-75K-v2 and synthetic chest X-ray pneumonia. Custom
 Hugging Face imports can map text fields, FHIR answer fields, PHI annotations,
 diagnosis-code fields, image fields, image-label fields, explicit lab/vital
 arrays, medication-history arrays, and time-series channel arrays into the local
-`SyntheticRecord` schema.
+`SyntheticRecord` schema. The same field mapping works for local JSONL, NDJSON,
+JSON arrays, or `{"rows": [...]}` files via `--path` or the REST import `path`
+field, so private validation sets can stay local.
 
 ## REST API
 

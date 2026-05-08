@@ -1462,6 +1462,67 @@ def test_dataset_api_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     assert record.imaging[0].labels[0].display == "Pneumonia"
 
 
+def test_dataset_api_imports_local_reference_dataset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    local_path = tmp_path / "local-reference.json"
+    local_path.write_text(
+        json.dumps(
+            {
+                "rows": [
+                    {
+                        "subject_id": "local-1",
+                        "clinical_note": (
+                            "Progress Note: 57-year-old female with COPD."
+                        ),
+                        "prompt": "Extract diagnosis.",
+                        "completion": "COPD.",
+                        "task_name": "extraction",
+                        "labs": [
+                            {
+                                "name": "PaCO2",
+                                "value": 51,
+                                "unit": "mmHg",
+                                "flag": "H",
+                                "effective_time": "2026-01-01T00:00:00",
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+    )
+
+    response = client.post(
+        "/api/datasets/reference-import",
+        json={
+            "path": str(local_path),
+            "reference_key": "local-copd-notes",
+            "dataset_id": "ds-local-reference",
+            "license": "cc-by-4.0",
+            "note_field": "clinical_note",
+            "question_field": "prompt",
+            "answer_field": "completion",
+            "task_field": "task_name",
+            "patient_id_field": "subject_id",
+            "lab_values_field": "labs",
+            "limit": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dataset_id"] == "ds-local-reference"
+    assert body["reference_key"] == "local-copd-notes"
+    assert body["repo_id"] == str(local_path)
+    record = DatasetStore().list_records(dataset_id="ds-local-reference")[0]
+    assert record.metadata["reference_key"] == "local-copd-notes"
+    assert record.metadata["reference_dataset"] == str(local_path)
+    assert record.metadata["reference_license"] == "cc-by-4.0"
+    assert record.documents[0].extracted_facts["instruction"] == "Extract diagnosis."
+    assert record.labs[0].name == "PaCO2"
+
+
 def test_dataset_api_imports_bundled_reference_fixture(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

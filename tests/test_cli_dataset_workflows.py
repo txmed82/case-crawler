@@ -1761,6 +1761,69 @@ def test_dataset_cli_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     assert record.imaging[0].labels[0].display == "Pneumonia"
 
 
+def test_dataset_cli_imports_local_reference_dataset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    local_path = tmp_path / "local-reference.jsonl"
+    local_path.write_text(
+        json.dumps(
+            {
+                "subject_id": "local-1",
+                "clinical_note": "Progress Note: 57-year-old female with COPD.",
+                "prompt": "Extract diagnosis.",
+                "completion": "COPD.",
+                "task_name": "extraction",
+                "labs": [
+                    {
+                        "name": "PaCO2",
+                        "value": 51,
+                        "unit": "mmHg",
+                        "flag": "H",
+                        "effective_time": "2026-01-01T00:00:00",
+                    }
+                ],
+            }
+        )
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "import-reference-dataset",
+            "local-copd-notes",
+            "--path",
+            str(local_path),
+            "--dataset-id",
+            "ds-local-reference",
+            "--license",
+            "cc-by-4.0",
+            "--note-field",
+            "clinical_note",
+            "--question-field",
+            "prompt",
+            "--answer-field",
+            "completion",
+            "--task-field",
+            "task_name",
+            "--patient-id-field",
+            "subject_id",
+            "--lab-values-field",
+            "labs",
+            "--limit",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Imported 1 reference record(s)" in result.output
+    record = DatasetStore().list_records(dataset_id="ds-local-reference")[0]
+    assert record.metadata["reference_key"] == "local-copd-notes"
+    assert record.metadata["reference_dataset"] == str(local_path)
+    assert record.metadata["reference_license"] == "cc-by-4.0"
+    assert record.documents[0].extracted_facts["instruction"] == "Extract diagnosis."
+    assert record.labs[0].name == "PaCO2"
+
+
 def test_dataset_cli_rejects_invalid_custom_image_label_map(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

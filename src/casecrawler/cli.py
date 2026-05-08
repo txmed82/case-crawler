@@ -262,6 +262,7 @@ def generation_recipes() -> None:
 @click.argument("reference_key", required=False)
 @click.option("--dataset-id", required=True, help="Dataset id for imported reference records")
 @click.option("--repo-id", default=None, help="Custom Hugging Face dataset repo id")
+@click.option("--path", "local_path", default=None, help="Local JSON/JSONL reference rows")
 @click.option("--split", default=None, help="Override the configured dataset split")
 @click.option("--license", "license_name", default=None, help="License for custom repo imports")
 @click.option("--note-field", default="note", help="Clinical note text field")
@@ -292,6 +293,7 @@ def import_reference_dataset(
     reference_key: str | None,
     dataset_id: str,
     repo_id: str | None,
+    local_path: str | None,
     split: str | None,
     license_name: str | None,
     note_field: str,
@@ -315,27 +317,32 @@ def import_reference_dataset(
     from casecrawler.integrations.huggingface import (
         REFERENCE_DATASETS,
         import_reference_rows,
+        load_local_reference_rows,
         load_huggingface_dataset,
         load_reference_dataset,
         reference_dataset_spec,
     )
     from casecrawler.storage.dataset_store import DatasetStore
 
-    if not reference_key and not repo_id:
-        raise click.ClickException("Provide a reference key or --repo-id.")
+    if not reference_key and not repo_id and not local_path:
+        raise click.ClickException("Provide a reference key, --repo-id, or --path.")
+    if repo_id and local_path:
+        raise click.ClickException("Use either --repo-id or --path, not both.")
     if not repo_id and reference_key not in REFERENCE_DATASETS:
-        choices = ", ".join(sorted(REFERENCE_DATASETS))
-        raise click.ClickException(
-            f"Unknown reference dataset {reference_key!r}. Choose from: {choices}"
-        )
+        if not local_path:
+            choices = ", ".join(sorted(REFERENCE_DATASETS))
+            raise click.ClickException(
+                f"Unknown reference dataset {reference_key!r}. Choose from: {choices}"
+            )
     if limit < 1:
         raise click.ClickException("limit must be at least 1.")
     parsed_image_label_map = _parse_image_label_map(image_label_map)
     try:
-        if repo_id:
+        if repo_id or local_path:
             effective_split = split or "train"
+            source_id = repo_id or str(local_path)
             spec = reference_dataset_spec(
-                repo_id=repo_id,
+                repo_id=source_id,
                 split=effective_split,
                 license=license_name or "unspecified",
                 note_field=note_field,
@@ -352,22 +359,30 @@ def import_reference_dataset(
                 vital_values_field=vital_values_field,
                 medications_field=medications_field,
                 time_series_field=time_series_field,
-                description="User-specified Hugging Face reference dataset.",
+                description=(
+                    "User-specified local reference dataset."
+                    if local_path
+                    else "User-specified Hugging Face reference dataset."
+                ),
             )
-            rows = load_huggingface_dataset(
-                repo_id,
-                split=effective_split,
-                streaming=not no_streaming,
+            rows = (
+                load_local_reference_rows(local_path)
+                if local_path
+                else load_huggingface_dataset(
+                    repo_id,
+                    split=effective_split,
+                    streaming=not no_streaming,
+                )
             )
             records = import_reference_rows(
                 rows,
                 dataset_id=dataset_id,
-                reference_key=reference_key or repo_id,
+                reference_key=reference_key or source_id,
                 split=effective_split,
                 limit=limit,
                 spec=spec,
             )
-            source_name = repo_id
+            source_name = source_id
         else:
             assert reference_key is not None
             rows = load_reference_dataset(
@@ -383,7 +398,7 @@ def import_reference_dataset(
                 limit=limit,
             )
             source_name = reference_key
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError, OSError) as exc:
         raise click.ClickException(str(exc)) from exc
 
     store = DatasetStore()

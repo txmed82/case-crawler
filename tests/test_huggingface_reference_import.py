@@ -7,6 +7,7 @@ from casecrawler.integrations.huggingface import (
     REFERENCE_DATASETS,
     import_reference_rows,
     list_reference_datasets,
+    load_local_reference_rows,
     reference_dataset_spec,
     load_reference_dataset,
     reference_row_to_record,
@@ -779,6 +780,42 @@ def test_image_reference_row_preserves_meaningful_note_text(tmp_path):
 
     assert record.documents[0].clean_text == row["caption"]
     assert record.imaging[0].report_text == row["caption"]
+
+
+def test_load_local_reference_rows_accepts_jsonl_and_json_envelope(tmp_path):
+    jsonl_path = tmp_path / "references.jsonl"
+    jsonl_path.write_text(
+        "\n".join(
+            [
+                json.dumps({"note": "ED note: 64-year-old male with sepsis."}),
+                json.dumps({"note": "Discharge summary: pneumonia improved."}),
+            ]
+        )
+    )
+    json_path = tmp_path / "references.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "rows": [
+                    {"note": "Progress note: COPD exacerbation."},
+                    {"note": "Radiology report: opacity."},
+                ]
+            }
+        )
+    )
+
+    assert load_local_reference_rows(jsonl_path)[0]["note"].startswith("ED note")
+    assert load_local_reference_rows(json_path)[1]["note"].startswith(
+        "Radiology report"
+    )
+
+
+def test_load_local_reference_rows_rejects_non_object_rows(tmp_path):
+    path = tmp_path / "bad.jsonl"
+    path.write_text(json.dumps(["not", "an", "object"]))
+
+    with pytest.raises(ValueError, match="Expected JSON object"):
+        load_local_reference_rows(path)
 
 
 def test_import_reference_rows_honors_limit_and_stable_ids():
