@@ -28,6 +28,8 @@ def build_dataset_quality_report(
     time_series_backend_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
     imaging_model_policy_counts: Counter[str] = Counter()
+    lab_unit_counts: Counter[str] = Counter()
+    vital_unit_counts: Counter[str] = Counter()
     lab_numeric_values: dict[str, list[float]] = {}
     vital_numeric_values: dict[str, list[float]] = {}
     time_series_numeric_values: dict[str, list[float]] = {}
@@ -64,6 +66,8 @@ def build_dataset_quality_report(
             time_series_backend_counts,
             imaging_backend_counts,
             imaging_model_policy_counts,
+            lab_unit_counts,
+            vital_unit_counts,
             lab_numeric_values,
             vital_numeric_values,
             time_series_numeric_values,
@@ -147,7 +151,9 @@ def build_dataset_quality_report(
         mean_observations_per_encounter=_mean_float(observations_per_encounter),
         note_type_counts=dict(sorted(note_type_counts.items())),
         extracted_fact_key_counts=dict(sorted(extracted_fact_key_counts.items())),
+        lab_unit_counts=dict(sorted(lab_unit_counts.items())),
         lab_numeric_summaries=_numeric_summaries(lab_numeric_values),
+        vital_unit_counts=dict(sorted(vital_unit_counts.items())),
         vital_numeric_summaries=_numeric_summaries(vital_numeric_values),
         diagnosis_code_system_counts=dict(sorted(diagnosis_code_system_counts.items())),
         diagnosis_code_counts=dict(sorted(diagnosis_code_counts.items())),
@@ -219,6 +225,8 @@ def _count_artifacts(
     time_series_backend_counts: Counter[str],
     imaging_backend_counts: Counter[str],
     imaging_model_policy_counts: Counter[str],
+    lab_unit_counts: Counter[str],
+    vital_unit_counts: Counter[str],
     lab_numeric_values: dict[str, list[float]],
     vital_numeric_values: dict[str, list[float]],
     time_series_numeric_values: dict[str, list[float]],
@@ -241,12 +249,14 @@ def _count_artifacts(
     )
     artifact_counts["labs"] += len(record.labs)
     for lab in record.labs:
+        lab_unit_counts[lab.unit] += 1
         if isinstance(lab.value, (int, float)):
             lab_numeric_values.setdefault(_metric_key(lab.name), []).append(
                 float(lab.value)
             )
     artifact_counts["vitals"] += len(record.vitals)
     for vital in record.vitals:
+        vital_unit_counts[vital.unit] += 1
         vital_numeric_values.setdefault(_metric_key(vital.name), []).append(
             float(vital.value)
         )
