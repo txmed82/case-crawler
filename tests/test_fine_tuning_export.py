@@ -5,6 +5,7 @@ import zipfile
 import zlib
 
 from casecrawler.export.fine_tuning import (
+    REQUIRED_RELEASE_COVERAGE_KEYS,
     export_clinical_observation_records,
     export_dpo_record,
     export_chat_record,
@@ -551,6 +552,89 @@ def test_verify_jsonl_split_package_validates_quality_report_release_fields(tmp_
     assert "audit_artifacts.quality_report.json.core_artifact_coverage" in issue_fields
     assert "audit_artifacts.quality_report.json.multimodal_release_ready" in issue_fields
     assert "audit_artifacts.quality_report.json.multimodal_release_missing" in issue_fields
+
+
+def test_verify_jsonl_split_package_requires_release_coverage_keys(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+        audit_artifacts={
+            "quality_report.json": {
+                "dataset_id": "ds-split",
+                "record_count": 3,
+                "approved_count": 3,
+                "approval_rate": 1.0,
+                "export_ready": True,
+                "core_artifact_coverage": {"records": True},
+                "multimodal_release_ready": True,
+                "multimodal_release_missing": [],
+            }
+        },
+    )
+
+    report = verify_jsonl_split_package(tmp_path)
+
+    assert report["valid"] is False
+    assert any(
+        issue["field"] == "audit_artifacts.quality_report.json.core_artifact_coverage"
+        and "missing required release coverage keys" in issue["message"]
+        for issue in report["issues"]
+    )
+
+
+def test_verify_jsonl_split_package_rejects_ready_release_with_false_coverage(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    coverage = {key: True for key in REQUIRED_RELEASE_COVERAGE_KEYS}
+    coverage["lab_reports"] = False
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+        audit_artifacts={
+            "quality_report.json": {
+                "dataset_id": "ds-split",
+                "record_count": 3,
+                "approved_count": 3,
+                "approval_rate": 1.0,
+                "export_ready": True,
+                "core_artifact_coverage": coverage,
+                "multimodal_release_ready": True,
+                "multimodal_release_missing": [],
+            }
+        },
+    )
+
+    report = verify_jsonl_split_package(tmp_path)
+
+    assert report["valid"] is False
+    assert any(
+        issue["field"] == "audit_artifacts.quality_report.json.core_artifact_coverage"
+        and "false release coverage keys" in issue["message"]
+        and "lab_reports" in issue["message"]
+        for issue in report["issues"]
+    )
 
 
 def test_verify_jsonl_split_package_validates_card_headers(tmp_path):
