@@ -1710,6 +1710,43 @@ def _verify_quality_report_artifact(
                 "message": "Quality report artifact has no boolean export_ready.",
             }
         )
+    if not isinstance(payload.get("multimodal_release_ready"), bool):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json.multimodal_release_ready",
+                "message": (
+                    "Quality report artifact has no boolean "
+                    "multimodal_release_ready."
+                ),
+            }
+        )
+    coverage = payload.get("core_artifact_coverage")
+    if not isinstance(coverage, dict) or not all(
+        isinstance(key, str) and isinstance(value, bool)
+        for key, value in (coverage or {}).items()
+    ):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json.core_artifact_coverage",
+                "message": (
+                    "Quality report artifact has no boolean core artifact "
+                    "coverage map."
+                ),
+            }
+        )
+    missing = payload.get("multimodal_release_missing")
+    if not isinstance(missing, list) or not all(
+        isinstance(item, str) for item in missing
+    ):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json.multimodal_release_missing",
+                "message": (
+                    "Quality report artifact has no string list "
+                    "multimodal_release_missing."
+                ),
+            }
+        )
 
 
 def _verify_card_artifact(
