@@ -1394,6 +1394,71 @@ def _verify_package_image_artifacts(
                     "message": "Image artifact package_path is missing from manifest files.",
                 }
             )
+        if release_ready:
+            _verify_release_image_artifact_metadata(key, artifact, issues)
+
+
+def _verify_release_image_artifact_metadata(
+    key: str,
+    artifact: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    required_strings = (
+        "record_id",
+        "image_id",
+        "modality",
+        "body_region",
+        "generation_backend",
+        "prompt",
+        "report_text",
+    )
+    for field in required_strings:
+        if not isinstance(artifact.get(field), str) or not artifact[field].strip():
+            issues.append(
+                {
+                    "field": f"image_artifacts.{key}.{field}",
+                    "message": (
+                        "Release-ready image artifact is missing required "
+                        f"metadata field {field}."
+                    ),
+                }
+            )
+    labels = artifact.get("labels")
+    if not isinstance(labels, list) or not all(
+        isinstance(label, dict) for label in labels
+    ):
+        issues.append(
+            {
+                "field": f"image_artifacts.{key}.labels",
+                "message": (
+                    "Release-ready image artifact labels must be a list of "
+                    "coded label objects."
+                ),
+            }
+        )
+    policy = artifact.get("imaging_model_policy")
+    if not isinstance(policy, dict):
+        issues.append(
+            {
+                "field": f"image_artifacts.{key}.imaging_model_policy",
+                "message": (
+                    "Release-ready image artifact is missing imaging model "
+                    "policy metadata."
+                ),
+            }
+        )
+    else:
+        for field in ("profile", "model_id", "license", "use_policy"):
+            if not isinstance(policy.get(field), str) or not policy[field].strip():
+                issues.append(
+                    {
+                        "field": f"image_artifacts.{key}.imaging_model_policy.{field}",
+                        "message": (
+                            "Release-ready image artifact imaging model policy "
+                            f"is missing {field}."
+                        ),
+                    }
+                )
 
 
 def _split_package_quality_report_summary(package_path: Path) -> dict[str, Any] | None:
@@ -2681,9 +2746,9 @@ def _package_file_metadata(file_paths: dict[str, str]) -> dict[str, dict[str, An
 def _copy_image_artifacts(
     records: list[SyntheticRecord],
     output_path: Path,
-) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     entries: dict[str, str] = {}
-    artifacts: dict[str, dict[str, str]] = {}
+    artifacts: dict[str, dict[str, Any]] = {}
     image_dir = output_path / "images"
     seen_package_paths: set[str] = set()
     for record in records:
@@ -2709,13 +2774,22 @@ def _copy_image_artifacts(
                 "image_id": asset.image_id,
                 "package_path": package_path,
                 "source_path": str(source_path),
+                "modality": asset.modality,
+                "body_region": asset.body_region,
+                "generation_backend": asset.generation_backend,
+                "prompt": asset.prompt,
+                "report_text": asset.report_text,
+                "labels": [label.model_dump(mode="json") for label in asset.labels],
+                "imaging_model_policy": _json_object_or_none(
+                    record.metadata.get("imaging_model_policy")
+                ),
             }
     return entries, artifacts
 
 
 def _record_image_package_paths(
     record: SyntheticRecord,
-    image_artifacts: dict[str, dict[str, str]],
+    image_artifacts: dict[str, dict[str, Any]],
 ) -> dict[str, str]:
     package_paths: dict[str, str] = {}
     for asset in record.imaging:
@@ -2723,6 +2797,10 @@ def _record_image_package_paths(
         if artifact and artifact.get("package_path"):
             package_paths[asset.image_id] = artifact["package_path"]
     return package_paths
+
+
+def _json_object_or_none(value: Any) -> dict[str, Any] | None:
+    return value if isinstance(value, dict) else None
 
 
 def _image_package_path(

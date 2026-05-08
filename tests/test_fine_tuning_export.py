@@ -203,9 +203,18 @@ def test_export_jsonl_split_package_copies_file_backed_images(tmp_path):
     )
     image_key = "rec-1:img-1"
     package_path = manifest["image_artifacts"][image_key]["package_path"]
+    image_artifact = manifest["image_artifacts"][image_key]
     copied_image = tmp_path / "package" / package_path
 
     assert package_path == "images/rec-1-img-1.png"
+    assert image_artifact["record_id"] == "rec-1"
+    assert image_artifact["image_id"] == "img-1"
+    assert image_artifact["modality"] == "xray"
+    assert image_artifact["body_region"] == "chest"
+    assert image_artifact["generation_backend"] == "placeholder"
+    assert image_artifact["prompt"] == "Synthetic chest x-ray with right lower lobe opacity"
+    assert image_artifact["report_text"] == "Right lower lobe opacity concerning for pneumonia."
+    assert image_artifact["labels"][0]["code"] == "opacity"
     assert copied_image.read_bytes() == image_path.read_bytes()
     assert package_path in manifest["files"]
     assert manifest["files"][package_path]["byte_size"] == image_path.stat().st_size
@@ -298,6 +307,68 @@ def test_verify_jsonl_split_package_validates_image_artifact_manifest_files(tmp_
         issue["field"].endswith(".package_path")
         and "missing from manifest files" in issue["message"]
         for issue in report["issues"]
+    )
+
+
+def test_verify_jsonl_split_package_requires_release_image_artifact_metadata(tmp_path):
+    image_path = tmp_path / "source-cxr.png"
+    image_path.write_bytes(_png_bytes(width=32, height=32))
+    record = _multimodal_record().model_copy(
+        update={
+            "dataset_id": "ds-split",
+            "metadata": {
+                "imaging_model_policy": {
+                    "profile": "stable_diffusion_chest_xray",
+                    "model_id": "danyalmalik/stable-diffusion-chest-xray",
+                    "license": "creativeml-openrail-m",
+                    "gated": False,
+                    "use_policy": "openrail_review_outputs_before_release",
+                }
+            },
+            "imaging": [
+                _multimodal_record().imaging[0].model_copy(
+                    update={"file_path": str(image_path)}
+                )
+            ],
+        }
+    )
+    export_jsonl_split_package(
+        [record],
+        tmp_path / "package",
+        "multimodal_jsonl",
+        dataset_id="ds-split",
+        audit_artifacts={
+            "quality_report.json": {
+                "dataset_id": "ds-split",
+                "record_count": 1,
+                "approved_count": 1,
+                "approval_rate": 1.0,
+                "export_ready": True,
+                "core_artifact_coverage": {
+                    key: True for key in REQUIRED_RELEASE_COVERAGE_KEYS
+                },
+                "multimodal_release_ready": True,
+                "multimodal_release_missing": [],
+            }
+        },
+    )
+    manifest_path = tmp_path / "package" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    image_artifact = next(iter(manifest["image_artifacts"].values()))
+    image_artifact.pop("generation_backend")
+    image_artifact["labels"] = "opacity"
+    image_artifact["imaging_model_policy"].pop("use_policy")
+    manifest_path.write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path / "package")
+    issue_fields = {issue["field"] for issue in report["issues"]}
+
+    assert report["valid"] is False
+    assert any(field.endswith(".generation_backend") for field in issue_fields)
+    assert any(field.endswith(".labels") for field in issue_fields)
+    assert any(
+        field.endswith(".imaging_model_policy.use_policy")
+        for field in issue_fields
     )
 
 
