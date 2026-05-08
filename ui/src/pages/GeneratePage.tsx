@@ -60,6 +60,10 @@ export default function GeneratePage() {
     useState<"placeholder" | "diffusers">("placeholder");
   const [imagingProfile, setImagingProfile] = useState("");
   const [diffusersModelId, setDiffusersModelId] = useState("");
+  const [timeSeriesBackend, setTimeSeriesBackend] =
+    useState<"deterministic" | "external">("deterministic");
+  const [timeSeriesProfile, setTimeSeriesProfile] = useState("");
+  const [timeSeriesCommand, setTimeSeriesCommand] = useState("");
   const [capabilities, setCapabilities] = useState<DatasetCapabilitiesResponse | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<DatasetGenerateResponse | null>(null);
@@ -155,6 +159,11 @@ export default function GeneratePage() {
     if (sexes.length > 0) cohortConstraints.sexes = sexes;
     if (baseTime) cohortConstraints.base_time = baseTime;
     const includesImaging = modalities.includes("imaging");
+    const includesTimeSeries = modalities.includes("time_series");
+    const parsedTimeSeriesCommand = timeSeriesCommand
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
 
     setResult(null);
     setError(null);
@@ -170,6 +179,13 @@ export default function GeneratePage() {
         ...(includesImaging && imagingProfile ? { imaging_model_profile: imagingProfile } : {}),
         ...(includesImaging && diffusersModelId.trim()
           ? { diffusers_model_id: diffusersModelId.trim() }
+          : {}),
+        ...(includesTimeSeries ? { time_series_backend: timeSeriesBackend } : {}),
+        ...(includesTimeSeries && timeSeriesProfile
+          ? { time_series_model_profile: timeSeriesProfile }
+          : {}),
+        ...(includesTimeSeries && parsedTimeSeriesCommand.length > 0
+          ? { time_series_command: parsedTimeSeriesCommand }
           : {}),
         ...(Object.keys(cohortConstraints).length > 0
           ? { cohort_constraints: cohortConstraints }
@@ -282,6 +298,7 @@ export default function GeneratePage() {
 
   const selectedReference = referenceCatalog.find((item) => item.key === referenceKey);
   const includesImaging = modalities.includes("imaging");
+  const includesTimeSeries = modalities.includes("time_series");
 
   return (
     <div className="space-y-6">
@@ -475,6 +492,52 @@ export default function GeneratePage() {
                 value={diffusersModelId}
                 onChange={(event) => setDiffusersModelId(event.target.value)}
                 placeholder="Use profile or config default"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+          </div>
+        )}
+
+        {includesTimeSeries && (
+          <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,16rem)_minmax(0,1fr)]">
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Time-series backend</span>
+              <select
+                aria-label="Time-series backend"
+                value={timeSeriesBackend}
+                onChange={(event) =>
+                  setTimeSeriesBackend(event.target.value as "deterministic" | "external")
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              >
+                <option value="deterministic">Deterministic</option>
+                <option value="external">External</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Model profile</span>
+              <select
+                aria-label="Time-series model profile"
+                value={timeSeriesProfile}
+                onChange={(event) => setTimeSeriesProfile(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              >
+                <option value="">Config default</option>
+                {(capabilities?.time_series_model_profiles ?? []).map((profile) => (
+                  <option key={profile.name} value={profile.name}>
+                    {profile.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>External command</span>
+              <input
+                aria-label="Time-series external command"
+                type="text"
+                value={timeSeriesCommand}
+                onChange={(event) => setTimeSeriesCommand(event.target.value)}
+                placeholder="timediff-sample,--checkpoint,local.pt"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
               />
             </label>

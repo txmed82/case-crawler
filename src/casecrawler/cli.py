@@ -410,6 +410,22 @@ def serve() -> None:
     default=None,
     help="Override Hugging Face diffusers model id for this generation request",
 )
+@click.option(
+    "--time-series-backend",
+    default=None,
+    type=click.Choice(["deterministic", "external"]),
+    help="Override time-series backend for this generation request",
+)
+@click.option(
+    "--time-series-model-profile",
+    default=None,
+    help="Built-in time-series model profile, for example timediff",
+)
+@click.option(
+    "--time-series-command",
+    default=None,
+    help="Comma-separated external time-series command for this request",
+)
 def generate_dataset(
     topic: str,
     count: int,
@@ -422,6 +438,9 @@ def generate_dataset(
     imaging_backend: str | None,
     imaging_model_profile: str | None,
     diffusers_model_id: str | None,
+    time_series_backend: str | None,
+    time_series_model_profile: str | None,
+    time_series_command: str | None,
 ) -> None:
     """Generate synthetic healthcare records for AI training."""
     from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
@@ -441,6 +460,11 @@ def generate_dataset(
         ]
     if base_time:
         cohort_constraints["base_time"] = base_time
+    parsed_time_series_command = (
+        [value.strip() for value in time_series_command.split(",") if value.strip()]
+        if time_series_command
+        else None
+    )
     try:
         selected_modalities = (
             [Modality(value.strip()) for value in modalities.split(",") if value.strip()]
@@ -458,6 +482,9 @@ def generate_dataset(
             imaging_backend=imaging_backend,
             imaging_model_profile=imaging_model_profile,
             diffusers_model_id=diffusers_model_id,
+            time_series_backend=time_series_backend,
+            time_series_model_profile=time_series_model_profile,
+            time_series_command=parsed_time_series_command,
         )
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc

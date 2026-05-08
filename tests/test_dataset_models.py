@@ -36,6 +36,20 @@ def test_generation_request_accepts_imaging_model_overrides():
     assert req.diffusers_model_id == "hf/test-cxr"
 
 
+def test_generation_request_accepts_time_series_model_overrides():
+    req = GenerationRequest(
+        topic="sepsis",
+        modalities=[Modality.TIME_SERIES],
+        time_series_backend="external",
+        time_series_model_profile="timediff",
+        time_series_command=["timediff-sample", "--checkpoint", "local.pt"],
+    )
+
+    assert req.time_series_backend == "external"
+    assert req.time_series_model_profile == "timediff"
+    assert req.time_series_command == ["timediff-sample", "--checkpoint", "local.pt"]
+
+
 def test_generation_request_rejects_invalid_validation_threshold():
     with pytest.raises(ValidationError):
         GenerationRequest(topic="sepsis", validation_threshold=1.5)

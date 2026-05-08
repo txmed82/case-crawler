@@ -59,6 +59,15 @@ class FakeImagingGenerator:
         raise AssertionError("Expected diffusers backend.")
 
 
+class FakeTimeSeriesGenerator:
+    def __init__(self):
+        self.calls = []
+
+    def add_time_series(self, record, channels=None, points=6):
+        self.calls.append((record.record_id, channels, points))
+        return record
+
+
 @pytest.mark.asyncio
 async def test_synthetic_pipeline_uses_configured_diffusers_backend(tmp_path):
     imaging_generator = FakeImagingGenerator()
@@ -135,6 +144,44 @@ async def test_synthetic_pipeline_uses_request_imaging_model_profile(monkeypatch
 
     assert created == [("hf/test-cxr", "cxr_pneumonia_dreambooth")]
     assert result["records"][0].imaging[0].generation_backend == "diffusers:test"
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_allows_request_time_series_backend_override(
+    monkeypatch,
+    tmp_path,
+):
+    created = []
+
+    class RequestScopedTimeSeriesGenerator(FakeTimeSeriesGenerator):
+        def __init__(self, external_command):
+            super().__init__()
+            created.append(external_command)
+
+    monkeypatch.setattr(
+        "casecrawler.generation.synthetic_pipeline.TimeSeriesGenerator",
+        RequestScopedTimeSeriesGenerator,
+    )
+    pipeline = SyntheticPipeline(
+        time_series_generator=FakeTimeSeriesGenerator(),
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="sepsis",
+            count=1,
+            modalities=[Modality.TIME_SERIES],
+            time_series_backend="external",
+            time_series_model_profile="timediff",
+            time_series_command=["timediff-sample"],
+        )
+    )
+
+    assert created == [["timediff-sample"]]
+    assert result["generated"] == 1
 
 
 @pytest.mark.asyncio

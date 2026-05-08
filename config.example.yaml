@@ -40,9 +40,11 @@ synthetic:
   imaging_backend: "placeholder" # placeholder or diffusers
   imaging_model_profile: null # e.g. cxr_pneumonia_dreambooth
   diffusers_model_id: "stabilityai/stable-diffusion-2-1"
-  time_series_backend: "deterministic"
-  time_series_model_profile: null
-  time_series_command: null
+  # GenerationRequest can override time_series_backend,
+  # time_series_model_profile, and time_series_command per run.
+  time_series_backend: "deterministic" # deterministic or external
+  time_series_model_profile: null # e.g. timediff or rawmed
+  time_series_command: null # e.g. ["timediff-sample", "--checkpoint", "local.pt"]
   synthea_executable: null
   image_output_dir: "./data/images"
   export_formats:

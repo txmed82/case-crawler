@@ -217,12 +217,16 @@ synthetic:
   imaging_backend: "placeholder" # or "diffusers"
   imaging_model_profile: null # e.g. cxr_pneumonia_dreambooth
   diffusers_model_id: "stabilityai/stable-diffusion-2-1"
-  time_series_backend: "deterministic"
+  time_series_backend: "deterministic" # or "external"
+  time_series_model_profile: null # e.g. timediff or rawmed
+  time_series_command: null # e.g. ["timediff-sample", "--checkpoint", "local.pt"]
   synthea_executable: null
   # GenerationRequest.cohort_constraints supports age_min, age_max, sexes,
   # sex_cycle, and base_time for deterministic cohort composition.
   # GenerationRequest can also override imaging_backend, imaging_model_profile,
   # and diffusers_model_id for a single dataset generation run.
+  # It can also override time_series_backend, time_series_model_profile,
+  # and time_series_command for external EHR time-series adapters.
   export_formats:
     - sft_jsonl
     - chat_jsonl

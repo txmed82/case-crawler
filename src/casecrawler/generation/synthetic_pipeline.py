@@ -9,6 +9,7 @@ from casecrawler.generation.modality_plan import ModalityPlanner
 from casecrawler.generation.structured_generator import StructuredGenerator
 from casecrawler.generation.text_generator import TextGenerator
 from casecrawler.generation.timeseries_generator import TimeSeriesGenerator
+from casecrawler.generation.timeseries_models import resolve_time_series_model_profile
 from casecrawler.llm.factory import get_provider
 from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import Modality, SyntheticRecord
@@ -60,6 +61,7 @@ class SyntheticPipeline:
         dataset_id = f"ds-{uuid4()}"
         plan = self._modality_planner.build(req)
         imaging_generator = self._imaging_generator_for(req)
+        time_series_generator = self._time_series_generator_for(req)
         records = []
         approved = 0
         for index in range(req.count):
@@ -69,7 +71,7 @@ class SyntheticPipeline:
                 index=index,
             )
             if Modality.TIME_SERIES in plan.modalities:
-                record = self._time_series_generator.add_time_series(
+                record = time_series_generator.add_time_series(
                     record,
                     channels=plan.time_series_channels,
                 )
@@ -137,6 +139,23 @@ class SyntheticPipeline:
                 or self._config.synthetic.imaging_model_profile
             ),
         )
+
+    def _time_series_generator_for(self, req: GenerationRequest) -> TimeSeriesGenerator:
+        if not (
+            req.time_series_backend
+            or req.time_series_model_profile
+            or req.time_series_command
+        ):
+            return self._time_series_generator
+        if req.time_series_model_profile:
+            resolve_time_series_model_profile(req.time_series_model_profile)
+        backend = req.time_series_backend or (
+            "external"
+            if (req.time_series_model_profile or req.time_series_command)
+            else self._config.synthetic.time_series_backend
+        )
+        command = req.time_series_command or self._config.synthetic.time_series_command
+        return _time_series_generator_from_config(backend, command)
 
 
 def _time_series_generator_from_config(

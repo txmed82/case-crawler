@@ -111,6 +111,9 @@ export interface DatasetGenerateRequest {
   imaging_backend?: "placeholder" | "diffusers";
   imaging_model_profile?: string;
   diffusers_model_id?: string;
+  time_series_backend?: "deterministic" | "external";
+  time_series_model_profile?: string;
+  time_series_command?: string[];
   cohort_constraints?: Record<string, unknown>;
 }
 
