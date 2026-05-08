@@ -162,6 +162,51 @@ def test_validator_rejects_implausible_lab_magnitudes():
     assert any(issue.field == "labs.value" for issue in report.issues)
 
 
+def test_validator_rejects_inconsistent_derived_anion_gap():
+    bad = _record(
+        labs=[
+            LabObservation(
+                name="Sodium",
+                value=140,
+                unit="mmol/L",
+                reference_low=136,
+                reference_high=145,
+                effective_time="2026-05-06T08:30:00",
+            ),
+            LabObservation(
+                name="Chloride",
+                value=100,
+                unit="mmol/L",
+                reference_low=98,
+                reference_high=106,
+                effective_time="2026-05-06T08:30:00",
+            ),
+            LabObservation(
+                name="Bicarbonate",
+                value=22,
+                unit="mmol/L",
+                reference_low=22,
+                reference_high=29,
+                effective_time="2026-05-06T08:30:00",
+            ),
+            LabObservation(
+                name="Anion gap",
+                value=6,
+                unit="mmol/L",
+                reference_low=8,
+                reference_high=16,
+                flag="L",
+                effective_time="2026-05-06T08:30:00",
+            ),
+        ]
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "labs.derived.anion_gap" for issue in report.issues)
+
+
 def test_validator_rejects_known_lab_and_vital_unit_conflicts():
     bad = _record(
         labs=[

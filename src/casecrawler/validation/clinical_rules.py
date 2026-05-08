@@ -488,6 +488,39 @@ def validate_lab_plausible_ranges(record: SyntheticRecord) -> list[ValidationIss
     return issues
 
 
+def validate_derived_lab_consistency(record: SyntheticRecord) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    labs_by_time: dict[str, dict[str, float]] = {}
+    for lab in record.labs:
+        if not isinstance(lab.value, int | float):
+            continue
+        labs_by_time.setdefault(lab.effective_time, {})[_normalize_name(lab.name)] = float(
+            lab.value
+        )
+
+    for effective_time, values in labs_by_time.items():
+        sodium = _first_named_value(values, {"na", "sodium"})
+        chloride = _first_named_value(values, {"cl", "chloride"})
+        bicarbonate = _first_named_value(values, {"bicarbonate", "co2", "hco3"})
+        anion_gap = _first_named_value(values, {"anion-gap"})
+        if None in {sodium, chloride, bicarbonate, anion_gap}:
+            continue
+        expected_gap = round(float(sodium) - float(chloride) - float(bicarbonate), 1)
+        if abs(float(anion_gap) - expected_gap) > 3.0:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.LABS,
+                    field="labs.derived.anion_gap",
+                    message=(
+                        f"Anion gap {float(anion_gap):g} conflicts with Na-Cl-HCO3 "
+                        f"derived value {expected_gap:g} at {effective_time}."
+                    ),
+                )
+            )
+    return issues
+
+
 def validate_observation_units(record: SyntheticRecord) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     for lab in record.labs:
@@ -1267,6 +1300,13 @@ def _first_numeric_lab(record: SyntheticRecord, names: set[str]) -> float | None
     for lab in record.labs:
         if _normalize_name(lab.name) in names and isinstance(lab.value, int | float):
             return float(lab.value)
+    return None
+
+
+def _first_named_value(values: dict[str, float], names: set[str]) -> float | None:
+    for name in names:
+        if name in values:
+            return values[name]
     return None
 
 
