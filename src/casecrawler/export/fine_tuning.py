@@ -391,7 +391,11 @@ def _multimodal_supervised_tasks(
     return tasks
 
 
-def export_time_series_records(record: SyntheticRecord) -> list[dict[str, Any]]:
+def export_time_series_records(
+    record: SyntheticRecord,
+    *,
+    time_series_package_paths: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
     """Export channel-level clinical time-series forecasting examples."""
     examples: list[dict[str, Any]] = []
     for channel in record.time_series:
@@ -412,6 +416,12 @@ def export_time_series_records(record: SyntheticRecord) -> list[dict[str, Any]]:
                     "sampling_rate_hz": channel.sampling_rate_hz,
                     "generation_backend": channel.generation_backend,
                     "point_count": len(channel.points),
+                    **(
+                        {"package_path": time_series_package_paths[channel.name]}
+                        if time_series_package_paths
+                        and channel.name in time_series_package_paths
+                        else {}
+                    ),
                 },
                 "input": {
                     "patient": record.patient.model_dump(),
@@ -1035,6 +1045,7 @@ def export_record(
     export_format: str | ExportFormat,
     *,
     image_package_paths: dict[str, str] | None = None,
+    time_series_package_paths: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     resolved_format = ExportFormat(export_format)
     if resolved_format == ExportFormat.SFT_JSONL:
@@ -1079,7 +1090,10 @@ def export_record(
         return {
             "record_id": record.record_id,
             "dataset_id": record.dataset_id,
-            "examples": export_time_series_records(record),
+            "examples": export_time_series_records(
+                record,
+                time_series_package_paths=time_series_package_paths,
+            ),
             "metadata": {**_metadata(record), "export_profile": "time_series_jsonl"},
         }
     if resolved_format == ExportFormat.DPO_JSONL:
@@ -1100,6 +1114,7 @@ def export_record_payloads(
     export_format: str | ExportFormat,
     *,
     image_package_paths: dict[str, str] | None = None,
+    time_series_package_paths: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     resolved_format = ExportFormat(export_format)
     if resolved_format == ExportFormat.NOTE_FACT_SFT_JSONL:
@@ -1109,12 +1124,16 @@ def export_record_payloads(
     if resolved_format == ExportFormat.MEDICATION_RECONCILIATION_JSONL:
         return export_medication_reconciliation_records(record)
     if resolved_format == ExportFormat.TIME_SERIES_JSONL:
-        return export_time_series_records(record)
+        return export_time_series_records(
+            record,
+            time_series_package_paths=time_series_package_paths,
+        )
     return [
         export_record(
             record,
             resolved_format,
             image_package_paths=image_package_paths,
+            time_series_package_paths=time_series_package_paths,
         )
     ]
 
@@ -1141,6 +1160,14 @@ def export_jsonl_split_package(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     image_artifact_entries, image_artifacts = _copy_image_artifacts(record_list, output_path)
+    if resolved_format == ExportFormat.TIME_SERIES_JSONL or _audit_requires_time_series_artifacts(
+        audit_artifacts or {}
+    ):
+        time_series_artifact_entries, time_series_artifacts = (
+            _write_time_series_artifacts(record_list, output_path)
+        )
+    else:
+        time_series_artifact_entries, time_series_artifacts = {}, {}
 
     split_entries = {}
     total_examples = 0
@@ -1155,6 +1182,10 @@ def export_jsonl_split_package(
                     image_package_paths=_record_image_package_paths(
                         record,
                         image_artifacts,
+                    ),
+                    time_series_package_paths=_record_time_series_package_paths(
+                        record,
+                        time_series_artifacts,
                     ),
                 ):
                     f.write(json.dumps(payload, sort_keys=True) + "\n")
@@ -1175,6 +1206,7 @@ def export_jsonl_split_package(
             },
             **artifact_entries,
             **image_artifact_entries,
+            **time_series_artifact_entries,
         }
     )
 
@@ -1193,6 +1225,7 @@ def export_jsonl_split_package(
         "splits": split_entries,
         "audit_artifacts": artifact_entries,
         "image_artifacts": image_artifacts,
+        "time_series_artifacts": time_series_artifacts,
         "files": files,
         "synthetic": True,
     }
@@ -1302,9 +1335,11 @@ def _verify_jsonl_split_package_dir(package_path: Path) -> dict[str, Any]:
     checked_files = _verify_package_files(package_path, manifest, issues)
     split_summaries = _verify_package_splits(package_path, manifest, issues)
     _verify_multimodal_image_package_paths(manifest, split_summaries, issues)
+    _verify_time_series_package_paths(manifest, split_summaries, issues)
     _verify_package_audit_artifacts(package_path, manifest, issues)
     quality_report = _split_package_quality_report_summary(package_path)
     _verify_package_image_artifacts(manifest, quality_report, issues)
+    _verify_package_time_series_artifacts(manifest, quality_report, issues)
     return {
         "package_dir": str(package_path),
         "dataset_id": manifest.get("dataset_id"),
@@ -1315,6 +1350,176 @@ def _verify_jsonl_split_package_dir(package_path: Path) -> dict[str, Any]:
         "splits": split_summaries,
         "quality_report": quality_report,
     }
+
+
+def _verify_package_time_series_artifacts(
+    manifest: dict[str, Any],
+    quality_report: dict[str, Any] | None,
+    issues: list[dict[str, str]],
+) -> None:
+    artifacts = manifest.get("time_series_artifacts")
+    files = manifest.get("files")
+    release_ready = (
+        isinstance(quality_report, dict)
+        and quality_report.get("multimodal_release_ready") is True
+    )
+    coverage = (
+        quality_report.get("core_artifact_coverage")
+        if isinstance(quality_report, dict)
+        else None
+    )
+    release_requires_time_series = (
+        release_ready
+        and isinstance(coverage, dict)
+        and coverage.get("time_series") is True
+    )
+    if artifacts is None:
+        if release_requires_time_series:
+            issues.append(
+                {
+                    "field": "time_series_artifacts",
+                    "message": (
+                        "Release-ready multimodal package has no time-series "
+                        "artifacts."
+                    ),
+                }
+            )
+        return
+    if not isinstance(artifacts, dict):
+        issues.append(
+            {
+                "field": "time_series_artifacts",
+                "message": "Split package time_series_artifacts must be an object.",
+            }
+        )
+        return
+    if release_requires_time_series and not artifacts:
+        issues.append(
+            {
+                "field": "time_series_artifacts",
+                "message": (
+                    "Release-ready multimodal package has no time-series artifacts."
+                ),
+            }
+        )
+    for key, artifact in sorted(artifacts.items()):
+        if not isinstance(key, str) or not isinstance(artifact, dict):
+            issues.append(
+                {
+                    "field": "time_series_artifacts",
+                    "message": (
+                        "Each time-series artifact entry must be an object keyed "
+                        "by string."
+                    ),
+                }
+            )
+            continue
+        package_path = artifact.get("package_path")
+        if not isinstance(package_path, str) or not _is_safe_package_path(package_path):
+            issues.append(
+                {
+                    "field": f"time_series_artifacts.{key}.package_path",
+                    "message": (
+                        "Time-series artifact package_path must be a safe relative "
+                        "path."
+                    ),
+                }
+            )
+            continue
+        if not package_path.startswith("time_series/"):
+            issues.append(
+                {
+                    "field": f"time_series_artifacts.{key}.package_path",
+                    "message": (
+                        "Time-series artifact package_path must be under "
+                        "time_series/."
+                    ),
+                }
+            )
+        if not isinstance(files, dict) or package_path not in files:
+            issues.append(
+                {
+                    "field": f"time_series_artifacts.{key}.package_path",
+                    "message": (
+                        "Time-series artifact package_path is missing from "
+                        "manifest files."
+                    ),
+                }
+            )
+        if release_ready:
+            _verify_release_time_series_artifact_metadata(key, artifact, issues)
+
+
+def _verify_release_time_series_artifact_metadata(
+    key: str,
+    artifact: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    for field in ("record_id", "channel_name", "unit", "generation_backend"):
+        if not isinstance(artifact.get(field), str) or not artifact[field].strip():
+            issues.append(
+                {
+                    "field": f"time_series_artifacts.{key}.{field}",
+                    "message": (
+                        "Release-ready time-series artifact is missing required "
+                        f"metadata field {field}."
+                    ),
+                }
+            )
+    expected_record_id, expected_channel_name = _time_series_artifact_key_parts(key)
+    if expected_record_id is not None and artifact.get("record_id") != expected_record_id:
+        issues.append(
+            {
+                "field": f"time_series_artifacts.{key}.record_id",
+                "message": (
+                    "Release-ready time-series artifact record_id does not match "
+                    "its manifest key."
+                ),
+            }
+        )
+    if (
+        expected_channel_name is not None
+        and artifact.get("channel_name") != expected_channel_name
+    ):
+        issues.append(
+            {
+                "field": f"time_series_artifacts.{key}.channel_name",
+                "message": (
+                    "Release-ready time-series artifact channel_name does not match "
+                    "its manifest key."
+                ),
+            }
+        )
+    if not isinstance(artifact.get("point_count"), int) or artifact["point_count"] < 1:
+        issues.append(
+            {
+                "field": f"time_series_artifacts.{key}.point_count",
+                "message": (
+                    "Release-ready time-series artifact point_count must be a "
+                    "positive integer."
+                ),
+            }
+        )
+    sampling_rate = artifact.get("sampling_rate_hz")
+    if sampling_rate is not None and not isinstance(sampling_rate, (int, float)):
+        issues.append(
+            {
+                "field": f"time_series_artifacts.{key}.sampling_rate_hz",
+                "message": (
+                    "Release-ready time-series artifact sampling_rate_hz must be "
+                    "numeric when present."
+                ),
+            }
+        )
+
+
+def _time_series_artifact_key_parts(key: str) -> tuple[str | None, str | None]:
+    if ":" not in key:
+        return None, None
+    record_id, channel_name = key.split(":", 1)
+    if not record_id or not channel_name:
+        return None, None
+    return record_id, channel_name
 
 
 def _verify_package_image_artifacts(
@@ -1778,6 +1983,74 @@ def _verify_multimodal_image_package_paths(
                             ),
                         }
                     )
+
+
+def _verify_time_series_package_paths(
+    manifest: dict[str, Any],
+    split_summaries: dict[str, dict[str, Any]],
+    issues: list[dict[str, str]],
+) -> None:
+    if manifest.get("export_format") != ExportFormat.TIME_SERIES_JSONL.value:
+        return
+    artifacts = manifest.get("time_series_artifacts")
+    files = manifest.get("files")
+    declared_paths = {
+        artifact.get("package_path")
+        for artifact in artifacts.values()
+        if isinstance(artifact, dict) and isinstance(artifact.get("package_path"), str)
+    } if isinstance(artifacts, dict) else set()
+    file_paths = set(files) if isinstance(files, dict) else set()
+    for split_name, summary in split_summaries.items():
+        examples = summary.get("examples")
+        if not isinstance(examples, list):
+            continue
+        for line_index, example in enumerate(examples, start=1):
+            for field, path in _time_series_payload_package_paths(example):
+                if not _is_safe_package_path(path):
+                    issues.append(
+                        {
+                            "field": f"{split_name}.jsonl.line.{line_index}.{field}",
+                            "message": "Time-series package_path is not safe.",
+                        }
+                    )
+                    continue
+                if path not in declared_paths:
+                    issues.append(
+                        {
+                            "field": f"{split_name}.jsonl.line.{line_index}.{field}",
+                            "message": (
+                                "Time-series package_path is not declared in "
+                                "manifest time_series_artifacts."
+                            ),
+                        }
+                    )
+                if path not in file_paths:
+                    issues.append(
+                        {
+                            "field": f"{split_name}.jsonl.line.{line_index}.{field}",
+                            "message": (
+                                "Time-series package_path is missing from manifest "
+                                "files."
+                            ),
+                        }
+                    )
+
+
+def _time_series_payload_package_paths(example: dict[str, Any]) -> list[tuple[str, str]]:
+    paths: list[tuple[str, str]] = []
+    channel = example.get("channel")
+    if isinstance(channel, dict):
+        path = channel.get("package_path")
+        if isinstance(path, str) and path:
+            paths.append(("channel.package_path", path))
+    for example_index, time_series_example in enumerate(_dict_items(example.get("examples"))):
+        channel = time_series_example.get("channel")
+        if not isinstance(channel, dict):
+            continue
+        path = channel.get("package_path")
+        if isinstance(path, str) and path:
+            paths.append((f"examples.{example_index}.channel.package_path", path))
+    return paths
 
 
 def _multimodal_payload_package_paths(example: dict[str, Any]) -> list[tuple[str, str]]:
@@ -2932,6 +3205,49 @@ def _copy_image_artifacts(
     return entries, artifacts
 
 
+def _write_time_series_artifacts(
+    records: list[SyntheticRecord],
+    output_path: Path,
+) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
+    entries: dict[str, str] = {}
+    artifacts: dict[str, dict[str, Any]] = {}
+    time_series_dir = output_path / "time_series"
+    seen_package_paths: set[str] = set()
+    for record in records:
+        for channel in record.time_series:
+            time_series_dir.mkdir(parents=True, exist_ok=True)
+            package_path = _time_series_package_path(
+                record_id=record.record_id,
+                channel_name=channel.name,
+                seen_package_paths=seen_package_paths,
+            )
+            target_path = output_path / package_path
+            target_path.write_text(
+                json.dumps(
+                    {
+                        "record_id": record.record_id,
+                        "dataset_id": record.dataset_id,
+                        "channel": channel.model_dump(mode="json"),
+                        "synthetic": True,
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+            key = f"{record.record_id}:{channel.name}"
+            entries[package_path] = str(target_path)
+            artifacts[key] = {
+                "record_id": record.record_id,
+                "channel_name": channel.name,
+                "package_path": package_path,
+                "unit": channel.unit,
+                "generation_backend": channel.generation_backend,
+                "sampling_rate_hz": channel.sampling_rate_hz,
+                "point_count": len(channel.points),
+            }
+    return entries, artifacts
+
+
 def _record_image_package_paths(
     record: SyntheticRecord,
     image_artifacts: dict[str, dict[str, Any]],
@@ -2941,6 +3257,18 @@ def _record_image_package_paths(
         artifact = image_artifacts.get(f"{record.record_id}:{asset.image_id}")
         if artifact and artifact.get("package_path"):
             package_paths[asset.image_id] = artifact["package_path"]
+    return package_paths
+
+
+def _record_time_series_package_paths(
+    record: SyntheticRecord,
+    time_series_artifacts: dict[str, dict[str, Any]],
+) -> dict[str, str]:
+    package_paths: dict[str, str] = {}
+    for channel in record.time_series:
+        artifact = time_series_artifacts.get(f"{record.record_id}:{channel.name}")
+        if artifact and artifact.get("package_path"):
+            package_paths[channel.name] = artifact["package_path"]
     return package_paths
 
 
@@ -2963,6 +3291,22 @@ def _image_package_path(
     counter = 2
     while candidate in seen_package_paths:
         candidate = f"images/{stem}-{counter}{suffix}"
+        counter += 1
+    seen_package_paths.add(candidate)
+    return candidate
+
+
+def _time_series_package_path(
+    *,
+    record_id: str,
+    channel_name: str,
+    seen_package_paths: set[str],
+) -> str:
+    stem = _package_slug(f"{record_id}-{channel_name}") or "time-series"
+    candidate = f"time_series/{stem}.json"
+    counter = 2
+    while candidate in seen_package_paths:
+        candidate = f"time_series/{stem}-{counter}.json"
         counter += 1
     seen_package_paths.add(candidate)
     return candidate
@@ -3003,6 +3347,26 @@ def _write_audit_artifacts(
             artifact_path.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n")
         entries[file_name] = str(artifact_path)
     return entries
+
+
+def _audit_requires_time_series_artifacts(
+    audit_artifacts: dict[str, str | dict[str, Any]],
+) -> bool:
+    quality_report = audit_artifacts.get("quality_report.json")
+    if isinstance(quality_report, str):
+        try:
+            parsed = json.loads(quality_report)
+        except json.JSONDecodeError:
+            return False
+        quality_report = parsed
+    if not isinstance(quality_report, dict):
+        return False
+    coverage = quality_report.get("core_artifact_coverage")
+    return (
+        quality_report.get("multimodal_release_ready") is True
+        and isinstance(coverage, dict)
+        and coverage.get("time_series") is True
+    )
 
 
 def _split_records(
