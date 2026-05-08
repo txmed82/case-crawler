@@ -16,6 +16,10 @@ from casecrawler.integrations.reference_fixtures import (
     import_reference_fixture,
     seed_recommended_reference_fixtures,
 )
+from casecrawler.imaging.file_metadata import (
+    has_supported_image_signature,
+    raster_dimensions,
+)
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import Modality
@@ -88,6 +92,21 @@ def test_import_reference_fixture_builds_time_series_reference_records():
     assert record.time_series[0].points[0].values["value"] == 122
     assert record.documents[0].note_type == "nursing_note"
     assert record.medication_history[0].name == "Norepinephrine"
+
+
+def test_import_reference_fixture_persists_bundled_image_artifact(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    records = import_reference_fixture("synthchex_75k", dataset_id="ds-image-fixture")
+
+    image = records[0].imaging[0]
+    assert Modality.IMAGING in records[0].modalities
+    assert image.file_path is not None
+    image_path = Path(image.file_path)
+    assert image_path.is_file()
+    assert has_supported_image_signature(image_path) is True
+    assert raster_dimensions(image_path) == (64, 64)
+    assert {label.display for label in image.labels} == {"Pneumonia"}
 
 
 @pytest.mark.asyncio

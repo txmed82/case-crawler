@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import struct
+import zlib
+
 from casecrawler.integrations.huggingface import (
     REFERENCE_DATASETS,
     import_reference_rows,
@@ -339,6 +342,34 @@ def _clinical_timeseries_fixture_records(dataset_id: str) -> list[SyntheticRecor
             },
         )
     ]
+def _fixture_png_bytes(label: str, *, width: int = 64, height: int = 64) -> bytes:
+    seed = zlib.crc32(label.encode("utf-8"))
+    rows = []
+    for y in range(height):
+        row = bytearray()
+        for x in range(width):
+            radial = abs(x - width // 2) + abs(y - height // 2)
+            texture = ((x * 19 + y * 23 + seed) % 41) - 20
+            row.append(max(0, min(255, 205 - radial * 3 + texture)))
+        rows.append(b"\x00" + bytes(row))
+    raw = b"".join(rows)
+    return b"".join(
+        [
+            b"\x89PNG\r\n\x1a\n",
+            _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)),
+            _png_chunk(b"IDAT", zlib.compress(raw)),
+            _png_chunk(b"IEND", b""),
+        ]
+    )
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + chunk_type
+        + data
+        + struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
+    )
 
 
 _FIXTURE_ROWS: dict[str, list[dict]] = {
@@ -412,7 +443,7 @@ _FIXTURE_ROWS: dict[str, list[dict]] = {
     "synthchex_75k": [
         {
             "label": "pneumonia",
-            "image": None,
+            "image": {"bytes": _fixture_png_bytes("pneumonia")},
         }
     ],
     "radiology_report_consistency": [
@@ -429,7 +460,7 @@ _FIXTURE_ROWS: dict[str, list[dict]] = {
     "synthetic_chest_xray_pneumonia": [
         {
             "label": "1",
-            "image": None,
+            "image": {"bytes": _fixture_png_bytes("synthetic_chest_xray_pneumonia")},
         }
     ],
 }
