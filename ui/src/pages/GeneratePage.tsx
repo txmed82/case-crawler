@@ -51,6 +51,7 @@ export default function GeneratePage() {
   const [ageMin, setAgeMin] = useState("");
   const [ageMax, setAgeMax] = useState("");
   const [sexes, setSexes] = useState<SexOption[]>([]);
+  const [topicMix, setTopicMix] = useState("");
   const [baseTime, setBaseTime] = useState("");
   const [modalities, setModalities] = useState<SyntheticModality[]>([
     "structured_ehr",
@@ -167,6 +168,11 @@ export default function GeneratePage() {
     if (parsedAgeMin !== undefined) cohortConstraints.age_min = parsedAgeMin;
     if (parsedAgeMax !== undefined) cohortConstraints.age_max = parsedAgeMax;
     if (sexes.length > 0) cohortConstraints.sexes = sexes;
+    const parsedTopicMix = topicMix
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (parsedTopicMix.length > 0) cohortConstraints.topic_mix = parsedTopicMix;
     if (baseTime) cohortConstraints.base_time = baseTime;
     const includesImaging = modalities.includes("imaging");
     const includesTimeSeries = modalities.includes("time_series");
@@ -394,7 +400,7 @@ export default function GeneratePage() {
           />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-[repeat(2,minmax(0,14rem))_minmax(0,18rem)]">
+        <div className="grid gap-4 md:grid-cols-[repeat(2,minmax(0,14rem))_minmax(0,1fr)_minmax(0,18rem)]">
           <label className="space-y-1 text-sm font-medium text-gray-700">
             <span>Minimum age</span>
             <input
@@ -420,6 +426,18 @@ export default function GeneratePage() {
               min={0}
               max={120}
               placeholder="Any"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Topic mix</span>
+            <input
+              id="dataset-topic-mix"
+              aria-label="Topic mix"
+              type="text"
+              value={topicMix}
+              onChange={(e) => setTopicMix(e.target.value)}
+              placeholder="sepsis, pneumonia, heart failure"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
             />
           </label>

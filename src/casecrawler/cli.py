@@ -405,6 +405,7 @@ def serve() -> None:
 @click.option("--age-min", default=None, type=int, help="Minimum generated patient age")
 @click.option("--age-max", default=None, type=int, help="Maximum generated patient age")
 @click.option("--sexes", default=None, help="Comma-separated sex cycle")
+@click.option("--topic-mix", default=None, help="Comma-separated topic cycle for mixed cohorts")
 @click.option("--base-time", default=None, help="ISO-8601 base timestamp")
 @click.option(
     "--clinical-text-backend",
@@ -459,6 +460,7 @@ def generate_dataset(
     age_min: int | None,
     age_max: int | None,
     sexes: str | None,
+    topic_mix: str | None,
     base_time: str | None,
     clinical_text_backend: str | None,
     llm_provider: str | None,
@@ -486,6 +488,10 @@ def generate_dataset(
     if sexes:
         cohort_constraints["sexes"] = [
             value.strip() for value in sexes.split(",") if value.strip()
+        ]
+    if topic_mix:
+        cohort_constraints["topic_mix"] = [
+            value.strip() for value in topic_mix.split(",") if value.strip()
         ]
     if base_time:
         cohort_constraints["base_time"] = base_time
