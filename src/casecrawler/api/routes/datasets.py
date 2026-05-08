@@ -21,6 +21,7 @@ from casecrawler.export.fine_tuning import (
     export_jsonl_split_package,
     export_parquet_bytes,
     export_record_payloads,
+    summarize_export_task_coverage,
 )
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.dataset import (
@@ -271,6 +272,10 @@ async def generate_release_package(req: ReleasePackageRequest):
                         "generated": result["generated"],
                         "approved": result["approved"],
                         "seeded_references": seeded_references,
+                        "task_coverage": summarize_export_task_coverage(
+                            records,
+                            req.export_format,
+                        ),
                         "quality_report": {
                             "export_ready": quality_report.export_ready,
                             "multimodal_release_ready": (

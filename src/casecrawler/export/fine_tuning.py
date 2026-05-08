@@ -1138,6 +1138,19 @@ def export_record_payloads(
     ]
 
 
+def summarize_export_task_coverage(
+    records: Iterable[SyntheticRecord],
+    export_format: str | ExportFormat,
+) -> dict[str, int]:
+    """Summarize fine-tuning task coverage for records and export format."""
+    coverage: dict[str, int] = {}
+    resolved_format = ExportFormat(export_format)
+    for record in records:
+        for payload in export_record_payloads(record, resolved_format):
+            _merge_task_coverage(coverage, _payload_task_coverage(payload))
+    return dict(sorted(coverage.items()))
+
+
 def export_jsonl_split_package(
     records: Iterable[SyntheticRecord],
     output_dir: str | Path,
@@ -2999,6 +3012,7 @@ def _verify_release_package_summary_artifact(
                 ),
             }
         )
+    _verify_release_summary_task_coverage(payload, manifest, issues)
     quality = payload.get("quality_report")
     if not isinstance(quality, dict):
         issues.append(
@@ -3101,6 +3115,51 @@ def _verify_release_summary_quality(
                 "message": (
                     "Release package summary marks multimodal_release_ready "
                     f"but lists missing requirements: {missing}."
+                ),
+            }
+        )
+
+
+def _verify_release_summary_task_coverage(
+    payload: dict[str, Any],
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    field = "audit_artifacts.release_package_summary.json.task_coverage"
+    task_coverage = payload.get("task_coverage")
+    quality = payload.get("quality_report")
+    release_ready = (
+        isinstance(quality, dict)
+        and quality.get("multimodal_release_ready") is True
+    )
+    if task_coverage is None:
+        if release_ready:
+            issues.append(
+                {
+                    "field": field,
+                    "message": "Release package summary is missing task_coverage.",
+                }
+            )
+        return
+    if not _string_int_map(task_coverage):
+        issues.append(
+            {
+                "field": field,
+                "message": (
+                    "Release package summary task_coverage must be a "
+                    "string-to-integer map."
+                ),
+            }
+        )
+        return
+    manifest_task_coverage = manifest.get("task_coverage")
+    if isinstance(manifest_task_coverage, dict) and task_coverage != manifest_task_coverage:
+        issues.append(
+            {
+                "field": field,
+                "message": (
+                    "Release package summary task_coverage does not match "
+                    "manifest task_coverage."
                 ),
             }
         )

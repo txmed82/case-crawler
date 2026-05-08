@@ -372,6 +372,7 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     assert benchmark["passed"] is True
     assert benchmark_suite["passed"] is True
     assert release_summary["dataset_id"] == body["dataset_id"]
+    assert release_summary["task_coverage"] == manifest["task_coverage"]
     assert release_summary["quality_report"]["multimodal_release_ready"] is True
     assert (
         release_summary["quality_report"]["imaging_report_label_evidence_rate"]
