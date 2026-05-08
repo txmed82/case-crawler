@@ -130,6 +130,9 @@ def build_dataset_quality_report(
         resolved_reference_dataset_id=benchmark_summary["resolved_reference_dataset_id"],
         missing_reference_keys=benchmark_summary["missing_reference_keys"],
         benchmark_thresholds=benchmark_summary["thresholds"],
+        task_export_reference_readiness=benchmark_summary[
+            "task_export_reference_readiness"
+        ],
         modality_counts=dict(sorted(modality_counts.items())),
         artifact_counts=dict(sorted(artifact_counts.items())),
         export_profile_readiness=_export_profile_readiness(
@@ -692,6 +695,7 @@ def _benchmark_summary(benchmark_plan: dict | None) -> dict:
             "resolved_reference_dataset_id": None,
             "missing_reference_keys": [],
             "thresholds": {},
+            "task_export_reference_readiness": {},
         }
     recommended_reference_keys = _string_list(
         benchmark_plan.get("recommended_reference_keys")
@@ -708,6 +712,9 @@ def _benchmark_summary(benchmark_plan: dict | None) -> dict:
             benchmark_plan.get("missing_reference_keys")
         ),
         "thresholds": _thresholds(benchmark_plan.get("thresholds")),
+        "task_export_reference_readiness": _dict_or_empty(
+            benchmark_plan.get("task_export_reference_readiness")
+        ),
     }
 
 
@@ -722,6 +729,12 @@ def _string_or_none(value: object) -> str | None:
         return None
     value = value.strip()
     return value or None
+
+
+def _dict_or_empty(value: object) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    return value
 
 
 def _thresholds(value: object) -> dict[str, float]:

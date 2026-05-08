@@ -341,6 +341,16 @@ def test_dataset_api_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
     assert body["resolved_reference_key"] == "synthclinicalnotes"
     assert body["ready"] is True
     assert body["thresholds"] == {"min_overall_score": 0.75, "min_metric_score": 0.5}
+    note_fact_readiness = body["task_export_reference_readiness"][
+        "note_fact_sft_jsonl"
+    ]
+    assert note_fact_readiness["available_reference_keys"] == ["synthclinicalnotes"]
+    assert note_fact_readiness["missing_reference_keys"] == [
+        "augmented_clinical_notes",
+        "clinical_notes_to_fhir",
+        "technetium_i",
+    ]
+    assert note_fact_readiness["ready"] is False
 
 
 def test_dataset_api_quality_report_includes_recipe_benchmark_readiness(
@@ -373,6 +383,9 @@ def test_dataset_api_quality_report_includes_recipe_benchmark_readiness(
         "min_overall_score": 0.75,
         "min_metric_score": 0.5,
     }
+    assert body["task_export_reference_readiness"]["time_series_jsonl"][
+        "recommended_reference_keys"
+    ] == ["synthea_fhir"]
 
 
 def test_dataset_api_runs_recipe_benchmark_suite(tmp_path, monkeypatch):
@@ -418,6 +431,12 @@ def test_dataset_api_runs_recipe_benchmark_suite(tmp_path, monkeypatch):
     assert {
         result["reference_dataset_id"] for result in body["results"]
     } == {first_reference_id, second_reference_id}
+    note_fact_results = body["task_export_results"]["note_fact_sft_jsonl"]
+    assert note_fact_results["reference_count"] == 2
+    assert note_fact_results["missing_reference_keys"] == [
+        "augmented_clinical_notes",
+        "technetium_i",
+    ]
 
 
 def test_dataset_api_lists_export_manifests(tmp_path, monkeypatch):

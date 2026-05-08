@@ -460,6 +460,9 @@ def test_dataset_cli_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
     assert body["resolved_reference_dataset_id"] == reference_dataset_id
     assert body["resolved_reference_key"] == "synthclinicalnotes"
     assert body["ready"] is True
+    assert body["task_export_reference_readiness"]["note_fact_sft_jsonl"][
+        "available_reference_keys"
+    ] == ["synthclinicalnotes"]
 
 
 def test_dataset_cli_runs_recipe_benchmark_suite(tmp_path, monkeypatch):
@@ -502,6 +505,9 @@ def test_dataset_cli_runs_recipe_benchmark_suite(tmp_path, monkeypatch):
     assert {
         item["reference_key"] for item in body["results"]
     } == {"synthclinicalnotes", "clinical_notes_to_fhir"}
+    assert body["task_export_results"]["medication_reconciliation_jsonl"][
+        "missing_reference_keys"
+    ] == ["synthea_fhir", "medsynth_dialogue_note"]
 
 
 def test_dataset_cli_export_blocks_failed_benchmark_gate(tmp_path, monkeypatch):
