@@ -63,7 +63,7 @@ def export_sft_record(record: SyntheticRecord, task: str = "summarize") -> dict[
 
 def export_note_fact_sft_records(record: SyntheticRecord) -> list[dict[str, Any]]:
     examples: list[dict[str, Any]] = []
-    target = {
+    record_context = {
         "topic": record.topic,
         "patient": record.patient.model_dump(),
         "encounters": [encounter.model_dump() for encounter in record.encounters],
@@ -84,6 +84,16 @@ def export_note_fact_sft_records(record: SyntheticRecord) -> list[dict[str, Any]
         "synthetic": True,
     }
     for document in record.documents:
+        target = {
+            "document": {
+                "document_id": document.document_id,
+                "note_type": document.note_type,
+                "author_role": document.author_role,
+                "timestamp": document.timestamp,
+                "extracted_facts": document.extracted_facts,
+            },
+            "record_context": record_context,
+        }
         examples.append(
             {
                 "record_id": record.record_id,

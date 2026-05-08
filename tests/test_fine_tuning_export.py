@@ -1,3 +1,5 @@
+import json
+
 from casecrawler.export.fine_tuning import (
     export_dpo_record,
     export_chat_record,
@@ -84,11 +86,18 @@ def test_export_note_fact_sft_records_creates_document_level_examples():
     assert example["document_id"] == "doc-1"
     assert example["task"] == "extract_clinical_facts_from_note"
     assert "pt fever hypotn lactate hi" in example["messages"][1]["content"]
-    target = example["messages"][2]["content"]
-    assert "Lactate" in target
-    assert "Heart rate" in target
-    assert "Ceftriaxone" in target
-    assert "Opacity" in target
+    target = json.loads(example["messages"][2]["content"])
+    assert target["document"]["document_id"] == "doc-1"
+    assert target["document"]["extracted_facts"] == {
+        "lab_values": [{"name": "Lactate", "value": 4.2, "unit": "mmol/L"}],
+        "vital_values": [{"name": "Heart rate", "value": 122, "unit": "/min"}],
+        "medications": ["Ceftriaxone"],
+        "imaging_labels": ["Opacity"],
+    }
+    assert target["record_context"]["labs"][0]["name"] == "Lactate"
+    assert target["record_context"]["vitals"][0]["name"] == "Heart rate"
+    assert target["record_context"]["medication_history"][0]["name"] == "Ceftriaxone"
+    assert target["record_context"]["imaging_labels"][0]["labels"][0]["display"] == "Opacity"
     assert example["metadata"]["note_type"] == "ed_note"
     assert example["metadata"]["export_profile"] == "note_fact_sft_jsonl"
 
@@ -349,6 +358,16 @@ def _multimodal_record() -> SyntheticRecord:
                 timestamp="2026-05-06T10:30:00",
                 clean_text="Patient has fever, hypotension, and elevated lactate.",
                 messy_text="pt fever hypotn lactate hi",
+                extracted_facts={
+                    "lab_values": [
+                        {"name": "Lactate", "value": 4.2, "unit": "mmol/L"}
+                    ],
+                    "vital_values": [
+                        {"name": "Heart rate", "value": 122, "unit": "/min"}
+                    ],
+                    "medications": ["Ceftriaxone"],
+                    "imaging_labels": ["Opacity"],
+                },
             )
         ],
         imaging=[
