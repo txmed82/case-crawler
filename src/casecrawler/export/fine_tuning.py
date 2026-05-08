@@ -3304,6 +3304,31 @@ def _verify_release_summary_quality(
                 }
             )
     _verify_release_summary_quality_numeric_fields(quality, issues)
+    for key in ("race_counts", "ethnicity_counts", "insurance_counts"):
+        if not _string_int_map(quality.get(key)):
+            issues.append(
+                {
+                    "field": f"{field_prefix}.{key}",
+                    "message": (
+                        "Release package summary quality_report."
+                        f"{key} must be a string-to-integer map."
+                    ),
+                }
+            )
+    social_history_counts = quality.get("social_history_counts")
+    if not isinstance(social_history_counts, dict) or not all(
+        isinstance(key, str) and _string_int_map(value)
+        for key, value in social_history_counts.items()
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.social_history_counts",
+                "message": (
+                    "Release package summary quality_report.social_history_counts "
+                    "must be a map of string-to-integer maps."
+                ),
+            }
+        )
     coverage = quality.get("core_artifact_coverage")
     if not isinstance(coverage, dict) or not all(
         isinstance(key, str) and isinstance(value, bool)

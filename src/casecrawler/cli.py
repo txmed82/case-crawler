@@ -1229,6 +1229,10 @@ def generate_release_package(
                     "multimodal_release_ready": quality_report.multimodal_release_ready,
                     "multimodal_release_missing": quality_report.multimodal_release_missing,
                     "core_artifact_coverage": quality_report.core_artifact_coverage,
+                    "race_counts": quality_report.race_counts,
+                    "ethnicity_counts": quality_report.ethnicity_counts,
+                    "insurance_counts": quality_report.insurance_counts,
+                    "social_history_counts": quality_report.social_history_counts,
                     "clinical_text_model_policy_counts": (
                         quality_report.clinical_text_model_policy_counts
                     ),
