@@ -153,6 +153,49 @@ def test_dataset_cli_passes_time_series_model_options(tmp_path, monkeypatch):
     ]
 
 
+def test_dataset_cli_passes_clinical_text_model_options(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    class FakePipeline:
+        async def generate(self, req: GenerationRequest):
+            captured.append(req)
+            return {
+                "dataset_id": "ds-test",
+                "generated": 0,
+                "approved": 0,
+                "records": [],
+            }
+
+    monkeypatch.setattr("casecrawler.generation.synthetic_pipeline.SyntheticPipeline", FakePipeline)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "generate-dataset",
+            "sepsis",
+            "--modalities",
+            "clinical_text",
+            "--clinical-text-backend",
+            "llm",
+            "--llm-provider",
+            "ollama",
+            "--llm-model",
+            "medgemma-local",
+            "--ollama-base-url",
+            "http://localhost:11434",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured[0].modalities == [Modality.CLINICAL_TEXT]
+    assert captured[0].clinical_text_backend == "llm"
+    assert captured[0].llm_provider == "ollama"
+    assert captured[0].llm_model == "medgemma-local"
+    assert captured[0].ollama_base_url == "http://localhost:11434"
+
+
 def test_dataset_cli_export_blocks_unready_dataset_without_override(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     store = DatasetStore()

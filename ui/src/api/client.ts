@@ -108,6 +108,10 @@ export interface DatasetGenerateRequest {
   complexity?: "simple" | "moderate" | "complex" | "rare";
   modalities?: SyntheticModality[];
   export_formats?: ExportFormat[];
+  clinical_text_backend?: "deterministic" | "llm";
+  llm_provider?: string;
+  llm_model?: string;
+  ollama_base_url?: string;
   imaging_backend?: "placeholder" | "diffusers";
   imaging_model_profile?: string;
   diffusers_model_id?: string;

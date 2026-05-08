@@ -68,6 +68,16 @@ class FakeTimeSeriesGenerator:
         return record
 
 
+class FakeTextGenerator:
+    def __init__(self, provider=None):
+        self.provider = provider
+        self.calls = []
+
+    async def add_documents_async(self, record):
+        self.calls.append(record.record_id)
+        return record
+
+
 @pytest.mark.asyncio
 async def test_synthetic_pipeline_uses_configured_diffusers_backend(tmp_path):
     imaging_generator = FakeImagingGenerator()
@@ -181,6 +191,60 @@ async def test_synthetic_pipeline_allows_request_time_series_backend_override(
     )
 
     assert created == [["timediff-sample"]]
+    assert result["generated"] == 1
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_allows_request_clinical_text_backend_override(
+    monkeypatch,
+    tmp_path,
+):
+    created_providers = []
+    created_generators = []
+
+    class FakeProvider:
+        pass
+
+    class RequestScopedTextGenerator(FakeTextGenerator):
+        def __init__(self, provider=None):
+            super().__init__(provider=provider)
+            created_generators.append(provider)
+
+    def fake_get_provider(provider_name, model, **kwargs):
+        created_providers.append((provider_name, model, kwargs))
+        return FakeProvider()
+
+    monkeypatch.setattr(
+        "casecrawler.generation.synthetic_pipeline.TextGenerator",
+        RequestScopedTextGenerator,
+    )
+    monkeypatch.setattr(
+        "casecrawler.generation.synthetic_pipeline.get_provider",
+        fake_get_provider,
+    )
+    pipeline = SyntheticPipeline(
+        text_generator=FakeTextGenerator(),
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="sepsis",
+            count=1,
+            modalities=[Modality.CLINICAL_TEXT],
+            clinical_text_backend="llm",
+            llm_provider="ollama",
+            llm_model="medgemma-local",
+            ollama_base_url="http://localhost:11434",
+        )
+    )
+
+    assert created_providers == [
+        ("ollama", "medgemma-local", {"base_url": "http://localhost:11434"})
+    ]
+    assert len(created_generators) == 1
     assert result["generated"] == 1
 
 

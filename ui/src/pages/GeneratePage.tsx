@@ -37,8 +37,11 @@ const exportFormatOptions: { value: ExportFormat; label: string }[] = [
   { value: "raw_jsonl", label: "Raw" },
 ];
 
+const llmProviderOptions = ["anthropic", "openai", "openrouter", "ollama"] as const;
+
 const sexOptions = ["female", "male", "other"] as const;
 type SexOption = (typeof sexOptions)[number];
+type LlmProviderOption = (typeof llmProviderOptions)[number];
 type ReferenceImportMode = "registered" | "custom";
 
 export default function GeneratePage() {
@@ -56,6 +59,11 @@ export default function GeneratePage() {
     "vitals",
   ]);
   const [exportFormats, setExportFormats] = useState<ExportFormat[]>(["sft_jsonl"]);
+  const [clinicalTextBackend, setClinicalTextBackend] =
+    useState<"deterministic" | "llm">("deterministic");
+  const [llmProvider, setLlmProvider] = useState<LlmProviderOption>("ollama");
+  const [llmModel, setLlmModel] = useState("");
+  const [ollamaBaseUrl, setOllamaBaseUrl] = useState("");
   const [imagingBackend, setImagingBackend] =
     useState<"placeholder" | "diffusers">("placeholder");
   const [imagingProfile, setImagingProfile] = useState("");
@@ -160,6 +168,7 @@ export default function GeneratePage() {
     if (baseTime) cohortConstraints.base_time = baseTime;
     const includesImaging = modalities.includes("imaging");
     const includesTimeSeries = modalities.includes("time_series");
+    const includesClinicalText = modalities.includes("clinical_text");
     const parsedTimeSeriesCommand = timeSeriesCommand
       .split(",")
       .map((value) => value.trim())
@@ -175,6 +184,18 @@ export default function GeneratePage() {
         count,
         modalities,
         export_formats: exportFormats,
+        ...(includesClinicalText ? { clinical_text_backend: clinicalTextBackend } : {}),
+        ...(includesClinicalText && clinicalTextBackend === "llm"
+          ? { llm_provider: llmProvider }
+          : {}),
+        ...(includesClinicalText && clinicalTextBackend === "llm" && llmModel.trim()
+          ? { llm_model: llmModel.trim() }
+          : {}),
+        ...(includesClinicalText &&
+        clinicalTextBackend === "llm" &&
+        ollamaBaseUrl.trim()
+          ? { ollama_base_url: ollamaBaseUrl.trim() }
+          : {}),
         ...(includesImaging ? { imaging_backend: imagingBackend } : {}),
         ...(includesImaging && imagingProfile ? { imaging_model_profile: imagingProfile } : {}),
         ...(includesImaging && diffusersModelId.trim()
@@ -297,6 +318,7 @@ export default function GeneratePage() {
   };
 
   const selectedReference = referenceCatalog.find((item) => item.key === referenceKey);
+  const includesClinicalText = modalities.includes("clinical_text");
   const includesImaging = modalities.includes("imaging");
   const includesTimeSeries = modalities.includes("time_series");
 
@@ -451,6 +473,65 @@ export default function GeneratePage() {
             );
           })}
         </div>
+
+        {includesClinicalText && (
+          <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,12rem)_minmax(0,1fr)_minmax(0,1fr)]">
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Text backend</span>
+              <select
+                aria-label="Clinical text backend"
+                value={clinicalTextBackend}
+                onChange={(event) =>
+                  setClinicalTextBackend(event.target.value as "deterministic" | "llm")
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              >
+                <option value="deterministic">Deterministic</option>
+                <option value="llm">LLM</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Provider</span>
+              <select
+                aria-label="Clinical text LLM provider"
+                value={llmProvider}
+                onChange={(event) => setLlmProvider(event.target.value as LlmProviderOption)}
+                disabled={clinicalTextBackend !== "llm"}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal disabled:opacity-50"
+              >
+                {llmProviderOptions.map((provider) => (
+                  <option key={provider} value={provider}>
+                    {provider}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Model</span>
+              <input
+                aria-label="Clinical text LLM model"
+                type="text"
+                value={llmModel}
+                onChange={(event) => setLlmModel(event.target.value)}
+                disabled={clinicalTextBackend !== "llm"}
+                placeholder="Use config default"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal disabled:opacity-50"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Ollama URL</span>
+              <input
+                aria-label="Ollama base URL"
+                type="text"
+                value={ollamaBaseUrl}
+                onChange={(event) => setOllamaBaseUrl(event.target.value)}
+                disabled={clinicalTextBackend !== "llm" || llmProvider !== "ollama"}
+                placeholder="Use config default"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal disabled:opacity-50"
+              />
+            </label>
+          </div>
+        )}
 
         {includesImaging && (
           <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,18rem)_minmax(0,1fr)]">

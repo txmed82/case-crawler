@@ -36,6 +36,22 @@ def test_generation_request_accepts_imaging_model_overrides():
     assert req.diffusers_model_id == "hf/test-cxr"
 
 
+def test_generation_request_accepts_clinical_text_model_overrides():
+    req = GenerationRequest(
+        topic="sepsis",
+        modalities=[Modality.CLINICAL_TEXT],
+        clinical_text_backend="llm",
+        llm_provider="ollama",
+        llm_model="medgemma-local",
+        ollama_base_url="http://localhost:11434",
+    )
+
+    assert req.clinical_text_backend == "llm"
+    assert req.llm_provider == "ollama"
+    assert req.llm_model == "medgemma-local"
+    assert req.ollama_base_url == "http://localhost:11434"
+
+
 def test_generation_request_accepts_time_series_model_overrides():
     req = GenerationRequest(
         topic="sepsis",
