@@ -545,6 +545,9 @@ def test_dataset_api_serves_quality_report(tmp_path, monkeypatch):
     assert body["time_series_backend_counts"] == {}
     assert body["imaging_backend_counts"] == {}
     assert body["imaging_model_policy_counts"] == {}
+    assert body["diagnosis_code_system_counts"]["synthetic"] >= 1
+    assert body["diagnosis_code_counts"]["synthetic:sepsis"] >= 1
+    assert body["phi_entity_counts"] == {}
 
 
 def test_dataset_api_quality_report_handles_missing_dataset(tmp_path, monkeypatch):
