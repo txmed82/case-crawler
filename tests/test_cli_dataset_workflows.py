@@ -348,6 +348,8 @@ def test_dataset_cli_generates_modalities_and_cohort_constraints(tmp_path, monke
             "51",
             "--sexes",
             "female,male",
+            "--topic-mix",
+            "pulmonary embolism,sepsis",
             "--base-time",
             "2026-02-03T04:05:06",
         ],
@@ -359,6 +361,11 @@ def test_dataset_cli_generates_modalities_and_cohort_constraints(tmp_path, monke
 
     assert sorted(record.patient.age for record in records) == [50, 51]
     assert sorted(record.patient.sex for record in records) == ["female", "male"]
+    assert [record.topic for record in records] == ["pulmonary embolism", "sepsis"]
+    assert records[0].metadata["cohort_constraints"]["topic_mix"] == [
+        "pulmonary embolism",
+        "sepsis",
+    ]
     assert Modality.IMAGING in records[0].modalities
     assert records[0].imaging[0].modality == "CTA"
     assert records[0].time_series

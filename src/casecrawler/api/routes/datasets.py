@@ -112,6 +112,7 @@ def list_dataset_capabilities():
             "age_max",
             "sexes",
             "sex_cycle",
+            "topic_mix",
             "base_time",
         ],
         "imaging_model_profiles": [

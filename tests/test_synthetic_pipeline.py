@@ -19,6 +19,30 @@ async def test_synthetic_pipeline_generates_valid_records():
     assert result["records"][0].labs
 
 
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_generates_topic_mix_cohorts():
+    pipeline = SyntheticPipeline(validator=SyntheticValidator())
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="mixed acute care cohort",
+            count=4,
+            cohort_constraints={"topic_mix": ["sepsis", "pneumonia"]},
+        )
+    )
+
+    assert [record.topic for record in result["records"]] == [
+        "sepsis",
+        "pneumonia",
+        "sepsis",
+        "pneumonia",
+    ]
+    assert result["records"][0].metadata["cohort_constraints"]["topic_mix"] == [
+        "sepsis",
+        "pneumonia",
+    ]
+
+
 class FakeImagingGenerator:
     def __init__(self):
         self.diffusers_calls = []

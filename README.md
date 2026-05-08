@@ -112,6 +112,10 @@ casecrawler generate-dataset "pulmonary embolism" \
   --count 50 \
   --modalities structured_ehr,clinical_text,labs,vitals,time_series,imaging \
   --age-min 45 --age-max 85 --sexes female,male
+casecrawler generate-dataset "mixed acute care cohort" \
+  --count 90 \
+  --topic-mix "sepsis,pneumonia,heart failure exacerbation" \
+  --modalities structured_ehr,clinical_text,labs,vitals,time_series
 casecrawler reference-datasets
 casecrawler import-reference-dataset asclepius --dataset-id ds-asclepius-ref --limit 100
 casecrawler import-reference-dataset clinical_notes_to_fhir --dataset-id ds-fhir-ref --limit 100
@@ -248,7 +252,7 @@ synthetic:
   time_series_command: null # e.g. ["timediff-sample", "--checkpoint", "local.pt"]
   synthea_executable: null
   # GenerationRequest.cohort_constraints supports age_min, age_max, sexes,
-  # sex_cycle, and base_time for deterministic cohort composition.
+  # sex_cycle, topic_mix, and base_time for deterministic cohort composition.
   # GenerationRequest can also override imaging_backend, imaging_model_profile,
   # and diffusers_model_id for a single dataset generation run.
   # It can also override time_series_backend, time_series_model_profile,

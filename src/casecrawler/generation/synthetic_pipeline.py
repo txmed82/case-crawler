@@ -66,9 +66,10 @@ class SyntheticPipeline:
         records = []
         approved = 0
         for index in range(req.count):
+            record_req = _request_for_record_index(req, index)
             record = self._structured_generator.generate(
                 dataset_id=dataset_id,
-                req=req,
+                req=record_req,
                 index=index,
             )
             if Modality.TIME_SERIES in plan.modalities:
@@ -87,7 +88,7 @@ class SyntheticPipeline:
                 record = record.model_copy(update={"imaging": [*record.imaging, *images]})
             if Modality.CLINICAL_TEXT in plan.modalities:
                 record = await text_generator.add_documents_async(record)
-            validation = self._validator_for(req).validate(record)
+            validation = self._validator_for(record_req).validate(record)
             record = record.model_copy(update={"validation": validation})
             records.append(record)
             if validation.approved:
@@ -301,3 +302,33 @@ def _topic_imaging_spec(topic: str) -> tuple[str, str, str]:
     if "gi bleed" in normalized or "gastrointestinal bleed" in normalized:
         return "CT", "abdomen", "contrast CT abdomen active gastrointestinal bleeding"
     return "XR", "chest", topic
+
+
+def _request_for_record_index(req: GenerationRequest, index: int) -> GenerationRequest:
+    topics = _topic_mix(req.cohort_constraints.get("topic_mix"))
+    if not topics:
+        return req
+    return req.model_copy(update={"topic": topics[index % len(topics)]})
+
+
+def _topic_mix(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        topics = [topic.strip() for topic in value.split(",") if topic.strip()]
+    elif isinstance(value, list):
+        topics = []
+        for item in value:
+            if isinstance(item, str):
+                topic = item.strip()
+            elif isinstance(item, dict):
+                topic = str(item.get("topic", "")).strip()
+            else:
+                topic = str(item).strip()
+            if topic:
+                topics.append(topic)
+    else:
+        raise ValueError("cohort_constraints.topic_mix must be a string or list.")
+    if not topics:
+        raise ValueError("cohort_constraints.topic_mix must contain at least one topic.")
+    return topics
