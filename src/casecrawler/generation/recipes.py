@@ -18,6 +18,7 @@ class GenerationRecipe:
     recommended_reference_keys: list[str] = field(default_factory=list)
     benchmark_min_overall_score: float = 0.75
     benchmark_min_metric_score: float = 0.5
+    default_imaging_model_profile: str | None = None
 
 
 RECIPES: dict[str, GenerationRecipe] = {
@@ -68,6 +69,7 @@ RECIPES: dict[str, GenerationRecipe] = {
         ],
         benchmark_min_overall_score=0.7,
         benchmark_min_metric_score=0.45,
+        default_imaging_model_profile="prompt2medimage",
     ),
     "radiology_cxr_report": GenerationRecipe(
         name="radiology_cxr_report",
@@ -97,6 +99,7 @@ RECIPES: dict[str, GenerationRecipe] = {
         ],
         benchmark_min_overall_score=0.7,
         benchmark_min_metric_score=0.45,
+        default_imaging_model_profile="stable_diffusion_chest_xray",
     ),
     "icu_timeseries_notes": GenerationRecipe(
         name="icu_timeseries_notes",
@@ -277,4 +280,6 @@ def apply_generation_recipe(req: GenerationRequest) -> GenerationRequest:
         updates["complexity"] = recipe.complexity
     if req.validation_threshold == default.validation_threshold:
         updates["validation_threshold"] = recipe.validation_threshold
+    if req.imaging_model_profile is None and recipe.default_imaging_model_profile:
+        updates["imaging_model_profile"] = recipe.default_imaging_model_profile
     return req.model_copy(update=updates)
