@@ -67,6 +67,8 @@ def test_synthea_adapter_imports_minimal_fhir_patient_bundle(tmp_path):
     assert record.vitals[0].value == 118
     assert record.medication_history[0].name == "Ceftriaxone"
     assert record.medication_history[0].route == "IV"
+    assert record.metadata["reference_key"] == "synthea_fhir"
+    assert record.metadata["reference_dataset"] == "synthea_fhir"
     assert Modality.STRUCTURED_EHR in record.modalities
     assert Modality.LABS in record.modalities
     assert Modality.VITALS in record.modalities

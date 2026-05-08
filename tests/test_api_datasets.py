@@ -195,6 +195,7 @@ def test_dataset_api_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
     assert body["dataset_id"] == dataset_id
     assert body["primary_recipe"] == "icu_timeseries_notes"
     assert body["recommended_reference_keys"] == [
+        "synthea_fhir",
         "synthclinicalnotes",
         "augmented_clinical_notes",
         "medsynth_dialogue_note",
@@ -224,6 +225,7 @@ def test_dataset_api_quality_report_includes_recipe_benchmark_readiness(
     body = response.json()
     assert body["benchmark_ready"] is False
     assert body["recommended_reference_keys"] == [
+        "synthea_fhir",
         "synthclinicalnotes",
         "augmented_clinical_notes",
         "medsynth_dialogue_note",
@@ -823,6 +825,8 @@ def test_dataset_api_imports_synthea_fhir_directory(tmp_path, monkeypatch):
     assert stored.status_code == 200
     assert stored.json()["records"][0]["patient"]["patient_id"] == "pat-1"
     assert stored.json()["records"][0]["labs"][0]["name"] == "Lactate"
+    assert stored.json()["manifest"]["metadata"]["primary_reference_key"] == "synthea_fhir"
+    assert stored.json()["manifest"]["metadata"]["reference_keys"] == {"synthea_fhir": 1}
 
 
 def test_dataset_api_reports_empty_synthea_import_directory(tmp_path, monkeypatch):
