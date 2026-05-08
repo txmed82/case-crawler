@@ -69,7 +69,9 @@ export default function GeneratePage() {
   ]);
   const [exportFormats, setExportFormats] = useState<ExportFormat[]>(["sft_jsonl"]);
   const [clinicalTextBackend, setClinicalTextBackend] =
-    useState<"deterministic" | "llm">("deterministic");
+    useState<"deterministic" | "llm" | "external">("deterministic");
+  const [clinicalTextProfile, setClinicalTextProfile] = useState("");
+  const [clinicalTextCommand, setClinicalTextCommand] = useState("");
   const [llmProvider, setLlmProvider] = useState<LlmProviderOption>("ollama");
   const [llmModel, setLlmModel] = useState("");
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState("");
@@ -206,6 +208,10 @@ export default function GeneratePage() {
     const includesImaging = modalities.includes("imaging");
     const includesTimeSeries = modalities.includes("time_series");
     const includesClinicalText = modalities.includes("clinical_text");
+    const parsedClinicalTextCommand = clinicalTextCommand
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
     const parsedTimeSeriesCommand = timeSeriesCommand
       .split(",")
       .map((value) => value.trim())
@@ -225,6 +231,14 @@ export default function GeneratePage() {
         ...(includesClinicalText ? { clinical_text_backend: clinicalTextBackend } : {}),
         ...(includesClinicalText && clinicalTextBackend === "llm"
           ? { llm_provider: llmProvider }
+          : {}),
+        ...(includesClinicalText && clinicalTextBackend === "external" && clinicalTextProfile
+          ? { clinical_text_model_profile: clinicalTextProfile }
+          : {}),
+        ...(includesClinicalText &&
+        clinicalTextBackend === "external" &&
+        parsedClinicalTextCommand.length > 0
+          ? { clinical_text_command: parsedClinicalTextCommand }
           : {}),
         ...(includesClinicalText && clinicalTextBackend === "llm" && llmModel.trim()
           ? { llm_model: llmModel.trim() }
@@ -274,6 +288,18 @@ export default function GeneratePage() {
         recipe: recipe || "full_multimodal_acute_care",
         export_format: "multimodal_jsonl",
         seed: "casecrawler",
+        clinical_text_backend: clinicalTextBackend,
+        ...(clinicalTextBackend === "external" && clinicalTextProfile
+          ? { clinical_text_model_profile: clinicalTextProfile }
+          : {}),
+        ...(clinicalTextBackend === "external" && clinicalTextCommand.trim()
+          ? {
+              clinical_text_command: clinicalTextCommand
+                .split(",")
+                .map((value) => value.trim())
+                .filter(Boolean),
+            }
+          : {}),
         imaging_backend: imagingBackend,
         ...(imagingProfile ? { imaging_model_profile: imagingProfile } : {}),
         ...(diffusersModelId.trim()
@@ -633,20 +659,52 @@ export default function GeneratePage() {
         </div>
 
         {includesClinicalText && (
-          <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,12rem)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,12rem)_minmax(0,16rem)_minmax(0,1fr)]">
             <label className="space-y-1 text-sm font-medium text-gray-700">
               <span>Text backend</span>
               <select
                 aria-label="Clinical text backend"
                 value={clinicalTextBackend}
                 onChange={(event) =>
-                  setClinicalTextBackend(event.target.value as "deterministic" | "llm")
+                  setClinicalTextBackend(
+                    event.target.value as "deterministic" | "llm" | "external"
+                  )
                 }
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
               >
                 <option value="deterministic">Deterministic</option>
                 <option value="llm">LLM</option>
+                <option value="external">External</option>
               </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Profile</span>
+              <select
+                aria-label="Clinical text model profile"
+                value={clinicalTextProfile}
+                onChange={(event) => setClinicalTextProfile(event.target.value)}
+                disabled={clinicalTextBackend !== "external"}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal disabled:opacity-50"
+              >
+                <option value="">Config default</option>
+                {(capabilities?.clinical_text_model_profiles ?? []).map((profile) => (
+                  <option key={profile.name} value={profile.name}>
+                    {profile.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Command</span>
+              <input
+                aria-label="Clinical text external command"
+                type="text"
+                value={clinicalTextCommand}
+                onChange={(event) => setClinicalTextCommand(event.target.value)}
+                disabled={clinicalTextBackend !== "external"}
+                placeholder="hf-note-sample,--model,local-notes"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal disabled:opacity-50"
+              />
             </label>
             <label className="space-y-1 text-sm font-medium text-gray-700">
               <span>Provider</span>
@@ -676,7 +734,7 @@ export default function GeneratePage() {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal disabled:opacity-50"
               />
             </label>
-            <label className="space-y-1 text-sm font-medium text-gray-700">
+            <label className="space-y-1 text-sm font-medium text-gray-700 md:col-span-2">
               <span>Ollama URL</span>
               <input
                 aria-label="Ollama base URL"
