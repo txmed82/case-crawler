@@ -799,6 +799,9 @@ def test_verify_jsonl_split_package_validates_release_package_summary_artifact(
             "core_artifact_coverage": {
                 key: True for key in REQUIRED_RELEASE_COVERAGE_KEYS
             },
+            "mean_imaging_prompt_chars": "long",
+            "mean_imaging_report_chars": False,
+            "imaging_report_label_evidence_rate": 1.5,
         },
         "benchmark": {
             "reference_dataset_id": "ds-ref",
@@ -851,6 +854,18 @@ def test_verify_jsonl_split_package_validates_release_package_summary_artifact(
     assert (
         "audit_artifacts.release_package_summary.json.quality_report."
         "multimodal_release_missing"
+    ) in issue_fields
+    assert (
+        "audit_artifacts.release_package_summary.json.quality_report."
+        "mean_imaging_prompt_chars"
+    ) in issue_fields
+    assert (
+        "audit_artifacts.release_package_summary.json.quality_report."
+        "mean_imaging_report_chars"
+    ) in issue_fields
+    assert (
+        "audit_artifacts.release_package_summary.json.quality_report."
+        "imaging_report_label_evidence_rate"
     ) in issue_fields
     assert (
         "audit_artifacts.release_package_summary.json.benchmark.failing_metrics"
