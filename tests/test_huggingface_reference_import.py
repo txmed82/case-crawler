@@ -45,6 +45,10 @@ def test_reference_dataset_catalog_includes_clinical_note_fhir_and_radiology_ben
     assert catalog["radiology_report_consistency"].license == "mit"
     assert catalog["synthchex_75k"].repo_id == "raman07/SynthCheX-75K-v2"
     assert catalog["synthchex_75k"].image_field == "image"
+    assert catalog["rexgradient_160k"].repo_id == "rajpurkarlab/ReXGradient-160K"
+    assert catalog["rexgradient_160k"].license == "rexgradient-non-commercial-gated"
+    assert catalog["rexgradient_160k"].image_field == "image"
+    assert "gated" in catalog["rexgradient_160k"].description.lower()
     assert catalog["synthetic_chest_xray_pneumonia"].repo_id == (
         "chimbiwide/synthetic-chest-xray-pneumonia"
     )

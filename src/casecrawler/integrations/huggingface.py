@@ -130,6 +130,22 @@ REFERENCE_DATASETS: dict[str, HuggingFaceReferenceDataset] = {
             "CheXGenBench, with pathological annotations."
         ),
     ),
+    "rexgradient_160k": HuggingFaceReferenceDataset(
+        repo_id="rajpurkarlab/ReXGradient-160K",
+        split="validation",
+        license="rexgradient-non-commercial-gated",
+        note_field="findings",
+        answer_field="impression",
+        patient_id_field="patient_id",
+        image_field="image",
+        image_modality="XR",
+        image_body_region="chest",
+        description=(
+            "Gated non-commercial chest radiograph/report reference dataset "
+            "for radiology generation benchmarking. Access requires accepting "
+            "the Hugging Face dataset terms."
+        ),
+    ),
     "synthetic_chest_xray_pneumonia": HuggingFaceReferenceDataset(
         repo_id="chimbiwide/synthetic-chest-xray-pneumonia",
         split="train",
