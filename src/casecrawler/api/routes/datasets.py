@@ -228,6 +228,7 @@ def import_reference_dataset(req: ReferenceImportRequest):
             records = import_reference_rows(
                 rows,
                 dataset_id=req.dataset_id,
+                reference_key=req.reference_key or req.repo_id,
                 split=split,
                 limit=req.limit,
                 spec=spec,

@@ -531,6 +531,8 @@ def test_dataset_api_imports_hf_reference_dataset(tmp_path, monkeypatch):
     assert body["imported"] == 1
     assert body["reference_key"] == "asclepius"
     assert DatasetStore().dataset_exists("ds-hf-reference")
+    manifest = DatasetStore().get_manifest("ds-hf-reference")
+    assert manifest.metadata["primary_reference_key"] == "asclepius"
 
 
 def test_dataset_api_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
@@ -578,6 +580,7 @@ def test_dataset_api_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     assert body["reference_key"] == "org/custom-synthetic-notes"
     assert body["repo_id"] == "org/custom-synthetic-notes"
     record = DatasetStore().list_records(dataset_id="ds-custom-reference")[0]
+    assert record.metadata["reference_key"] == "org/custom-synthetic-notes"
     assert record.metadata["reference_license"] == "cc-by-4.0"
     assert record.documents[0].extracted_facts["instruction"] == "Extract diagnosis."
 

@@ -254,6 +254,7 @@ def import_reference_rows(
                 row,
                 dataset_id=dataset_id,
                 spec=resolved_spec,
+                reference_key=reference_key,
                 split=effective_split,
                 image_output_dir=image_output_dir,
             )
@@ -266,6 +267,7 @@ def reference_row_to_record(
     *,
     dataset_id: str,
     spec: HuggingFaceReferenceDataset,
+    reference_key: str = "unspecified",
     split: str | None = None,
     image_output_dir: str | Path = "./data/reference_images",
 ) -> SyntheticRecord:
@@ -349,6 +351,7 @@ def reference_row_to_record(
             model=None,
             source_refs=[
                 {
+                    "reference_key": reference_key,
                     "repo_id": spec.repo_id,
                     "split": effective_split,
                     "license": spec.license,
@@ -357,6 +360,7 @@ def reference_row_to_record(
             created_at="2026-01-01T00:00:00",
         ),
         metadata={
+            "reference_key": reference_key,
             "reference_dataset": spec.repo_id,
             "reference_license": spec.license,
             "reference_split": effective_split,
