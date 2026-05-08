@@ -141,6 +141,9 @@ export interface ReleasePackageRequest {
   modalities?: SyntheticModality[];
   export_format?: ExportFormat;
   seed?: string;
+  train_ratio?: number;
+  validation_ratio?: number;
+  test_ratio?: number;
   cohort_constraints?: Record<string, unknown>;
   clinical_text_backend?: "deterministic" | "llm" | "external";
   clinical_text_model_profile?: string;

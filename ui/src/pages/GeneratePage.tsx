@@ -94,6 +94,9 @@ export default function GeneratePage() {
   const [releaseFixtureLimit, setReleaseFixtureLimit] = useState("1");
   const [releaseMinOverallScore, setReleaseMinOverallScore] = useState("0.7");
   const [releaseMinMetricScore, setReleaseMinMetricScore] = useState("0.45");
+  const [releaseTrainRatio, setReleaseTrainRatio] = useState("0.8");
+  const [releaseValidationRatio, setReleaseValidationRatio] = useState("0.1");
+  const [releaseTestRatio, setReleaseTestRatio] = useState("0.1");
   const [referenceCatalog, setReferenceCatalog] = useState<ReferenceDatasetCatalogItem[]>([]);
   const [referenceImportMode, setReferenceImportMode] =
     useState<ReferenceImportMode>("registered");
@@ -305,6 +308,9 @@ export default function GeneratePage() {
     const parsedFixtureLimit = Number(releaseFixtureLimit);
     const parsedMinOverallScore = Number(releaseMinOverallScore);
     const parsedMinMetricScore = Number(releaseMinMetricScore);
+    const parsedTrainRatio = Number(releaseTrainRatio);
+    const parsedValidationRatio = Number(releaseValidationRatio);
+    const parsedTestRatio = Number(releaseTestRatio);
     if (!Number.isInteger(parsedFixtureLimit) || parsedFixtureLimit < 1) {
       setReleaseError("Fixture limit must be a positive integer.");
       return;
@@ -318,6 +324,18 @@ export default function GeneratePage() {
       parsedMinMetricScore > 1
     ) {
       setReleaseError("Benchmark thresholds must be numbers from 0 to 1.");
+      return;
+    }
+    if (
+      Number.isNaN(parsedTrainRatio) ||
+      parsedTrainRatio < 0 ||
+      Number.isNaN(parsedValidationRatio) ||
+      parsedValidationRatio < 0 ||
+      Number.isNaN(parsedTestRatio) ||
+      parsedTestRatio < 0 ||
+      parsedTrainRatio + parsedValidationRatio + parsedTestRatio <= 0
+    ) {
+      setReleaseError("Split ratios must be non-negative and sum above zero.");
       return;
     }
     setReleaseResult(null);
@@ -342,6 +360,9 @@ export default function GeneratePage() {
         modalities,
         export_format: "multimodal_jsonl",
         seed: "casecrawler",
+        train_ratio: parsedTrainRatio,
+        validation_ratio: parsedValidationRatio,
+        test_ratio: parsedTestRatio,
         fixture_limit: parsedFixtureLimit,
         min_overall_score: parsedMinOverallScore,
         min_metric_score: parsedMinMetricScore,
@@ -978,6 +999,45 @@ export default function GeneratePage() {
               onChange={(event) => setReleaseMinMetricScore(event.target.value)}
               min={0}
               max={1}
+              step={0.01}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,12rem)_minmax(0,12rem)]">
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Train split</span>
+            <input
+              aria-label="Release train split ratio"
+              type="number"
+              value={releaseTrainRatio}
+              onChange={(event) => setReleaseTrainRatio(event.target.value)}
+              min={0}
+              step={0.01}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Validation split</span>
+            <input
+              aria-label="Release validation split ratio"
+              type="number"
+              value={releaseValidationRatio}
+              onChange={(event) => setReleaseValidationRatio(event.target.value)}
+              min={0}
+              step={0.01}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Test split</span>
+            <input
+              aria-label="Release test split ratio"
+              type="number"
+              value={releaseTestRatio}
+              onChange={(event) => setReleaseTestRatio(event.target.value)}
+              min={0}
               step={0.01}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
             />
