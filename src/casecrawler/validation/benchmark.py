@@ -217,6 +217,16 @@ class DatasetBenchmark:
                 reference_profile.imaging_backend_counts,
             ),
             _jaccard_metric(
+                "imaging_model_policy_overlap",
+                set(generated_profile.imaging_model_policy_counts),
+                set(reference_profile.imaging_model_policy_counts),
+            ),
+            _distribution_metric(
+                "imaging_model_policy_distribution",
+                generated_profile.imaging_model_policy_counts,
+                reference_profile.imaging_model_policy_counts,
+            ),
+            _jaccard_metric(
                 "imaging_label_overlap",
                 set(generated_profile.imaging_label_counts),
                 set(reference_profile.imaging_label_counts),
@@ -300,6 +310,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     imaging_modality_counts: Counter[str] = Counter()
     imaging_body_region_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
+    imaging_model_policy_counts: Counter[str] = Counter()
     imaging_label_counts: Counter[str] = Counter()
     imaging_label_pair_counts: Counter[str] = Counter()
     ages: list[int] = []
@@ -373,6 +384,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             for index, left in enumerate(asset_labels):
                 for right in asset_labels[index + 1 :]:
                     imaging_label_pair_counts[f"{left}|{right}"] += 1
+        imaging_policy_key = _imaging_model_policy_key(record)
+        if imaging_policy_key:
+            imaging_model_policy_counts[imaging_policy_key] += 1
         if record.validation is not None:
             approved_values.append(record.validation.approved)
 
@@ -410,6 +424,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         imaging_modality_counts=dict(sorted(imaging_modality_counts.items())),
         imaging_body_region_counts=dict(sorted(imaging_body_region_counts.items())),
         imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
+        imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
         imaging_label_counts=dict(sorted(imaging_label_counts.items())),
         imaging_label_pair_counts=dict(sorted(imaging_label_pair_counts.items())),
         approved_rate=_mean([int(value) for value in approved_values])
@@ -725,6 +740,20 @@ def _parse_datetime(value: str) -> datetime | None:
 def _imaging_label_key(display: str, code: str) -> str:
     value = display or code.replace("_", " ")
     return " ".join(value.lower().replace("_", " ").split())
+
+
+def _imaging_model_policy_key(record: SyntheticRecord) -> str | None:
+    policy = record.metadata.get("imaging_model_policy")
+    if not isinstance(policy, dict):
+        return None
+    profile = _metric_key(str(policy.get("profile") or "unspecified"))
+    license_name = _metric_key(str(policy.get("license") or "unspecified"))
+    use_policy = _metric_key(str(policy.get("use_policy") or "review_license_before_use"))
+    gated = str(bool(policy.get("gated"))).lower()
+    return (
+        f"profile={profile}|license={license_name}|"
+        f"gated={gated}|use_policy={use_policy}"
+    )
 
 
 def _metric_key(value: str) -> str:

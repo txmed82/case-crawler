@@ -227,6 +227,7 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.imaging_modality_counts == {"XR": 2}
     assert profile.imaging_body_region_counts == {"chest": 2}
     assert profile.imaging_backend_counts == {"placeholder": 2}
+    assert profile.imaging_model_policy_counts == {}
     assert profile.imaging_label_counts == {"effusion": 2, "opacity": 2}
     assert profile.imaging_label_pair_counts == {"effusion|opacity": 2}
     assert profile.approved_rate == 1.0
@@ -296,6 +297,8 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "imaging_body_region_overlap",
         "imaging_backend_overlap",
         "imaging_backend_distribution",
+        "imaging_model_policy_overlap",
+        "imaging_model_policy_distribution",
         "imaging_label_overlap",
         "imaging_label_distribution",
         "imaging_label_pair_overlap",
@@ -400,6 +403,59 @@ def test_dataset_benchmark_compares_imaging_generation_backends():
     }
     assert backend_metric.score == 0.0
     assert "imaging_backend_overlap" in report.failing_metrics
+
+
+def test_dataset_benchmark_compares_imaging_model_policies():
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "metadata": {
+                    "imaging_model_policy": {
+                        "profile": "medisyn",
+                        "model_id": "hiesingerlab/MediSyn",
+                        "license": "cc-by-nc-nd-4.0",
+                        "gated": False,
+                        "use_policy": "non_commercial_no_derivatives_review_before_release",
+                    }
+                }
+            }
+        )
+    ]
+    reference = [
+        _record("ref-1", "ds-ref").model_copy(
+            update={
+                "metadata": {
+                    "imaging_model_policy": {
+                        "profile": "cxr_pneumonia_dreambooth",
+                        "model_id": "chimbiwide/cxr-pneumonia-dreambooth",
+                        "license": "openrail++",
+                        "gated": False,
+                        "use_policy": "openrail_review_outputs_before_release",
+                    }
+                }
+            }
+        )
+    ]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    overlap_metric = next(
+        metric for metric in report.metrics if metric.name == "imaging_model_policy_overlap"
+    )
+    distribution_metric = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "imaging_model_policy_distribution"
+    )
+
+    assert report.generated_profile.imaging_model_policy_counts == {
+        (
+            "profile=medisyn|license=cc-by-nc-nd-4.0|gated=false|"
+            "use_policy=non commercial no derivatives review before release"
+        ): 1
+    }
+    assert overlap_metric.score == 0.0
+    assert distribution_metric.score == 0.0
+    assert "imaging_model_policy_overlap" in report.failing_metrics
 
 
 def test_dataset_benchmark_flags_numeric_lab_and_vital_drift():
