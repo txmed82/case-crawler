@@ -5,7 +5,7 @@ from casecrawler.generation.structured_generator import (
     list_clinical_profile_catalog,
 )
 from casecrawler.models.dataset import ExportFormat, GenerationRequest
-from casecrawler.models.synthetic import Modality
+from casecrawler.models.synthetic import ComplexityProfile, Modality
 
 
 def test_structured_generator_ids_are_scoped_to_dataset_id():
@@ -235,6 +235,36 @@ def test_structured_generator_adds_furosemide_for_heart_failure_topic_variant():
     record = StructuredGenerator().generate("ds-one", req, 0)
 
     assert any(medication.name == "Furosemide" for medication in record.medication_history)
+
+
+def test_structured_generator_complexity_changes_artifact_density():
+    generator = StructuredGenerator()
+
+    moderate = generator.generate(
+        "ds-one",
+        GenerationRequest(topic="sepsis", complexity=ComplexityProfile.MODERATE),
+        0,
+    )
+    complex_record = generator.generate(
+        "ds-one",
+        GenerationRequest(topic="sepsis", complexity=ComplexityProfile.COMPLEX),
+        0,
+    )
+    rare = generator.generate(
+        "ds-one",
+        GenerationRequest(topic="sepsis", complexity=ComplexityProfile.RARE),
+        0,
+    )
+
+    assert len(complex_record.encounters[0].diagnoses) > len(moderate.encounters[0].diagnoses)
+    assert len(complex_record.labs) > len(moderate.labs)
+    assert len(complex_record.medication_history) > len(moderate.medication_history)
+    assert any(
+        diagnosis.display == "distributive shock with disseminated intravascular coagulation"
+        for diagnosis in rare.encounters[0].diagnoses
+    )
+    assert any(lab.name == "Fibrinogen" for lab in rare.labs)
+    assert any(medication.name == "Norepinephrine" for medication in rare.medication_history)
 
 
 def test_structured_generator_applies_age_and_sex_cohort_constraints():

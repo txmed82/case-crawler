@@ -10,6 +10,7 @@ from uuid import NAMESPACE_URL, uuid5
 from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import (
     Code,
+    ComplexityProfile,
     Encounter,
     LabObservation,
     MedicationStatement,
@@ -66,8 +67,10 @@ class StructuredGenerator:
                     system="synthetic",
                     code=profile.diagnosis_code,
                     display=profile.diagnosis_display,
-                )
+                ),
+                *_complexity_diagnoses(req.complexity, req.topic),
             ],
+            procedures=_complexity_procedures(req.complexity, req.topic),
         )
         include_labs = _includes_modality(req, "labs")
         include_vitals = _includes_modality(req, "vitals")
@@ -82,19 +85,22 @@ class StructuredGenerator:
             encounters=[encounter],
             labs=[
                 _lab_observation(lab, now, index)
-                for lab in profile.labs
+                for lab in [*profile.labs, *_complexity_labs(req.complexity, req.topic)]
             ]
             if include_labs
             else [],
             vitals=[
                 _vital_observation(vital, now, index)
-                for vital in profile.vitals
+                for vital in [*profile.vitals, *_complexity_vitals(req.complexity, req.topic)]
             ]
             if include_vitals
             else [],
             medication_history=[
                 _medication_statement(medication, now[:10])
-                for medication in profile.medications
+                for medication in [
+                    *profile.medications,
+                    *_complexity_medications(req.complexity, req.topic),
+                ]
             ]
             if include_medications
             else [],
@@ -232,6 +238,143 @@ def _metadata_generation_overrides(req: GenerationRequest) -> dict:
             continue
         metadata[field] = value
     return metadata
+
+
+def _complexity_diagnoses(complexity: ComplexityProfile, topic: str) -> list[Code]:
+    if complexity in {ComplexityProfile.SIMPLE, ComplexityProfile.MODERATE}:
+        return []
+    diagnoses = [
+        Code(
+            system="synthetic",
+            code="type_2_diabetes_mellitus",
+            display="type 2 diabetes mellitus",
+        ),
+        Code(
+            system="synthetic",
+            code="chronic_kidney_disease",
+            display="chronic kidney disease",
+        ),
+    ]
+    if complexity == ComplexityProfile.RARE:
+        diagnoses.append(
+            Code(
+                system="synthetic",
+                code=_rare_complication_code(topic),
+                display=_rare_complication_display(topic),
+            )
+        )
+    return diagnoses
+
+
+def _complexity_procedures(complexity: ComplexityProfile, topic: str) -> list[Code]:
+    if complexity == ComplexityProfile.SIMPLE:
+        return []
+    if complexity == ComplexityProfile.RARE:
+        return [
+            Code(
+                system="synthetic",
+                code=_rare_procedure_code(topic),
+                display=_rare_procedure_display(topic),
+            )
+        ]
+    if complexity == ComplexityProfile.COMPLEX:
+        return [
+            Code(
+                system="synthetic",
+                code="specialty_consultation",
+                display="specialty consultation",
+            )
+        ]
+    return []
+
+
+def _complexity_labs(complexity: ComplexityProfile, topic: str) -> list[dict]:
+    if complexity in {ComplexityProfile.SIMPLE, ComplexityProfile.MODERATE}:
+        return []
+    labs = [
+        _lab("Albumin", 2.8, "g/dL", reference_low=3.5, reference_high=5.0, flag="L", step=-0.1),
+        _lab("Magnesium", 1.5, "mg/dL", reference_low=1.7, reference_high=2.4, flag="L", step=-0.1),
+    ]
+    if complexity == ComplexityProfile.RARE:
+        labs.append(_rare_lab(topic))
+    return labs
+
+
+def _complexity_vitals(complexity: ComplexityProfile, topic: str) -> list[dict]:
+    if complexity in {ComplexityProfile.SIMPLE, ComplexityProfile.MODERATE}:
+        return []
+    vitals = [_vital("Pain score", 7, "0-10", step=1)]
+    if complexity == ComplexityProfile.RARE:
+        vitals.append(_vital("Mean arterial pressure", 62, "mmHg", step=-2))
+    return vitals
+
+
+def _complexity_medications(complexity: ComplexityProfile, topic: str) -> list[dict]:
+    if complexity in {ComplexityProfile.SIMPLE, ComplexityProfile.MODERATE}:
+        return []
+    medications = [
+        _med("Insulin glargine", rxnorm="274783", dose="20 units", route="subcutaneous", frequency="nightly"),
+        _med("Heparin prophylaxis", rxnorm="5224", dose="5000 units", route="subcutaneous", frequency="every 8 hours"),
+    ]
+    if complexity == ComplexityProfile.RARE:
+        medications.append(_rare_medication(topic))
+    return medications
+
+
+def _rare_complication_code(topic: str) -> str:
+    return re.sub(r"\W+", "_", _rare_complication_display(topic).lower()).strip("_")
+
+
+def _rare_complication_display(topic: str) -> str:
+    normalized = topic.lower()
+    if "pneumonia" in normalized:
+        return "necrotizing pneumonia"
+    if "heart failure" in normalized:
+        return "cardiorenal syndrome"
+    if "diabetic ketoacidosis" in normalized or "dka" in normalized:
+        return "cerebral edema"
+    if "stroke" in normalized:
+        return "basilar artery occlusion"
+    if "sepsis" in normalized:
+        return "distributive shock with disseminated intravascular coagulation"
+    return "rare disease complication"
+
+
+def _rare_procedure_code(topic: str) -> str:
+    return re.sub(r"\W+", "_", _rare_procedure_display(topic).lower()).strip("_")
+
+
+def _rare_procedure_display(topic: str) -> str:
+    normalized = topic.lower()
+    if "stroke" in normalized:
+        return "mechanical thrombectomy evaluation"
+    if "heart failure" in normalized:
+        return "right heart catheterization"
+    if "sepsis" in normalized:
+        return "central venous catheter placement"
+    return "advanced diagnostic consultation"
+
+
+def _rare_lab(topic: str) -> dict:
+    normalized = topic.lower()
+    if "sepsis" in normalized:
+        return _lab("Fibrinogen", 95, "mg/dL", reference_low=200, reference_high=400, flag="L", step=-10)
+    if "heart failure" in normalized:
+        return _lab("Mixed venous oxygen saturation", 52, "%", reference_low=60, reference_high=80, flag="L", step=-2)
+    if "stroke" in normalized:
+        return _lab("Anti-Xa level", 0.1, "IU/mL", reference_low=0.3, reference_high=0.7, flag="L", step=0.0)
+    return _lab("Ferritin", 1850, "ng/mL", reference_low=20, reference_high=300, flag="H", step=120)
+
+
+def _rare_medication(topic: str) -> dict:
+    normalized = topic.lower()
+    if "sepsis" in normalized:
+        return _med("Norepinephrine", rxnorm="7512", dose="0.08 mcg/kg/min", route="IV", frequency="continuous")
+    if "heart failure" in normalized:
+        return _med("Dobutamine", rxnorm="3616", dose="2.5 mcg/kg/min", route="IV", frequency="continuous")
+    if "stroke" in normalized:
+        return _med("Alteplase", rxnorm="8410", dose="0.9 mg/kg", route="IV", frequency="once")
+    return _med("Specialty-directed rescue therapy", route="IV", frequency="per protocol")
 
 
 def _profile_for_topic(topic: str) -> ClinicalProfile:
