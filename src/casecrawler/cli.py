@@ -26,7 +26,7 @@ import casecrawler.sources.firecrawl  # noqa: F401
 @click.group()
 @click.option("--config", "config_path", default=None, help="Path to config.yaml")
 def cli(config_path: str | None) -> None:
-    """CaseCrawler — Medical knowledge ingestion engine."""
+    """CaseCrawler — validated synthetic healthcare dataset engine."""
     load_config(config_path)
 
 

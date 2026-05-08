@@ -1,8 +1,14 @@
 # CaseCrawler Case Generation Pipeline — Design Spec
 
 **Date:** 2026-04-08
-**Status:** Draft
+**Status:** Archived legacy concept
 **Depends on:** Ingestion Engine (v1, complete)
+
+> This spec is retained only as historical design context. It is superseded by
+> `docs/superpowers/plans/2026-05-06-healthcare-synthetic-data-platform.md`.
+> CaseCrawler's current product direction is a dataset-first synthetic
+> healthcare data engine for AI training and evaluation, not a medical education
+> case player.
 
 ---
 

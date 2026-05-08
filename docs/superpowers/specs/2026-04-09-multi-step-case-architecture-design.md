@@ -1,9 +1,14 @@
 # Multi-Step Case Architecture for AI Training Data
 
 **Date:** 2026-04-09
-**Status:** Draft
+**Status:** Archived legacy concept
 **Primary use case:** AI training (synthetic clinical reasoning episodes)
-**Secondary use case:** Trainee education (interactive multi-step simulation)
+
+> This spec is retained only as historical design context. It is superseded by
+> `docs/superpowers/plans/2026-05-06-healthcare-synthetic-data-platform.md`.
+> CaseCrawler's current product direction is a dataset-first synthetic
+> healthcare data engine for AI training and evaluation, not a medical education
+> case player.
 
 ## Problem
 
