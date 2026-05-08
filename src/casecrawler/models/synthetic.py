@@ -95,6 +95,7 @@ class TimeSeriesPoint(StrictModel):
 class TimeSeriesChannel(StrictModel):
     name: str
     unit: str
+    generation_backend: str = "deterministic"
     sampling_rate_hz: float | None = None
     points: list[TimeSeriesPoint]
 

@@ -29,6 +29,7 @@ class CohortProfile(BaseModel):
     medication_route_counts: dict[str, int] = Field(default_factory=dict)
     medication_status_counts: dict[str, int] = Field(default_factory=dict)
     time_series_channel_counts: dict[str, int] = Field(default_factory=dict)
+    time_series_backend_counts: dict[str, int] = Field(default_factory=dict)
     mean_time_series_points: float | None = None
     mean_time_series_duration_hours: float | None = None
     imaging_modality_counts: dict[str, int] = Field(default_factory=dict)

@@ -110,6 +110,7 @@ class TimeSeriesGenerator:
                 TimeSeriesChannel(
                     name=name,
                     unit=units[name],
+                    generation_backend="deterministic",
                     sampling_rate_hz=None,
                     points=series_points,
                 )
@@ -141,8 +142,10 @@ class TimeSeriesGenerator:
             raise RuntimeError("External time-series backend returned invalid JSON.") from exc
         if not isinstance(raw_channels, list):
             raise RuntimeError("External time-series backend must return a JSON list.")
+        backend = f"external:{' '.join(self._external_command)}"
         generated_channels = [
-            TimeSeriesChannel.model_validate(channel) for channel in raw_channels
+            _external_channel(channel, backend=backend)
+            for channel in raw_channels
         ]
         return record.model_copy(
             update={"time_series": [*record.time_series, *generated_channels]}
@@ -238,8 +241,17 @@ def _waveform_channel(
     return TimeSeriesChannel(
         name=name,
         unit=spec["unit"],
+        generation_backend="deterministic",
         sampling_rate_hz=sampling_rate_hz,
         points=series_points,
+    )
+
+
+def _external_channel(channel: object, *, backend: str) -> TimeSeriesChannel:
+    if not isinstance(channel, dict):
+        return TimeSeriesChannel.model_validate(channel)
+    return TimeSeriesChannel.model_validate(
+        {"generation_backend": backend, **channel}
     )
 
 

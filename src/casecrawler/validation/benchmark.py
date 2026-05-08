@@ -163,6 +163,16 @@ class DatasetBenchmark:
                 set(generated_profile.time_series_channel_counts),
                 set(reference_profile.time_series_channel_counts),
             ),
+            _jaccard_metric(
+                "time_series_backend_overlap",
+                set(generated_profile.time_series_backend_counts),
+                set(reference_profile.time_series_backend_counts),
+            ),
+            _distribution_metric(
+                "time_series_backend_distribution",
+                generated_profile.time_series_backend_counts,
+                reference_profile.time_series_backend_counts,
+            ),
             _closeness_metric(
                 "mean_time_series_points",
                 generated_profile.mean_time_series_points,
@@ -264,6 +274,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     medication_route_counts: Counter[str] = Counter()
     medication_status_counts: Counter[str] = Counter()
     time_series_channel_counts: Counter[str] = Counter()
+    time_series_backend_counts: Counter[str] = Counter()
     imaging_modality_counts: Counter[str] = Counter()
     imaging_body_region_counts: Counter[str] = Counter()
     imaging_label_counts: Counter[str] = Counter()
@@ -315,6 +326,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             medication_status_counts[medication.status or "unknown"] += 1
         for channel in record.time_series:
             time_series_channel_counts[channel.name] += 1
+            time_series_backend_counts[channel.generation_backend] += 1
             time_series_point_counts.append(len(channel.points))
             duration = _channel_duration_hours(channel)
             if duration is not None:
@@ -364,6 +376,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         medication_route_counts=dict(sorted(medication_route_counts.items())),
         medication_status_counts=dict(sorted(medication_status_counts.items())),
         time_series_channel_counts=dict(sorted(time_series_channel_counts.items())),
+        time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
         mean_time_series_points=_mean(time_series_point_counts),
         mean_time_series_duration_hours=_mean_float(time_series_durations),
         imaging_modality_counts=dict(sorted(imaging_modality_counts.items())),
