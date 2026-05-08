@@ -248,11 +248,15 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     assert response.headers["content-type"] == "application/zip"
     dataset_id = response.headers["x-casecrawler-dataset-id"]
     with zipfile.ZipFile(BytesIO(response.content)) as archive:
-        assert sorted(archive.namelist()) == [
+        names = sorted(archive.namelist())
+        image_files = [name for name in names if name.startswith("images/")]
+        assert len(image_files) == 1
+        assert names == [
             "benchmark_profile.json",
             "benchmark_report.json",
             "benchmark_suite_report.json",
             "dataset_card.md",
+            image_files[0],
             "manifest.json",
             "model_card.md",
             "quality_report.json",
@@ -271,6 +275,8 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     assert manifest["dataset_id"] == dataset_id
     assert manifest["export_format"] == "multimodal_jsonl"
     assert manifest["record_count"] == 1
+    assert next(iter(manifest["image_artifacts"].values()))["package_path"] == image_files[0]
+    assert image_files[0] in manifest["files"]
     assert quality["multimodal_release_ready"] is True
     assert benchmark["passed"] is True
     assert benchmark_suite["passed"] is True

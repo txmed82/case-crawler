@@ -181,6 +181,39 @@ def test_export_jsonl_split_package_writes_manifest_and_stable_splits(tmp_path):
     }
 
 
+def test_export_jsonl_split_package_copies_file_backed_images(tmp_path):
+    image_path = tmp_path / "source-cxr.png"
+    image_path.write_bytes(_png_bytes(width=32, height=32))
+    record = _multimodal_record().model_copy(
+        update={
+            "dataset_id": "ds-split",
+            "imaging": [
+                _multimodal_record().imaging[0].model_copy(
+                    update={"file_path": str(image_path)}
+                )
+            ],
+        }
+    )
+
+    manifest = export_jsonl_split_package(
+        [record],
+        tmp_path / "package",
+        "multimodal_jsonl",
+        dataset_id="ds-split",
+    )
+    image_key = "rec-1:img-1"
+    package_path = manifest["image_artifacts"][image_key]["package_path"]
+    copied_image = tmp_path / "package" / package_path
+
+    assert package_path == "images/rec-1-img-1.png"
+    assert copied_image.read_bytes() == image_path.read_bytes()
+    assert package_path in manifest["files"]
+    assert manifest["files"][package_path]["byte_size"] == image_path.stat().st_size
+    report = verify_jsonl_split_package(tmp_path / "package")
+    assert report["valid"] is True
+    assert report["checked_files"][package_path]["exists"] is True
+
+
 def test_verify_jsonl_split_package_accepts_valid_moved_package(tmp_path):
     records = [
         _multimodal_record().model_copy(

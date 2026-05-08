@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import shutil
 import tempfile
 import zipfile
 from collections.abc import Iterable
@@ -1120,6 +1121,7 @@ def export_jsonl_split_package(
             "record_ids": [record.record_id for record in split_items],
         }
     artifact_entries = _write_audit_artifacts(output_path, audit_artifacts or {})
+    image_artifact_entries, image_artifacts = _copy_image_artifacts(record_list, output_path)
     files = _package_file_metadata(
         {
             **{
@@ -1127,6 +1129,7 @@ def export_jsonl_split_package(
                 for split_name, entry in split_entries.items()
             },
             **artifact_entries,
+            **image_artifact_entries,
         }
     )
 
@@ -1144,6 +1147,7 @@ def export_jsonl_split_package(
         "example_count": total_examples,
         "splits": split_entries,
         "audit_artifacts": artifact_entries,
+        "image_artifacts": image_artifacts,
         "files": files,
         "synthetic": True,
     }
@@ -1300,7 +1304,7 @@ def _verify_package_files(
         )
         return checked_files
     for file_name, metadata in sorted(files.items()):
-        if not isinstance(file_name, str) or Path(file_name).name != file_name:
+        if not isinstance(file_name, str) or not _is_safe_package_path(file_name):
             issues.append(
                 {
                     "field": "files",
@@ -2052,6 +2056,81 @@ def _package_file_metadata(file_paths: dict[str, str]) -> dict[str, dict[str, An
             "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         }
     return metadata
+
+
+def _copy_image_artifacts(
+    records: list[SyntheticRecord],
+    output_path: Path,
+) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+    entries: dict[str, str] = {}
+    artifacts: dict[str, dict[str, str]] = {}
+    image_dir = output_path / "images"
+    seen_package_paths: set[str] = set()
+    for record in records:
+        for asset in record.imaging:
+            if not asset.file_path:
+                continue
+            source_path = Path(asset.file_path)
+            if not source_path.is_file():
+                continue
+            image_dir.mkdir(parents=True, exist_ok=True)
+            package_path = _image_package_path(
+                record_id=record.record_id,
+                image_id=asset.image_id,
+                source_path=source_path,
+                seen_package_paths=seen_package_paths,
+            )
+            target_path = output_path / package_path
+            shutil.copyfile(source_path, target_path)
+            key = f"{record.record_id}:{asset.image_id}"
+            entries[package_path] = str(target_path)
+            artifacts[key] = {
+                "record_id": record.record_id,
+                "image_id": asset.image_id,
+                "package_path": package_path,
+                "source_path": str(source_path),
+            }
+    return entries, artifacts
+
+
+def _image_package_path(
+    *,
+    record_id: str,
+    image_id: str,
+    source_path: Path,
+    seen_package_paths: set[str],
+) -> str:
+    suffix = source_path.suffix.lower()
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp"}:
+        suffix = ".png"
+    stem = _package_slug(f"{record_id}-{image_id}") or "image"
+    candidate = f"images/{stem}{suffix}"
+    counter = 2
+    while candidate in seen_package_paths:
+        candidate = f"images/{stem}-{counter}{suffix}"
+        counter += 1
+    seen_package_paths.add(candidate)
+    return candidate
+
+
+def _package_slug(value: str) -> str:
+    slug = []
+    for char in value.lower():
+        if char.isalnum():
+            slug.append(char)
+        elif char in {"-", "_"}:
+            slug.append("-")
+    return "-".join("".join(slug).split("-"))
+
+
+def _is_safe_package_path(value: str) -> bool:
+    path = Path(value)
+    return (
+        bool(value)
+        and not path.is_absolute()
+        and ".." not in path.parts
+        and all(part not in {"", "."} for part in path.parts)
+    )
 
 
 def _write_audit_artifacts(
