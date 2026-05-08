@@ -218,6 +218,8 @@ async def test_synthetic_pipeline_uses_configured_diffusers_backend(tmp_path):
     assert result["records"][0].imaging[0].generation_backend == "diffusers:test"
     assert imaging_generator.diffusers_calls[0][0] == str(tmp_path)
     assert "right lower lobe opacity" in imaging_generator.diffusers_calls[0][1]
+    assert f"{result['records'][0].patient.age} year old" in imaging_generator.diffusers_calls[0][1]
+    assert result["records"][0].patient.sex in imaging_generator.diffusers_calls[0][1]
     assert imaging_generator.diffusers_calls[0][2:] == ("XR", "chest")
 
 
