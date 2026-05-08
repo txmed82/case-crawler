@@ -4,6 +4,7 @@ import {
   datasetExportUrl,
   fetchDataset,
   fetchDatasetBenchmark,
+  fetchDatasetBenchmarkPlan,
   fetchDatasetCard,
   fetchDatasetExports,
   fetchDatasetQuality,
@@ -16,6 +17,7 @@ import type {
   DatasetManifest,
   ExportFormat,
   ExportManifest,
+  BenchmarkPlanReadiness,
   BenchmarkReport,
   DatasetQualityReport,
   HumanReviewStatus,
@@ -126,6 +128,15 @@ export default function DatasetsPage() {
         benchmarkMinMetricScore
       ),
     enabled: Boolean(activeDatasetId && referenceDatasetId),
+  });
+  const {
+    data: benchmarkPlanReadiness,
+    isLoading: isBenchmarkPlanLoading,
+    error: benchmarkPlanError,
+  } = useQuery({
+    queryKey: ["dataset-benchmark-plan", activeDatasetId],
+    queryFn: () => fetchDatasetBenchmarkPlan(activeDatasetId as string),
+    enabled: Boolean(activeDatasetId),
   });
   const reviewMutation = useMutation({
     mutationFn: ({
@@ -242,30 +253,32 @@ export default function DatasetsPage() {
                           effectiveExportFormat,
                           referenceDatasetId
                             ? {
-                      referenceDatasetId,
-                      minOverallScore: benchmarkMinOverallScore,
-                      minMetricScore: benchmarkMinMetricScore,
-                    }
+                                referenceDatasetId,
+                                minOverallScore: benchmarkMinOverallScore,
+                                minMetricScore: benchmarkMinMetricScore,
+                              }
                             : undefined
                         )}
                         className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                       >
                         {referenceDatasetId ? "Export Gated" : "Export"}
                       </a>
-                      {hasAutoBenchmarkPlan && !referenceDatasetId && (
-                        <a
-                          href={datasetExportUrl(
-                            detail.manifest.dataset_id,
-                            effectiveExportFormat,
-                            {
-                              autoBenchmark: true,
-                            }
-                          )}
-                          className="rounded-md border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
-                        >
-                          Export Auto-Gated
-                        </a>
-                      )}
+                      {hasAutoBenchmarkPlan &&
+                        !referenceDatasetId &&
+                        benchmarkPlanReadiness?.ready && (
+                          <a
+                            href={datasetExportUrl(
+                              detail.manifest.dataset_id,
+                              effectiveExportFormat,
+                              {
+                                autoBenchmark: true,
+                              }
+                            )}
+                            className="rounded-md border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                          >
+                            Export Auto-Gated
+                          </a>
+                        )}
                     </div>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -326,6 +339,9 @@ export default function DatasetsPage() {
                   referenceDatasetId={referenceDatasetId}
                   onReferenceDatasetChange={setReferenceDatasetId}
                   recipeBenchmarkPlan={benchmarkPlan}
+                  benchmarkPlanReadiness={benchmarkPlanReadiness ?? null}
+                  isBenchmarkPlanLoading={isBenchmarkPlanLoading}
+                  benchmarkPlanError={benchmarkPlanError}
                   benchmark={benchmark ?? null}
                   isLoading={isBenchmarkLoading}
                   error={benchmarkError}
@@ -366,6 +382,9 @@ function BenchmarkPanel({
   referenceDatasetId,
   onReferenceDatasetChange,
   recipeBenchmarkPlan,
+  benchmarkPlanReadiness,
+  isBenchmarkPlanLoading,
+  benchmarkPlanError,
   benchmark,
   isLoading,
   error,
@@ -379,6 +398,9 @@ function BenchmarkPanel({
   referenceDatasetId: string;
   onReferenceDatasetChange: (datasetId: string) => void;
   recipeBenchmarkPlan: RecipeBenchmarkPlan;
+  benchmarkPlanReadiness: BenchmarkPlanReadiness | null;
+  isBenchmarkPlanLoading: boolean;
+  benchmarkPlanError: unknown;
   benchmark: BenchmarkReport | null;
   isLoading: boolean;
   error: unknown;
@@ -405,6 +427,11 @@ function BenchmarkPanel({
   const selectRecommendedReference = () => {
     const [firstRecommended] = recommendedReferenceOptions;
     if (firstRecommended) onReferenceDatasetChange(firstRecommended.dataset_id);
+  };
+  const selectResolvedReference = () => {
+    if (benchmarkPlanReadiness?.resolved_reference_dataset_id) {
+      onReferenceDatasetChange(benchmarkPlanReadiness.resolved_reference_dataset_id);
+    }
   };
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -480,6 +507,39 @@ function BenchmarkPanel({
                   {formatMetricValue(recipeBenchmarkPlan.thresholds.minMetricScore)}
                 </p>
               )}
+              {isBenchmarkPlanLoading && (
+                <p className="mt-2 text-xs text-blue-800">Checking imported references...</p>
+              )}
+              {Boolean(benchmarkPlanError) && (
+                <p className="mt-2 text-xs text-red-700">
+                  {benchmarkPlanError instanceof Error
+                    ? benchmarkPlanError.message
+                    : "Failed to load benchmark plan readiness."}
+                </p>
+              )}
+              {benchmarkPlanReadiness && (
+                <div className="mt-2 space-y-1 text-xs text-blue-800">
+                  <p>
+                    Readiness:{" "}
+                    <span className="font-medium">
+                      {benchmarkPlanReadiness.ready ? "ready" : "missing reference import"}
+                    </span>
+                  </p>
+                  {benchmarkPlanReadiness.resolved_reference_dataset_id && (
+                    <p className="break-words">
+                      Resolved reference:{" "}
+                      {benchmarkPlanReadiness.resolved_reference_key ?? "unknown"} |{" "}
+                      {benchmarkPlanReadiness.resolved_reference_dataset_id}
+                    </p>
+                  )}
+                  {!benchmarkPlanReadiness.ready &&
+                    benchmarkPlanReadiness.missing_reference_keys.length > 0 && (
+                      <p className="break-words">
+                        Missing imports: {benchmarkPlanReadiness.missing_reference_keys.join(", ")}
+                      </p>
+                    )}
+                </div>
+              )}
             </div>
             {recipeBenchmarkPlan.thresholds && (
               <button
@@ -497,6 +557,15 @@ function BenchmarkPanel({
                 className="shrink-0 rounded-md border border-blue-300 bg-white px-3 py-2 text-xs font-medium text-blue-800 hover:bg-blue-100"
               >
                 Select reference
+              </button>
+            )}
+            {benchmarkPlanReadiness?.resolved_reference_dataset_id && (
+              <button
+                type="button"
+                onClick={selectResolvedReference}
+                className="shrink-0 rounded-md border border-blue-300 bg-white px-3 py-2 text-xs font-medium text-blue-800 hover:bg-blue-100"
+              >
+                Use resolved
               </button>
             )}
           </div>
