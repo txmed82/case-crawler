@@ -102,6 +102,15 @@ def validate_image_file_asset(asset: ImagingAsset) -> list[ValidationIssue]:
                 ),
             )
         )
+    elif not _has_supported_image_signature(path):
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                modality=Modality.IMAGING,
+                field=f"{field_prefix}.file_signature",
+                message=f"Generated image file signature is invalid: {asset.file_path}.",
+            )
+        )
     return issues
 
 
@@ -145,7 +154,26 @@ _RADIOLOGY_SYNONYMS: dict[str, set[str]] = {
     "pulmonary edema": {"edema", "interstitial edema"},
 }
 
-_SUPPORTED_IMAGE_EXTENSIONS = {".dcm", ".jpeg", ".jpg", ".png", ".tif", ".tiff"}
+_SUPPORTED_IMAGE_EXTENSIONS = {".dcm", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
+
+
+def _has_supported_image_signature(path: Path) -> bool:
+    suffix = path.suffix.lower()
+    if suffix == ".dcm":
+        return True
+    try:
+        signature = path.read_bytes()[:16]
+    except OSError:
+        return False
+    if suffix == ".png":
+        return signature.startswith(b"\x89PNG\r\n\x1a\n")
+    if suffix in {".jpg", ".jpeg"}:
+        return signature.startswith(b"\xff\xd8\xff")
+    if suffix in {".tif", ".tiff"}:
+        return signature.startswith((b"II*\x00", b"MM\x00*"))
+    if suffix == ".webp":
+        return signature.startswith(b"RIFF") and signature[8:12] == b"WEBP"
+    return False
 
 
 class BiomedCLIPImageValidator:
