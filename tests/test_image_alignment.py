@@ -1,3 +1,6 @@
+import struct
+import zlib
+
 from casecrawler.models.synthetic import Code, ImagingAsset
 from casecrawler.validation.image_alignment import (
     BiomedCLIPImageValidator,
@@ -169,11 +172,21 @@ def test_radiology_label_consistency_flags_negated_label():
 
 def test_validate_image_file_asset_accepts_supported_image_signature(tmp_path):
     image_path = tmp_path / "image.png"
-    image_path.write_bytes(b"\x89PNG\r\n\x1a\nsynthetic-image")
+    image_path.write_bytes(_png_bytes(width=64, height=64))
 
     issues = validate_image_file_asset(_asset(str(image_path)))
 
     assert issues == []
+
+
+def test_validate_image_file_asset_rejects_tiny_raster_image(tmp_path):
+    image_path = tmp_path / "image.png"
+    image_path.write_bytes(_png_bytes(width=16, height=16))
+
+    issues = validate_image_file_asset(_asset(str(image_path)))
+
+    assert any(issue.field == "imaging.img-1.dimensions" for issue in issues)
+    assert any("at least 32x32" in issue.message for issue in issues)
 
 
 def test_validate_image_file_asset_rejects_invalid_image_signature(tmp_path):
@@ -183,3 +196,23 @@ def test_validate_image_file_asset_rejects_invalid_image_signature(tmp_path):
     issues = validate_image_file_asset(_asset(str(image_path)))
 
     assert any(issue.field == "imaging.img-1.file_signature" for issue in issues)
+
+
+def _png_bytes(*, width: int, height: int) -> bytes:
+    raw = b"".join(b"\x00" + (b"\x80" * width) for _ in range(height))
+    chunks = [
+        b"\x89PNG\r\n\x1a\n",
+        _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)),
+        _png_chunk(b"IDAT", zlib.compress(raw)),
+        _png_chunk(b"IEND", b""),
+    ]
+    return b"".join(chunks)
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + chunk_type
+        + data
+        + struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
+    )

@@ -1,4 +1,6 @@
 import json
+import struct
+import zlib
 
 from casecrawler.export.fine_tuning import (
     export_dpo_record,
@@ -250,7 +252,7 @@ def test_export_multimodal_record_preserves_imaging_labels_and_alignment_tasks()
 
 def test_export_multimodal_record_inlines_existing_image_bytes(tmp_path):
     image_path = tmp_path / "image.png"
-    image_path.write_bytes(b"synthetic image bytes")
+    image_path.write_bytes(_png_bytes(width=64, height=48))
     record = _multimodal_record().model_copy(
         update={
             "imaging": [
@@ -263,8 +265,13 @@ def test_export_multimodal_record_inlines_existing_image_bytes(tmp_path):
 
     exported = export_multimodal_record(record)
 
-    assert exported["images"][0]["image_base64"] == "c3ludGhldGljIGltYWdlIGJ5dGVz"
-    assert exported["images"][0]["image_mime_type"] == "image/png"
+    image = exported["images"][0]
+    assert image["image_base64"]
+    assert image["image_metadata"]["mime_type"] == "image/png"
+    assert image["image_metadata"]["width"] == 64
+    assert image["image_metadata"]["height"] == 48
+    assert image["image_metadata"]["byte_size"] == image_path.stat().st_size
+    assert len(image["image_metadata"]["sha256"]) == 64
 
 
 def test_export_fhir_record_contains_training_bundle_resources():
@@ -676,4 +683,24 @@ def _multimodal_record() -> SyntheticRecord:
             generator="unit-test",
             created_at="2026-05-06T10:00:00",
         ),
+    )
+
+
+def _png_bytes(*, width: int, height: int) -> bytes:
+    raw = b"".join(b"\x00" + (b"\x80" * width) for _ in range(height))
+    chunks = [
+        b"\x89PNG\r\n\x1a\n",
+        _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)),
+        _png_chunk(b"IDAT", zlib.compress(raw)),
+        _png_chunk(b"IEND", b""),
+    ]
+    return b"".join(chunks)
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + chunk_type
+        + data
+        + struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
     )
