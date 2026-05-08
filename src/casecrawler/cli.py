@@ -983,6 +983,38 @@ def datasets_quality(dataset_id: str) -> None:
     click.echo(report.model_dump_json(indent=2))
 
 
+@datasets_group.command("capabilities")
+def datasets_capabilities() -> None:
+    """Show dataset generation and strict release capabilities."""
+    from casecrawler.capabilities import release_coverage_requirements
+    from casecrawler.generation.recipes import list_generation_recipes
+    from casecrawler.models.dataset import ExportFormat
+    from casecrawler.models.synthetic import ComplexityProfile, Modality
+
+    payload = {
+        "modalities": [modality.value for modality in Modality],
+        "complexity_profiles": [profile.value for profile in ComplexityProfile],
+        "export_formats": [export_format.value for export_format in ExportFormat],
+        "generation_recipes": [
+            {
+                "name": recipe.name,
+                "modalities": [modality.value for modality in recipe.modalities],
+                "export_formats": [
+                    export_format.value for export_format in recipe.export_formats
+                ],
+                "recommended_reference_keys": recipe.recommended_reference_keys,
+                "benchmark_thresholds": {
+                    "min_overall_score": recipe.benchmark_min_overall_score,
+                    "min_metric_score": recipe.benchmark_min_metric_score,
+                },
+            }
+            for recipe in list_generation_recipes()
+        ],
+        "release_coverage_requirements": release_coverage_requirements(),
+    }
+    click.echo(json.dumps(payload, indent=2))
+
+
 @datasets_group.command("benchmark-plan")
 @click.argument("dataset_id")
 def datasets_benchmark_plan(dataset_id: str) -> None:

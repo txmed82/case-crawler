@@ -17,6 +17,29 @@ from casecrawler.models.synthetic import (
 from casecrawler.storage.dataset_store import DatasetStore
 
 
+def test_dataset_cli_lists_generation_capabilities(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["datasets", "capabilities"])
+
+    assert result.exit_code == 0
+    body = json.loads(result.output)
+    release_requirements = {
+        requirement["key"]: requirement["description"]
+        for requirement in body["release_coverage_requirements"]
+    }
+    assert "full_multimodal_acute_care" in {
+        recipe["name"] for recipe in body["generation_recipes"]
+    }
+    assert "multimodal_jsonl" in body["export_formats"]
+    assert "lab_reports" in release_requirements
+    assert "vital_signs_flowsheets" in release_requirements
+    assert "medication_administration_records" in release_requirements
+    assert "discharge_summaries" in release_requirements
+    assert "benchmark reference" in release_requirements["benchmark_reference"].lower()
+
+
 def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

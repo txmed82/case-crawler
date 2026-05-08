@@ -117,6 +117,7 @@ casecrawler generate-dataset "mixed acute care cohort" \
   --count 90 \
   --topic-mix "sepsis,pneumonia,heart failure exacerbation" \
   --modalities structured_ehr,clinical_text,labs,vitals,time_series
+casecrawler datasets capabilities
 casecrawler reference-datasets
 casecrawler import-reference-dataset asclepius --dataset-id ds-asclepius-ref --limit 100
 casecrawler import-reference-dataset clinical_notes_to_fhir --dataset-id ds-fhir-ref --limit 100
