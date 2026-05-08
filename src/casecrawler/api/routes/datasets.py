@@ -64,7 +64,10 @@ async def generate_dataset(req: GenerationRequest):
             detail=f"count must be less than or equal to {max_count}",
         )
 
-    result = await SyntheticPipeline().generate(req)
+    try:
+        result = await SyntheticPipeline().generate(req)
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
     store = DatasetStore()
     for record in result["records"]:
         store.save_record(record)

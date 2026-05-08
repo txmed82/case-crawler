@@ -42,6 +42,19 @@ def test_generate_dataset_api_rejects_unbounded_counts(tmp_path, monkeypatch):
     assert "less than or equal to 1" in response.json()["detail"]
 
 
+def test_generate_dataset_api_reports_unknown_recipe(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/generate",
+        json={"topic": "sepsis", "recipe": "missing"},
+    )
+
+    assert response.status_code == 422
+    assert "Unknown generation recipe" in response.json()["detail"]
+
+
 def test_dataset_api_lists_and_exports_records(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)
