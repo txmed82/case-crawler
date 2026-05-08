@@ -1225,6 +1225,7 @@ def _verify_jsonl_split_package_dir(package_path: Path) -> dict[str, Any]:
     checked_files = _verify_package_files(package_path, manifest, issues)
     split_summaries = _verify_package_splits(package_path, manifest, issues)
     _verify_package_audit_artifacts(package_path, manifest, issues)
+    quality_report = _split_package_quality_report_summary(package_path)
     return {
         "package_dir": str(package_path),
         "dataset_id": manifest.get("dataset_id"),
@@ -1233,6 +1234,25 @@ def _verify_jsonl_split_package_dir(package_path: Path) -> dict[str, Any]:
         "issues": issues,
         "checked_files": checked_files,
         "splits": split_summaries,
+        "quality_report": quality_report,
+    }
+
+
+def _split_package_quality_report_summary(package_path: Path) -> dict[str, Any] | None:
+    path = package_path / "quality_report.json"
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return {
+        "export_ready": payload.get("export_ready"),
+        "multimodal_release_ready": payload.get("multimodal_release_ready"),
+        "multimodal_release_missing": payload.get("multimodal_release_missing"),
+        "core_artifact_coverage": payload.get("core_artifact_coverage"),
     }
 
 

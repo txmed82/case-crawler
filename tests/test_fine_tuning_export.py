@@ -218,6 +218,10 @@ def test_verify_jsonl_split_package_accepts_valid_moved_package(tmp_path):
 
     assert report["valid"] is True
     assert report["dataset_id"] == "ds-split"
+    assert report["quality_report"]["multimodal_release_ready"] is False
+    assert report["quality_report"]["multimodal_release_missing"] == [
+        "benchmark_reference"
+    ]
     assert report["checked_files"]["train.jsonl"]["exists"] is True
     assert report["splits"]["train"]["example_count"] == 2
 
