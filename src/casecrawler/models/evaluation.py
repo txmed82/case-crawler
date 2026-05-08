@@ -25,6 +25,7 @@ class CohortProfile(BaseModel):
     lab_numeric_summaries: dict[str, dict[str, float | int]] = Field(default_factory=dict)
     vital_name_counts: dict[str, int] = Field(default_factory=dict)
     vital_numeric_summaries: dict[str, dict[str, float | int]] = Field(default_factory=dict)
+    procedure_name_counts: dict[str, int] = Field(default_factory=dict)
     medication_name_counts: dict[str, int] = Field(default_factory=dict)
     medication_route_counts: dict[str, int] = Field(default_factory=dict)
     medication_status_counts: dict[str, int] = Field(default_factory=dict)
