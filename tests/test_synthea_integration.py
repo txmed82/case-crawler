@@ -139,6 +139,54 @@ def test_synthea_adapter_imports_conditions_and_diagnostic_reports(tmp_path):
     assert Modality.CLINICAL_TEXT in record.modalities
 
 
+def test_synthea_adapter_imports_procedures(tmp_path):
+    bundle = {
+        "resourceType": "Bundle",
+        "entry": [
+            {
+                "resource": {
+                    "resourceType": "Patient",
+                    "id": "pat-proc",
+                    "gender": "female",
+                    "birthDate": "1980-01-01",
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Encounter",
+                    "id": "enc-proc",
+                    "period": {"start": "2026-01-01T00:00:00"},
+                    "reasonCode": [{"text": "acute coronary syndrome"}],
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Procedure",
+                    "id": "proc-1",
+                    "code": {
+                        "coding": [
+                            {
+                                "system": "http://snomed.info/sct",
+                                "code": "415070008",
+                                "display": "Percutaneous coronary intervention",
+                            }
+                        ],
+                    },
+                }
+            },
+        ],
+    }
+    path = tmp_path / "patient-procedure.json"
+    path.write_text(json.dumps(bundle))
+
+    record = SyntheaAdapter().import_fhir_bundle(str(path), dataset_id="ds-1")
+
+    assert record.encounters[0].procedures[0].code == "415070008"
+    assert record.encounters[0].procedures[0].display == (
+        "Percutaneous coronary intervention"
+    )
+
+
 def test_synthea_adapter_handles_partial_fhir_dates(tmp_path):
     bundle = {
         "resourceType": "Bundle",

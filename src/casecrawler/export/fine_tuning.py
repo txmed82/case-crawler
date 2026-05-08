@@ -390,6 +390,11 @@ def export_fhir_record(record: SyntheticRecord) -> dict[str, Any]:
         _entry(_encounter_resource(record, encounter, condition_refs))
         for encounter in record.encounters
     )
+    entries.extend(
+        _entry(_procedure_resource(record, encounter, procedure))
+        for encounter in record.encounters
+        for procedure in encounter.procedures
+    )
     entries.extend(_entry(_lab_observation_resource(record, lab)) for lab in record.labs)
     entries.extend(
         _entry(_vital_observation_resource(record, vital)) for vital in record.vitals
@@ -727,6 +732,27 @@ def _encounter_resource(
             for diagnosis in encounter.diagnoses
         ]
     return resource
+
+
+def _procedure_resource(record: SyntheticRecord, encounter, procedure) -> dict[str, Any]:
+    return {
+        "resourceType": "Procedure",
+        "id": f"{record.record_id}-procedure-{_slug(procedure.code)}",
+        "status": "completed",
+        "code": {
+            "coding": [
+                {
+                    "system": procedure.system,
+                    "code": procedure.code,
+                    "display": procedure.display,
+                }
+            ],
+            "text": procedure.display,
+        },
+        "subject": _patient_reference(record),
+        "encounter": {"reference": f"Encounter/{encounter.encounter_id}"},
+        "performedDateTime": encounter.start,
+    }
 
 
 def _lab_observation_resource(record: SyntheticRecord, lab) -> dict[str, Any]:
