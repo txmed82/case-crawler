@@ -553,6 +553,8 @@ def _source_fields(row: dict, spec: HuggingFaceReferenceDataset) -> dict:
         spec.note_field,
         spec.question_field,
         spec.answer_field,
+        spec.image_field,
+        spec.image_label_field,
     }
     return {
         str(key): value
