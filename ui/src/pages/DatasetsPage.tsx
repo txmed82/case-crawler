@@ -980,6 +980,18 @@ function QualityPanel({
               value={Object.keys(quality.diagnosis_code_counts).length}
             />
             <Metric label="PHI entities" value={Object.keys(quality.phi_entity_counts).length} />
+            <Metric
+              label="Lab signals"
+              value={Object.keys(quality.lab_numeric_summaries).length}
+            />
+            <Metric
+              label="Vital signals"
+              value={Object.keys(quality.vital_numeric_summaries).length}
+            />
+            <Metric
+              label="Series signals"
+              value={Object.keys(quality.time_series_numeric_summaries).length}
+            />
           </div>
           {quality.recommended_reference_keys.length > 0 && (
             <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">

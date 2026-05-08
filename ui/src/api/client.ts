@@ -452,10 +452,13 @@ export interface DatasetQualityReport {
   artifact_counts: Record<string, number>;
   note_type_counts: Record<string, number>;
   extracted_fact_key_counts: Record<string, number>;
+  lab_numeric_summaries: Record<string, Record<string, number>>;
+  vital_numeric_summaries: Record<string, Record<string, number>>;
   diagnosis_code_system_counts: Record<string, number>;
   diagnosis_code_counts: Record<string, number>;
   phi_entity_counts: Record<string, number>;
   time_series_backend_counts: Record<string, number>;
+  time_series_numeric_summaries: Record<string, Record<string, number>>;
   imaging_backend_counts: Record<string, number>;
   imaging_model_policy_counts: Record<string, number>;
   mean_modality_alignment_score?: number | null;

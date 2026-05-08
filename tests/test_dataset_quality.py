@@ -14,6 +14,7 @@ from casecrawler.models.synthetic import (
     TimeSeriesPoint,
     ValidationIssue,
     ValidationReport,
+    VitalObservation,
 )
 from casecrawler.validation.quality import build_dataset_quality_report
 
@@ -395,7 +396,14 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
                     effective_time="2026-01-01T00:00:00",
                 )
             ],
-            "vitals": [],
+            "vitals": [
+                VitalObservation(
+                    name="HR",
+                    value=112,
+                    unit="/min",
+                    effective_time="2026-01-01T00:00:00",
+                )
+            ],
             "medication_history": [
                 MedicationStatement(name="Ceftriaxone", route="IV", status="active")
             ],
@@ -482,6 +490,10 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
     assert report.artifact_counts["imaging_assets"] == 1
     assert report.note_type_counts == {"ed_note": 1, "radiology_report": 1}
     assert report.extracted_fact_key_counts == {"lab_values": 1, "medications": 1}
+    assert report.lab_numeric_summaries["wbc"]["mean"] == 12.0
+    assert report.vital_numeric_summaries["hr"]["mean"] == 112.0
+    assert report.time_series_numeric_summaries["heart_rate.value"]["mean"] == 100.0
+    assert report.time_series_numeric_summaries["ecg_lead_ii.millivolts"]["mean"] == 0.1
     assert report.time_series_backend_counts == {
         "deterministic": 1,
         "external:timediff-sample": 1,
@@ -497,7 +509,7 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
     }
     assert report.mean_modality_alignment_score == 0.82
     assert report.export_ready is False
-    assert "vitals.missing_artifacts" in report.issue_counts_by_field
+    assert "vitals.missing_artifacts" not in report.issue_counts_by_field
 
 
 def test_quality_report_summarizes_phi_and_diagnosis_code_signals():
