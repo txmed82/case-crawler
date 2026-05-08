@@ -279,6 +279,39 @@ async def test_synthetic_pipeline_uses_request_imaging_model_profile(monkeypatch
 
     assert created == [("hf/test-cxr", "cxr_pneumonia_dreambooth")]
     assert result["records"][0].imaging[0].generation_backend == "diffusers:test"
+    assert result["records"][0].metadata["imaging_model_policy"] == {
+        "profile": "cxr_pneumonia_dreambooth",
+        "model_id": "chimbiwide/cxr-pneumonia-dreambooth",
+        "license": "openrail++",
+        "gated": False,
+        "use_policy": "openrail_review_outputs_before_release",
+    }
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_records_broader_imaging_model_policy(tmp_path):
+    pipeline = SyntheticPipeline(
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="appendicitis",
+            count=1,
+            modalities=[Modality.IMAGING],
+            imaging_model_profile="medisyn",
+        )
+    )
+
+    assert result["records"][0].metadata["imaging_model_policy"] == {
+        "profile": "medisyn",
+        "model_id": "hiesingerlab/MediSyn",
+        "license": "cc-by-nc-nd-4.0",
+        "gated": False,
+        "use_policy": "non_commercial_no_derivatives_review_before_release",
+    }
 
 
 @pytest.mark.asyncio

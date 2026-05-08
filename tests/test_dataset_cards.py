@@ -48,6 +48,11 @@ def test_build_model_card_documents_generator_and_validation_gates():
     assert "- unit-test-generator: 1" in card
     assert "- unit-test-model: 1" in card
     assert "- imaging_model_profile=cxr_pneumonia_dreambooth: 1" in card
+    assert "## Imaging Model Policies" in card
+    assert (
+        "- profile=cxr_pneumonia_dreambooth license=openrail++ "
+        "gated=False use_policy=openrail_review_outputs_before_release: 1"
+    ) in card
     assert "## Time-Series Backends" in card
     assert "- external:timediff-sample: 1" in card
     assert "## Procedure Coverage" in card
@@ -121,7 +126,14 @@ def _record() -> SyntheticRecord:
             "generation_overrides": {
                 "imaging_backend": "diffusers",
                 "imaging_model_profile": "cxr_pneumonia_dreambooth",
-            }
+            },
+            "imaging_model_policy": {
+                "profile": "cxr_pneumonia_dreambooth",
+                "model_id": "chimbiwide/cxr-pneumonia-dreambooth",
+                "license": "openrail++",
+                "gated": False,
+                "use_policy": "openrail_review_outputs_before_release",
+            },
         },
     )
 

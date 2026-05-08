@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from casecrawler.config import get_config
 from casecrawler.generation.imaging_generator import ImagingGenerator
+from casecrawler.generation.imaging_models import resolve_imaging_model_profile
 from casecrawler.generation.modality_plan import ModalityPlanner
 from casecrawler.generation.recipes import apply_generation_recipe
 from casecrawler.generation.structured_generator import StructuredGenerator
@@ -87,7 +88,16 @@ class SyntheticPipeline:
                         plan.imaging_views or ["medical_image"],
                     )
                 ]
-                record = record.model_copy(update={"imaging": [*record.imaging, *images]})
+                record = record.model_copy(
+                    update={
+                        "imaging": [*record.imaging, *images],
+                        "metadata": _with_imaging_generation_metadata(
+                            record.metadata,
+                            req,
+                            self._config.synthetic.imaging_model_profile,
+                        ),
+                    }
+                )
             if Modality.CLINICAL_TEXT in plan.modalities:
                 record = await text_generator.add_documents_async(record)
             validation = self._validator_for(record_req).validate(record)
@@ -210,6 +220,29 @@ def _text_generator_from_config(
         provider = get_provider(provider_name, model, base_url=ollama_base_url)
         return TextGenerator(provider=provider)
     raise ValueError(f"Unknown synthetic clinical text backend: {backend}")
+
+
+def _with_imaging_generation_metadata(
+    metadata: dict,
+    req: GenerationRequest,
+    configured_profile: str | None,
+) -> dict:
+    profile_name = req.imaging_model_profile or configured_profile
+    if not profile_name:
+        return metadata
+    profile = resolve_imaging_model_profile(profile_name)
+    if profile is None:
+        return metadata
+    return {
+        **metadata,
+        "imaging_model_policy": {
+            "profile": profile.name,
+            "model_id": profile.model_id,
+            "license": profile.license,
+            "gated": profile.gated,
+            "use_policy": profile.use_policy,
+        },
+    }
 
 
 def _imaging_requests_for_record(
