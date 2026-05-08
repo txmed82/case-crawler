@@ -1301,6 +1301,7 @@ def _verify_jsonl_split_package_dir(package_path: Path) -> dict[str, Any]:
 
     checked_files = _verify_package_files(package_path, manifest, issues)
     split_summaries = _verify_package_splits(package_path, manifest, issues)
+    _verify_multimodal_image_package_paths(manifest, split_summaries, issues)
     _verify_package_audit_artifacts(package_path, manifest, issues)
     quality_report = _split_package_quality_report_summary(package_path)
     _verify_package_image_artifacts(manifest, quality_report, issues)
@@ -1547,6 +1548,7 @@ def _verify_package_splits(
             all_record_ids.add(record_id)
         total_examples += example_count
         summaries[split_name] = {
+            "examples": examples,
             "example_count": example_count,
             "record_ids": observed_record_ids,
         }
@@ -1622,6 +1624,83 @@ def _verify_package_splits(
             }
         )
     return summaries
+
+
+def _verify_multimodal_image_package_paths(
+    manifest: dict[str, Any],
+    split_summaries: dict[str, dict[str, Any]],
+    issues: list[dict[str, str]],
+) -> None:
+    if manifest.get("export_format") != ExportFormat.MULTIMODAL_JSONL.value:
+        return
+    image_artifacts = manifest.get("image_artifacts")
+    files = manifest.get("files")
+    declared_paths = {
+        artifact.get("package_path")
+        for artifact in image_artifacts.values()
+        if isinstance(artifact, dict) and isinstance(artifact.get("package_path"), str)
+    } if isinstance(image_artifacts, dict) else set()
+    file_paths = set(files) if isinstance(files, dict) else set()
+    for split_name, summary in split_summaries.items():
+        examples = summary.get("examples")
+        if not isinstance(examples, list):
+            continue
+        for index, example in enumerate(examples, start=1):
+            for field, path in _multimodal_payload_package_paths(example):
+                if not _is_safe_package_path(path):
+                    issues.append(
+                        {
+                            "field": f"{split_name}.jsonl.line.{index}.{field}",
+                            "message": "Multimodal image package_path is not safe.",
+                        }
+                    )
+                    continue
+                if path not in declared_paths:
+                    issues.append(
+                        {
+                            "field": f"{split_name}.jsonl.line.{index}.{field}",
+                            "message": (
+                                "Multimodal image package_path is not declared in "
+                                "manifest image_artifacts."
+                            ),
+                        }
+                    )
+                if path not in file_paths:
+                    issues.append(
+                        {
+                            "field": f"{split_name}.jsonl.line.{index}.{field}",
+                            "message": (
+                                "Multimodal image package_path is missing from "
+                                "manifest files."
+                            ),
+                        }
+                    )
+
+
+def _multimodal_payload_package_paths(example: dict[str, Any]) -> list[tuple[str, str]]:
+    paths: list[tuple[str, str]] = []
+    for index, image in enumerate(_dict_items(example.get("images"))):
+        path = image.get("package_path")
+        if isinstance(path, str) and path:
+            paths.append((f"images.{index}.package_path", path))
+    for index, pair in enumerate(_dict_items(example.get("image_text_pairs"))):
+        path = pair.get("package_path")
+        if isinstance(path, str) and path:
+            paths.append((f"image_text_pairs.{index}.package_path", path))
+    for task_index, task in enumerate(_dict_items(example.get("supervised_tasks"))):
+        input_payload = task.get("input")
+        if not isinstance(input_payload, dict):
+            continue
+        path = input_payload.get("package_path")
+        if isinstance(path, str) and path:
+            paths.append((f"supervised_tasks.{task_index}.input.package_path", path))
+    return paths
+
+
+def _dict_items(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
 
 
 def _verify_fhir_split_examples(
