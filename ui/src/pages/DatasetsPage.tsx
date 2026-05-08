@@ -954,6 +954,10 @@ function QualityPanel({
             <Metric label="Procedures" value={quality.artifact_counts.procedures ?? 0} />
             <Metric label="Series" value={quality.artifact_counts.time_series_channels ?? 0} />
             <Metric label="Images" value={quality.artifact_counts.imaging_assets ?? 0} />
+            <Metric
+              label="Image files"
+              value={quality.artifact_counts.imaging_file_assets ?? 0}
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <Metric

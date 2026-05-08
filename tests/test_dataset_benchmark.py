@@ -208,6 +208,7 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.artifact_counts["time_series_channels"] == 2
     assert profile.artifact_counts["time_series_points"] == 4
     assert profile.artifact_counts["imaging_assets"] == 2
+    assert profile.artifact_counts["imaging_file_assets"] == 0
     assert profile.artifact_density == {
         "documents_per_record": 1.0,
         "encounters_per_record": 1.0,
@@ -218,6 +219,7 @@ def test_profile_records_summarizes_multimodal_cohort():
         "medications_per_record": 1.0,
         "time_series_channels_per_record": 1.0,
         "imaging_assets_per_record": 1.0,
+        "imaging_file_assets_per_record": 0.0,
     }
     assert profile.longitudinal_record_rate == 0
     assert profile.mean_encounter_span_hours is None
@@ -371,6 +373,7 @@ def test_dataset_benchmark_compares_longitudinal_profiles():
         "artifact_density:medications_per_record",
         "artifact_density:time_series_channels_per_record",
         "artifact_density:imaging_assets_per_record",
+        "artifact_density:imaging_file_assets_per_record",
         "longitudinal_record_rate",
         "mean_encounter_span_hours",
         "mean_observations_per_encounter",

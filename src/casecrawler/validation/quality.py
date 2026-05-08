@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable
 from datetime import datetime, timezone
+from pathlib import Path
 
 from casecrawler.models.evaluation import DatasetQualityReport
 from casecrawler.models.synthetic import Modality, SyntheticRecord
@@ -111,6 +112,7 @@ def build_dataset_quality_report(
         blocking_issue_count=blocking_issue_count,
         issue_counts_by_field=issue_counts_by_field,
         modality_counts=modality_counts,
+        artifact_counts=artifact_counts,
         benchmark_plan=benchmark_plan,
     )
     benchmark_summary = _benchmark_summary(benchmark_plan)
@@ -231,6 +233,11 @@ def _count_artifacts(
         len(channel.points) for channel in record.time_series
     )
     artifact_counts["imaging_assets"] += len(record.imaging)
+    artifact_counts["imaging_file_assets"] += sum(
+        1
+        for asset in record.imaging
+        if asset.file_path and Path(asset.file_path).is_file()
+    )
     for asset in record.imaging:
         imaging_backend_counts[asset.generation_backend or "unknown"] += 1
     policy_key = _imaging_model_policy_key(record)
@@ -493,6 +500,7 @@ def _recommendations(
     blocking_issue_count: int,
     issue_counts_by_field: Counter[str],
     modality_counts: Counter[str],
+    artifact_counts: Counter[str],
     benchmark_plan: dict | None = None,
 ) -> list[str]:
     recommendations: list[str] = []
@@ -515,6 +523,12 @@ def _recommendations(
     if issue_counts_by_field.get("imaging.model_policy.missing", 0):
         recommendations.append(
             "Attach imaging model policy metadata before exporting generated image datasets."
+        )
+    if artifact_counts.get("imaging_assets", 0) > artifact_counts.get(
+        "imaging_file_assets", 0
+    ):
+        recommendations.append(
+            "Attach local image files before multimodal fine-tuning export."
         )
     if issue_counts_by_field.get("human_review.missing", 0):
         recommendations.append(

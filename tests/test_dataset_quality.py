@@ -401,7 +401,9 @@ def test_quality_report_requires_expected_clinical_document_author_roles():
     assert any("expected clinical document author roles" in item for item in report.recommendations)
 
 
-def test_quality_report_summarizes_multimodal_training_artifacts():
+def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
+    image_path = tmp_path / "image.png"
+    image_path.write_bytes(b"synthetic image")
     record = _record("rec-1").model_copy(
         update={
             "modalities": [
@@ -503,6 +505,7 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
                     modality="XR",
                     body_region="chest",
                     prompt="portable chest x-ray pneumonia",
+                    file_path=str(image_path),
                     report_text="Pneumonia.",
                     generation_backend="diffusers:cxr_pneumonia_dreambooth",
                 )
@@ -535,6 +538,7 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
     assert report.artifact_counts["procedures"] == 1
     assert report.artifact_counts["time_series_waveform_channels"] == 1
     assert report.artifact_counts["imaging_assets"] == 1
+    assert report.artifact_counts["imaging_file_assets"] == 1
     assert report.note_type_counts == {"ed_note": 1, "radiology_report": 1}
     assert report.extracted_fact_key_counts == {"lab_values": 1, "medications": 1}
     assert report.lab_numeric_summaries["wbc"]["mean"] == 12.0
@@ -557,6 +561,31 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
     assert report.mean_modality_alignment_score == 0.82
     assert report.export_ready is False
     assert "vitals.missing_artifacts" not in report.issue_counts_by_field
+    assert not any("local image files" in item for item in report.recommendations)
+
+
+def test_quality_report_recommends_file_backed_multimodal_images():
+    record = _record("rec-1").model_copy(
+        update={
+            "modalities": [Modality.CLINICAL_TEXT, Modality.IMAGING],
+            "imaging": [
+                ImagingAsset(
+                    image_id="img-1",
+                    modality="XR",
+                    body_region="chest",
+                    prompt="portable chest x-ray pneumonia",
+                    report_text="Pneumonia.",
+                    generation_backend="placeholder",
+                )
+            ],
+        }
+    )
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.artifact_counts["imaging_assets"] == 1
+    assert report.artifact_counts["imaging_file_assets"] == 0
+    assert any("local image files" in item for item in report.recommendations)
 
 
 def test_quality_report_summarizes_phi_and_diagnosis_code_signals():
