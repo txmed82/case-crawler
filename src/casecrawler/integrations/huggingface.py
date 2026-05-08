@@ -114,6 +114,21 @@ REFERENCE_DATASETS: dict[str, HuggingFaceReferenceDataset] = {
             "note-to-dialogue clinical documentation benchmarking."
         ),
     ),
+    "betrac_2026": HuggingFaceReferenceDataset(
+        repo_id="BeTraC/betrac-2026",
+        split="validation",
+        license="cc-by-4.0",
+        note_field="soap.txt",
+        question_field="transcript.txt",
+        answer_field="json",
+        default_task="doctor_patient_dialogue_to_soap",
+        patient_id_field="__key__",
+        description=(
+            "Synthetic doctor-patient transcripts paired with target SOAP "
+            "summaries from BeTraC/Synth-DoPaCo for dialogue-to-note "
+            "benchmarking."
+        ),
+    ),
     "clinical_notes_to_fhir": HuggingFaceReferenceDataset(
         repo_id="ai-galileo/clinical-notes-to-fhir",
         split="train",

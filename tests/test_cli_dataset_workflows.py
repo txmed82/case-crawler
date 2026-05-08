@@ -1051,6 +1051,7 @@ def test_dataset_cli_seeds_recipe_reference_fixtures(tmp_path, monkeypatch):
         "synthclinicalnotes",
         "augmented_clinical_notes",
         "medsynth_dialogue_note",
+        "betrac_2026",
         "clinical_notes_to_fhir",
         "technetium_i",
         "clinical_timeseries_reference",
