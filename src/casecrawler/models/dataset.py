@@ -12,6 +12,7 @@ from casecrawler.models.synthetic import ComplexityProfile, Modality
 class ExportFormat(str, Enum):
     RAW_JSONL = "raw_jsonl"
     SFT_JSONL = "sft_jsonl"
+    NOTE_FACT_SFT_JSONL = "note_fact_sft_jsonl"
     CHAT_JSONL = "chat_jsonl"
     TOOL_CALL_JSONL = "tool_call_jsonl"
     MULTIMODAL_JSONL = "multimodal_jsonl"

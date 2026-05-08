@@ -3,8 +3,10 @@ from casecrawler.export.fine_tuning import (
     export_chat_record,
     export_fhir_record,
     export_multimodal_record,
+    export_note_fact_sft_records,
     export_parquet_record,
     export_record,
+    export_record_payloads,
     export_rl_record,
     export_sft_record,
     export_tool_call_record,
@@ -71,6 +73,26 @@ def test_export_sft_record_includes_structured_context_without_documents():
     assert "img-1" in user_message
 
 
+def test_export_note_fact_sft_records_creates_document_level_examples():
+    record = _multimodal_record()
+
+    examples = export_note_fact_sft_records(record)
+
+    assert len(examples) == 1
+    example = examples[0]
+    assert example["record_id"] == "rec-1"
+    assert example["document_id"] == "doc-1"
+    assert example["task"] == "extract_clinical_facts_from_note"
+    assert "pt fever hypotn lactate hi" in example["messages"][1]["content"]
+    target = example["messages"][2]["content"]
+    assert "Lactate" in target
+    assert "Heart rate" in target
+    assert "Ceftriaxone" in target
+    assert "Opacity" in target
+    assert example["metadata"]["note_type"] == "ed_note"
+    assert example["metadata"]["export_profile"] == "note_fact_sft_jsonl"
+
+
 def test_export_record_dispatches_chat_and_multimodal():
     record = SyntheticRecord(
         record_id="rec-1",
@@ -94,6 +116,17 @@ def test_export_record_dispatches_chat_and_multimodal():
     assert chat["messages"][0]["role"] == "system"
     assert multimodal["images"] == []
     assert multimodal["clinical_context"]["record_id"] == "rec-1"
+
+
+def test_export_record_dispatches_note_fact_sft_profile():
+    record = _multimodal_record()
+
+    exported = export_record(record, "note_fact_sft_jsonl")
+    payloads = export_record_payloads(record, "note_fact_sft_jsonl")
+
+    assert exported["metadata"]["export_profile"] == "note_fact_sft_jsonl"
+    assert exported["examples"] == payloads
+    assert payloads[0]["document_id"] == "doc-1"
 
 
 def test_export_multimodal_record_preserves_imaging_labels_and_alignment_tasks():

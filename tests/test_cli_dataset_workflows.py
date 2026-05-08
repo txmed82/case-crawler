@@ -68,6 +68,26 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     assert "Exported" in fhir_exported.output
     assert "Bundle" in (tmp_path / "synthetic.fhir.ndjson").read_text()
 
+    note_fact_exported = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--output",
+            "synthetic.note-facts.jsonl",
+            "--format",
+            "note_fact_sft_jsonl",
+        ],
+    )
+    note_fact_lines = [
+        json.loads(line)
+        for line in (tmp_path / "synthetic.note-facts.jsonl").read_text().splitlines()
+    ]
+    assert note_fact_exported.exit_code == 0
+    assert len(note_fact_lines) > 1
+    assert {line["task"] for line in note_fact_lines} == {"extract_clinical_facts_from_note"}
+
 
 def test_dataset_cli_lists_generation_recipes():
     result = CliRunner().invoke(cli, ["generation-recipes"])
