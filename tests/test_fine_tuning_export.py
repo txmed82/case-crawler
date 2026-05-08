@@ -238,6 +238,47 @@ def test_verify_jsonl_split_package_accepts_zip_archive(tmp_path):
     assert report["splits"]["test"]["example_count"] == 1
 
 
+def test_verify_jsonl_split_package_validates_fhir_split_examples(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "fhir_ndjson",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+    )
+    train_payload = json.loads((tmp_path / "train.jsonl").read_text().splitlines()[0])
+    observation = next(
+        entry["resource"]
+        for entry in train_payload["entry"]
+        if entry["resource"]["resourceType"] == "Observation"
+    )
+    observation.pop("subject")
+    (tmp_path / "train.jsonl").write_text(json.dumps(train_payload) + "\n")
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    manifest["files"]["train.jsonl"]["byte_size"] = (tmp_path / "train.jsonl").stat().st_size
+    manifest["files"]["train.jsonl"]["sha256"] = hashlib.sha256(
+        (tmp_path / "train.jsonl").read_bytes()
+    ).hexdigest()
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path)
+
+    assert report["valid"] is False
+    assert any(
+        issue["field"].startswith("train.jsonl.line.1.Observation.subject")
+        for issue in report["issues"]
+    )
+
+
 def test_verify_jsonl_split_package_validates_benchmark_profile_artifact(tmp_path):
     records = [
         _multimodal_record().model_copy(
