@@ -88,6 +88,45 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     ] == "IV"
 
 
+def test_text_generator_adds_follow_up_notes_for_longitudinal_encounters():
+    req = GenerationRequest(
+        topic="sepsis",
+        complexity=ComplexityProfile.COMPLEX,
+        modalities=[
+            Modality.STRUCTURED_EHR,
+            Modality.CLINICAL_TEXT,
+            Modality.LABS,
+            Modality.VITALS,
+        ],
+        cohort_constraints={
+            "base_time": "2026-01-01T00:00:00",
+            "encounter_count": 3,
+        },
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0)
+
+    updated = TextGenerator().add_documents(record)
+    follow_ups = [
+        document
+        for document in updated.documents
+        if document.extracted_facts.get("encounter_index") in {2, 3}
+    ]
+
+    assert len(follow_ups) == 4
+    assert {document.note_type for document in follow_ups} == {
+        "progress_note",
+        "nursing_note",
+    }
+    assert len({document.document_id for document in updated.documents}) == len(
+        updated.documents
+    )
+    assert {
+        document.extracted_facts["encounter_id"] for document in follow_ups
+    } == {record.encounters[1].encounter_id, record.encounters[2].encounter_id}
+    assert any("Follow-up progress note for encounter 2" in doc.clean_text for doc in follow_ups)
+    assert any("Follow-up nursing note for encounter 3" in doc.clean_text for doc in follow_ups)
+
+
 def test_text_generator_adds_radiology_report_when_imaging_modality_is_requested():
     req = GenerationRequest(
         topic="pneumonia",

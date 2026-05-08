@@ -171,6 +171,7 @@ class TextGenerator:
                     "medication reconciliation, and follow-up needs."
                 ),
             ),
+            *_longitudinal_follow_up_documents(record),
             *(
                 [
                     _document(
@@ -194,17 +195,84 @@ def _document(
     author_role: str,
     timestamp: str,
     clean_text: str,
+    *,
+    document_key: str | None = None,
+    extracted_fact_updates: dict | None = None,
 ) -> ClinicalDocument:
     messy = _messy_text(note_type, clean_text)
+    extracted_facts = _extracted_facts(record, note_type)
+    if extracted_fact_updates:
+        extracted_facts.update(extracted_fact_updates)
     return ClinicalDocument(
-        document_id=f"doc-{uuid5(NAMESPACE_URL, f'{record.record_id}:{note_type}')}",
+        document_id=(
+            f"doc-{uuid5(NAMESPACE_URL, f'{record.record_id}:{document_key or note_type}')}"
+        ),
         note_type=note_type,
         author_role=author_role,
         timestamp=timestamp,
         clean_text=clean_text,
         messy_text=messy,
-        extracted_facts=_extracted_facts(record, note_type),
+        extracted_facts=extracted_facts,
     )
+
+
+def _longitudinal_follow_up_documents(record: SyntheticRecord) -> list[ClinicalDocument]:
+    if len(record.encounters) < 2:
+        return []
+    documents = []
+    for index, encounter in enumerate(record.encounters[1:], start=2):
+        diagnoses = ", ".join(diagnosis.display for diagnosis in encounter.diagnoses)
+        procedures = ", ".join(procedure.display for procedure in encounter.procedures)
+        facts = {
+            "encounter_id": encounter.encounter_id,
+            "encounter_index": index,
+            "encounter_start": encounter.start,
+            "encounter_end": encounter.end,
+            "encounter_setting": encounter.setting,
+            "encounter_reason": encounter.reason,
+            "encounter_diagnoses": [
+                diagnosis.display for diagnosis in encounter.diagnoses
+            ],
+            "encounter_procedures": [
+                procedure.display for procedure in encounter.procedures
+            ],
+        }
+        documents.append(
+            _document(
+                record,
+                "progress_note",
+                "physician",
+                encounter.start,
+                (
+                    f"Follow-up progress note for encounter {index} in "
+                    f"{encounter.setting}. Reason: {encounter.reason}. "
+                    f"Diagnoses: {diagnoses or 'none documented'}. "
+                    f"Procedures: {procedures or 'none documented'}. "
+                    "Synthetic longitudinal reassessment compares current "
+                    "structured observations with the prior encounter timeline."
+                ),
+                document_key=f"progress_note:{encounter.encounter_id}",
+                extracted_fact_updates=facts,
+            )
+        )
+        documents.append(
+            _document(
+                record,
+                "nursing_note",
+                "nurse",
+                encounter.start,
+                (
+                    f"Follow-up nursing note for encounter {index} in "
+                    f"{encounter.setting}. Reason: {encounter.reason}. "
+                    "Nursing reassessment documents safety checks, symptom "
+                    "trajectory, intake/output review, and medication response "
+                    "for the synthetic longitudinal record."
+                ),
+                document_key=f"nursing_note:{encounter.encounter_id}",
+                extracted_fact_updates=facts,
+            )
+        )
+    return documents
 
 
 def _messy_text(note_type: str, clean_text: str) -> str:
