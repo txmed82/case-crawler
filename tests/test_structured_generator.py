@@ -76,6 +76,31 @@ def test_structured_generator_can_emit_longitudinal_encounter_timeline():
     assert record.metadata["cohort_constraints"]["encounter_count"] == 3
 
 
+def test_structured_generator_repeats_observations_across_longitudinal_encounters():
+    req = GenerationRequest(
+        topic="sepsis",
+        cohort_constraints={
+            "base_time": "2026-02-03T04:05:06",
+            "encounter_count": 2,
+        },
+    )
+
+    record = StructuredGenerator().generate("ds-one", req, 0)
+
+    lactates = [lab for lab in record.labs if lab.name == "Lactate"]
+    heart_rates = [vital for vital in record.vitals if vital.name == "HR"]
+    assert [lab.effective_time for lab in lactates] == [
+        "2026-02-03T05:05:06",
+        "2026-02-04T05:05:06",
+    ]
+    assert [lab.value for lab in lactates] == [3.4, 3.6]
+    assert [vital.effective_time for vital in heart_rates] == [
+        "2026-02-03T04:20:06",
+        "2026-02-04T04:20:06",
+    ]
+    assert [vital.value for vital in heart_rates] == [112, 115]
+
+
 def test_structured_generator_rejects_invalid_encounter_count():
     req = GenerationRequest(
         topic="sepsis",

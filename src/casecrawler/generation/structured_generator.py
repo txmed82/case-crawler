@@ -75,6 +75,14 @@ class StructuredGenerator:
         include_labs = _includes_modality(req, "labs")
         include_vitals = _includes_modality(req, "vitals")
         include_medications = _includes_modality(req, "structured_ehr")
+        lab_templates = [
+            *profile.labs,
+            *_complexity_labs(req.complexity, req.topic),
+        ]
+        vital_templates = [
+            *profile.vitals,
+            *_complexity_vitals(req.complexity, req.topic),
+        ]
         return SyntheticRecord(
             record_id=f"rec-{uuid5(NAMESPACE_URL, f'{stable_prefix}:record')}",
             dataset_id=dataset_id,
@@ -83,18 +91,8 @@ class StructuredGenerator:
             modalities=req.modalities,
             patient=patient,
             encounters=encounters,
-            labs=[
-                _lab_observation(lab, now, index)
-                for lab in [*profile.labs, *_complexity_labs(req.complexity, req.topic)]
-            ]
-            if include_labs
-            else [],
-            vitals=[
-                _vital_observation(vital, now, index)
-                for vital in [*profile.vitals, *_complexity_vitals(req.complexity, req.topic)]
-            ]
-            if include_vitals
-            else [],
+            labs=_timeline_labs(lab_templates, encounters, index) if include_labs else [],
+            vitals=_timeline_vitals(vital_templates, encounters, index) if include_vitals else [],
             medication_history=[
                 _medication_statement(medication, now[:10])
                 for medication in [
@@ -178,6 +176,42 @@ def _encounter_timeline(
             )
         )
     return encounters
+
+
+def _timeline_labs(
+    templates: list[dict],
+    encounters: list[Encounter],
+    record_index: int,
+) -> list[LabObservation]:
+    return [
+        _lab_observation(
+            template,
+            _offset_time(encounter.start, hours=1),
+            record_index + encounter_index,
+        )
+        for encounter_index, encounter in enumerate(encounters)
+        for template in templates
+    ]
+
+
+def _timeline_vitals(
+    templates: list[dict],
+    encounters: list[Encounter],
+    record_index: int,
+) -> list[VitalObservation]:
+    return [
+        _vital_observation(
+            template,
+            _offset_time(encounter.start, minutes=15),
+            record_index + encounter_index,
+        )
+        for encounter_index, encounter in enumerate(encounters)
+        for template in templates
+    ]
+
+
+def _offset_time(value: str, *, hours: int = 0, minutes: int = 0) -> str:
+    return (datetime.fromisoformat(value) + timedelta(hours=hours, minutes=minutes)).isoformat()
 
 
 def _stable_record_seed(dataset_id: str, req: GenerationRequest, index: int) -> str:
