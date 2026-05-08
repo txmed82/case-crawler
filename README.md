@@ -123,6 +123,7 @@ casecrawler import-reference-dataset radiology_report_consistency --dataset-id d
 casecrawler import-reference-dataset synthchex_75k --dataset-id ds-synthchex-ref --limit 100
 casecrawler import-reference-dataset synthetic_chest_xray_pneumonia --dataset-id ds-cxr-pneumonia-ref --limit 100
 casecrawler import-synthea-fhir ./synthea/output/fhir --dataset-id ds-synthea-ref
+# The Synthea import accepts FHIR JSON bundles or FHIR NDJSON resource directories.
 casecrawler run-synthea \
   --synthea-executable ./synthea/run_synthea \
   --output-dir ./synthea/output/fhir \
@@ -194,7 +195,7 @@ Start the server with `casecrawler serve` or `docker compose up`.
 | `/api/datasets/generate` | POST | Generate synthetic healthcare records |
 | `/api/datasets/reference-catalog` | GET | List registered Hugging Face reference datasets |
 | `/api/datasets/reference-import` | POST | Import registered reference datasets into local storage |
-| `/api/datasets/synthea-import` | POST | Import Synthea FHIR JSON bundles into local storage |
+| `/api/datasets/synthea-import` | POST | Import Synthea FHIR JSON bundles or NDJSON directories into local storage |
 | `/api/datasets/{dataset_id}/benchmark` | GET | Compare a generated dataset to a reference dataset with configurable pass/fail thresholds |
 | `/api/datasets/{dataset_id}/quality` | GET | Summarize validation and fine-tuning export readiness |
 | `/api/datasets/{dataset_id}/export` | GET | Stream fine-tuning/export records |

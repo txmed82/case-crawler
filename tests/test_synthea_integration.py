@@ -358,6 +358,98 @@ def test_synthea_adapter_imports_bundle_directory_in_stable_order(tmp_path):
     assert [record.patient.patient_id for record in records] == ["pat-a", "pat-b"]
 
 
+def test_synthea_adapter_imports_fhir_ndjson_directory_grouped_by_patient(tmp_path):
+    (tmp_path / "Patient.ndjson").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "resourceType": "Patient",
+                        "id": "pat-a",
+                        "gender": "female",
+                        "birthDate": "1970-01-01",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "resourceType": "Patient",
+                        "id": "pat-b",
+                        "gender": "male",
+                        "birthDate": "1980-01-01",
+                    }
+                ),
+            ]
+        )
+        + "\n"
+    )
+    (tmp_path / "Encounter.ndjson").write_text(
+        json.dumps(
+            {
+                "resourceType": "Encounter",
+                "id": "enc-a",
+                "subject": {"reference": "Patient/pat-a"},
+                "period": {"start": "2026-01-01T00:00:00"},
+                "reasonCode": [{"text": "sepsis"}],
+            }
+        )
+        + "\n"
+    )
+    (tmp_path / "Observation.ndjson").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "resourceType": "Observation",
+                        "id": "obs-a",
+                        "subject": {"reference": "Patient/pat-a"},
+                        "code": {"text": "Lactate"},
+                        "valueQuantity": {"value": 3.2, "unit": "mmol/L"},
+                        "effectiveDateTime": "2026-01-01T01:00:00",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "resourceType": "Observation",
+                        "id": "obs-b",
+                        "subject": {"reference": "Patient/pat-b"},
+                        "category": [{"coding": [{"code": "vital-signs"}]}],
+                        "code": {"text": "Heart rate"},
+                        "valueQuantity": {"value": 88, "unit": "/min"},
+                        "effectiveDateTime": "2026-01-01T01:00:00",
+                    }
+                ),
+            ]
+        )
+        + "\n"
+    )
+
+    records = SyntheaAdapter().import_fhir_ndjson_path(
+        str(tmp_path),
+        dataset_id="ds-ndjson",
+    )
+
+    assert [record.patient.patient_id for record in records] == ["pat-a", "pat-b"]
+    pat_a = records[0]
+    pat_b = records[1]
+    assert pat_a.topic == "sepsis"
+    assert pat_a.labs[0].name == "Lactate"
+    assert pat_b.vitals[0].name == "Heart rate"
+    assert pat_a.provenance.source_refs[0]["format"] == "fhir_ndjson"
+    assert pat_a.metadata["source_format"] == "fhir_ndjson"
+
+
+def test_synthea_adapter_auto_detects_ndjson_output_directory(tmp_path):
+    (tmp_path / "Patient.ndjson").write_text(
+        json.dumps({"resourceType": "Patient", "id": "pat-ndjson"}) + "\n"
+    )
+
+    records = SyntheaAdapter().import_fhir_path(str(tmp_path), dataset_id="ds-ndjson")
+
+    assert len(records) == 1
+    assert records[0].patient.patient_id == "pat-ndjson"
+    assert records[0].metadata["source_format"] == "fhir_ndjson"
+
+
 def test_synthea_adapter_runs_command_and_imports_output_directory(tmp_path):
     output_dir = tmp_path / "fhir"
     output_dir.mkdir()

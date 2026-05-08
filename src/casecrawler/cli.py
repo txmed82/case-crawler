@@ -328,7 +328,7 @@ def import_reference_dataset(
 @click.argument("path")
 @click.option("--dataset-id", required=True, help="Dataset id for imported Synthea records")
 def import_synthea_fhir(path: str, dataset_id: str) -> None:
-    """Import Synthea FHIR JSON bundle files into the local dataset store."""
+    """Import Synthea FHIR JSON bundles or NDJSON files into the local dataset store."""
     from casecrawler.integrations.synthea import SyntheaAdapter
     from casecrawler.storage.dataset_store import DatasetStore
 
@@ -337,7 +337,7 @@ def import_synthea_fhir(path: str, dataset_id: str) -> None:
     except (OSError, json.JSONDecodeError) as exc:
         raise click.ClickException(f"Failed to import Synthea FHIR from {path}: {exc}") from exc
     if not records:
-        raise click.ClickException(f"No Synthea FHIR JSON bundles found at {path}.")
+        raise click.ClickException(f"No Synthea FHIR JSON bundles or NDJSON files found at {path}.")
     store = DatasetStore()
     for record in records:
         store.save_record(record)
@@ -349,7 +349,7 @@ def import_synthea_fhir(path: str, dataset_id: str) -> None:
 @click.option(
     "--output-dir",
     required=True,
-    help="Directory where Synthea writes FHIR JSON bundles",
+    help="Directory where Synthea writes FHIR JSON bundles or NDJSON files",
 )
 @click.option("--population", default=1, type=click.IntRange(1), show_default=True)
 @click.option(
@@ -363,7 +363,7 @@ def run_synthea(
     population: int,
     synthea_executable: str | None,
 ) -> None:
-    """Run a configured Synthea executable and import generated FHIR bundles."""
+    """Run a configured Synthea executable and import generated FHIR output."""
     from casecrawler.integrations.synthea import SyntheaAdapter
     from casecrawler.storage.dataset_store import DatasetStore
 
@@ -382,7 +382,9 @@ def run_synthea(
     except (OSError, json.JSONDecodeError, ValueError, subprocess.SubprocessError) as exc:
         raise click.ClickException(f"Failed to run/import Synthea: {exc}") from exc
     if not records:
-        raise click.ClickException(f"No Synthea FHIR JSON bundles found at {output_dir}.")
+        raise click.ClickException(
+            f"No Synthea FHIR JSON bundles or NDJSON files found at {output_dir}."
+        )
     store = DatasetStore()
     for record in records:
         store.save_record(record)

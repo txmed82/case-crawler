@@ -834,6 +834,27 @@ def test_dataset_api_imports_synthea_fhir_directory(tmp_path, monkeypatch):
     assert stored.json()["manifest"]["metadata"]["reference_keys"] == {"synthea_fhir": 1}
 
 
+def test_dataset_api_imports_synthea_fhir_ndjson_directory(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    bundle_dir = tmp_path / "synthea-ndjson"
+    bundle_dir.mkdir()
+    (bundle_dir / "Patient.ndjson").write_text(
+        json.dumps({"resourceType": "Patient", "id": "pat-ndjson"}) + "\n"
+    )
+
+    response = client.post(
+        "/api/datasets/synthea-import",
+        json={"path": str(bundle_dir), "dataset_id": "ds-synthea-ndjson"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["imported"] == 1
+    stored = client.get("/api/datasets/ds-synthea-ndjson")
+    assert stored.json()["records"][0]["patient"]["patient_id"] == "pat-ndjson"
+    assert stored.json()["records"][0]["metadata"]["source_format"] == "fhir_ndjson"
+
+
 def test_dataset_api_reports_empty_synthea_import_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)
@@ -846,7 +867,7 @@ def test_dataset_api_reports_empty_synthea_import_directory(tmp_path, monkeypatc
     )
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "no Synthea FHIR JSON bundles found"
+    assert response.json()["detail"] == "no Synthea FHIR JSON bundles or NDJSON files found"
 
 
 def test_dataset_api_reports_unknown_hf_reference_dataset(tmp_path, monkeypatch):
