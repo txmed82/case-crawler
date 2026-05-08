@@ -446,6 +446,21 @@ def benchmark_plan(dataset_id: str):
     return build_benchmark_plan_summary(store, dataset_id)
 
 
+@router.get("/datasets/{dataset_id}/benchmark-suite")
+def benchmark_suite(dataset_id: str):
+    from casecrawler.validation.benchmark_selection import run_recommended_benchmark_suite
+
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+    try:
+        return run_recommended_benchmark_suite(store, dataset_id)
+    except LookupError as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+
+
 @router.get("/datasets/{dataset_id}/export")
 def export_dataset(
     dataset_id: str,

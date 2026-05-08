@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from casecrawler.storage.dataset_store import DatasetStore
+from casecrawler.validation.benchmark import DatasetBenchmark
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,59 @@ def build_benchmark_plan_summary(store: DatasetStore, dataset_id: str) -> dict:
             "min_overall_score": thresholds[0] if thresholds else 0.75,
             "min_metric_score": thresholds[1] if thresholds else 0.5,
         },
+    }
+
+
+def run_recommended_benchmark_suite(store: DatasetStore, dataset_id: str) -> dict:
+    manifest = store.get_manifest(dataset_id)
+    reference_keys = _metadata_string_list(manifest.metadata.get("recommended_reference_keys"))
+    thresholds = _metadata_thresholds(manifest.metadata.get("benchmark_thresholds")) or (0.75, 0.5)
+    generated_records = list(store.iter_records(dataset_id=dataset_id))
+    results = []
+    seen_reference_ids: set[str] = set()
+    for reference_key in reference_keys:
+        for reference_manifest in store.list_manifests():
+            if reference_manifest.dataset_id == dataset_id:
+                continue
+            if reference_manifest.dataset_id in seen_reference_ids:
+                continue
+            if reference_manifest.metadata.get("primary_reference_key") != reference_key:
+                continue
+            reference_records = list(store.iter_records(dataset_id=reference_manifest.dataset_id))
+            report = DatasetBenchmark(
+                min_overall_score=thresholds[0],
+                min_metric_score=thresholds[1],
+            ).compare(generated_records, reference_records)
+            results.append(
+                {
+                    "reference_key": reference_key,
+                    "reference_dataset_id": reference_manifest.dataset_id,
+                    "passed": report.passed,
+                    "overall_score": report.overall_score,
+                    "failing_metrics": report.failing_metrics,
+                    "report": report.model_dump(),
+                }
+            )
+            seen_reference_ids.add(reference_manifest.dataset_id)
+    if not results:
+        raise LookupError(
+            "No imported reference dataset matches this dataset's recommended benchmark keys."
+        )
+    return {
+        "dataset_id": dataset_id,
+        "primary_recipe": _metadata_string(manifest.metadata.get("primary_recipe")),
+        "recommended_reference_keys": reference_keys,
+        "reference_count": len(results),
+        "passed": all(result["passed"] for result in results),
+        "mean_overall_score": round(
+            sum(float(result["overall_score"]) for result in results) / len(results),
+            4,
+        ),
+        "thresholds": {
+            "min_overall_score": thresholds[0],
+            "min_metric_score": thresholds[1],
+        },
+        "results": results,
     }
 
 

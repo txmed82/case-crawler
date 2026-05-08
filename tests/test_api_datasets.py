@@ -186,6 +186,51 @@ def test_dataset_api_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
     assert body["thresholds"] == {"min_overall_score": 0.75, "min_metric_score": 0.5}
 
 
+def test_dataset_api_runs_recipe_benchmark_suite(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post(
+        "/api/datasets/generate",
+        json={"topic": "sepsis", "count": 1, "recipe": "icu_timeseries_notes"},
+    )
+    first_reference = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    second_reference = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    dataset_id = generated.json()["dataset_id"]
+    first_reference_id = first_reference.json()["dataset_id"]
+    second_reference_id = second_reference.json()["dataset_id"]
+    store = DatasetStore()
+    for dataset_id_to_mark, reference_key in [
+        (first_reference_id, "synthclinicalnotes"),
+        (second_reference_id, "clinical_notes_to_fhir"),
+    ]:
+        for record in store.list_records(dataset_id=dataset_id_to_mark):
+            store.save_record(
+                record.model_copy(
+                    update={
+                        "metadata": {
+                            **record.metadata,
+                            "reference_key": reference_key,
+                            "reference_dataset": reference_key,
+                        }
+                    }
+                )
+            )
+
+    response = client.get(f"/api/datasets/{dataset_id}/benchmark-suite")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dataset_id"] == dataset_id
+    assert body["reference_count"] == 2
+    assert body["thresholds"] == {"min_overall_score": 0.75, "min_metric_score": 0.5}
+    assert {
+        result["reference_key"] for result in body["results"]
+    } == {"synthclinicalnotes", "clinical_notes_to_fhir"}
+    assert {
+        result["reference_dataset_id"] for result in body["results"]
+    } == {first_reference_id, second_reference_id}
+
+
 def test_dataset_api_lists_export_manifests(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

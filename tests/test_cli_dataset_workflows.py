@@ -201,6 +201,48 @@ def test_dataset_cli_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
     assert body["ready"] is True
 
 
+def test_dataset_cli_runs_recipe_benchmark_suite(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generated = runner.invoke(
+        cli,
+        ["generate-dataset", "sepsis", "--count", "1", "--recipe", "icu_timeseries_notes"],
+    )
+    first_reference = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    second_reference = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output).group(1)
+    first_reference_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", first_reference.output).group(1)
+    second_reference_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", second_reference.output).group(1)
+    store = DatasetStore()
+    for dataset_id_to_mark, reference_key in [
+        (first_reference_id, "synthclinicalnotes"),
+        (second_reference_id, "clinical_notes_to_fhir"),
+    ]:
+        for record in store.list_records(dataset_id=dataset_id_to_mark):
+            store.save_record(
+                record.model_copy(
+                    update={
+                        "metadata": {
+                            **record.metadata,
+                            "reference_key": reference_key,
+                            "reference_dataset": reference_key,
+                        }
+                    }
+                )
+            )
+
+    result = runner.invoke(cli, ["datasets", "benchmark-suite", dataset_id])
+
+    assert result.exit_code == 0
+    body = json.loads(result.output)
+    assert body["dataset_id"] == dataset_id
+    assert body["reference_count"] == 2
+    assert {
+        item["reference_key"] for item in body["results"]
+    } == {"synthclinicalnotes", "clinical_notes_to_fhir"}
+
+
 def test_dataset_cli_export_blocks_failed_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
