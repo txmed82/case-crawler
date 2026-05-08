@@ -24,6 +24,7 @@ def test_build_dataset_card_includes_validation_and_use_limits():
     assert "# Dataset Card: sepsis-synthetic" in card
     assert "- clinical_text: 1" in card
     assert "- Mean clinical consistency score: 0.900" in card
+    assert "- Mean modality alignment score: 0.850" in card
     assert "Records are synthetic" in card
     assert "- sft_jsonl" in card
     assert "- imaging_backend=diffusers: 1" in card
@@ -149,6 +150,7 @@ def _record() -> SyntheticRecord:
             clinical_consistency_score=0.9,
             privacy_score=1.0,
             utility_score=1.0,
+            modality_alignment_score=0.85,
             approved=True,
         ),
         metadata={
