@@ -19,6 +19,7 @@ def test_generation_recipe_catalog_includes_multimodal_training_profiles():
     assert "synthchex_75k" in recipes["radiology_cxr_report"].recommended_reference_keys
     assert "rexgradient_160k" in recipes["radiology_cxr_report"].recommended_reference_keys
     assert "synthea_fhir" in recipes["full_multimodal_acute_care"].recommended_reference_keys
+    assert "medsynth_dialogue_note" in recipes["full_multimodal_acute_care"].recommended_reference_keys
     assert "synthea_fhir" in recipes["icu_timeseries_notes"].recommended_reference_keys
     assert "technetium_i" in recipes["icu_timeseries_notes"].recommended_reference_keys
     assert recipes["full_multimodal_acute_care"].benchmark_min_overall_score == 0.7
@@ -43,6 +44,8 @@ def test_apply_generation_recipe_fills_default_request_fields():
         ExportFormat.MULTIMODAL_JSONL,
         ExportFormat.SFT_JSONL,
         ExportFormat.NOTE_FACT_SFT_JSONL,
+        ExportFormat.CLINICAL_OBSERVATION_JSONL,
+        ExportFormat.MEDICATION_RECONCILIATION_JSONL,
         ExportFormat.TIME_SERIES_JSONL,
         ExportFormat.FHIR_NDJSON,
         ExportFormat.PARQUET,
@@ -75,6 +78,8 @@ def test_icu_recipe_recommends_note_fact_sft_export():
     )
 
     assert ExportFormat.NOTE_FACT_SFT_JSONL in req.export_formats
+    assert ExportFormat.CLINICAL_OBSERVATION_JSONL in req.export_formats
+    assert ExportFormat.MEDICATION_RECONCILIATION_JSONL in req.export_formats
     assert ExportFormat.TIME_SERIES_JSONL in req.export_formats
 
 

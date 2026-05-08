@@ -32,6 +32,9 @@ def test_build_dataset_card_includes_validation_and_use_limits():
     assert "reference=ds-ref" in card
     assert "## Recommended Benchmark Plan" in card
     assert "synthchex_75k" in card
+    assert "## Task-Specific Export References" in card
+    assert "clinical_observation_jsonl: synthea_fhir, clinical_notes_to_fhir" in card
+    assert "medication_reconciliation_jsonl: synthea_fhir, medsynth_dialogue_note" in card
     assert "## Extracted Fact Targets" in card
     assert "- lab_values: 1" in card
     assert "- medications: 1" in card
@@ -189,6 +192,16 @@ def _manifest() -> DatasetManifest:
             "benchmark_thresholds": {
                 "min_overall_score": 0.7,
                 "min_metric_score": 0.45,
+            },
+            "task_export_reference_keys": {
+                "clinical_observation_jsonl": [
+                    "synthea_fhir",
+                    "clinical_notes_to_fhir",
+                ],
+                "medication_reconciliation_jsonl": [
+                    "synthea_fhir",
+                    "medsynth_dialogue_note",
+                ],
             },
             "latest_exports": [
                 {
