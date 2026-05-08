@@ -358,6 +358,9 @@ def export_dataset(
     dataset_id: str,
     export_format: ExportFormat = ExportFormat.SFT_JSONL,
     allow_blocked: bool = False,
+    reference_dataset_id: str | None = Query(default=None, min_length=1),
+    min_overall_score: float = Query(0.75, ge=0.0, le=1.0),
+    min_metric_score: float = Query(0.5, ge=0.0, le=1.0),
 ):
     store = DatasetStore()
     if not store.dataset_exists(dataset_id):
@@ -378,6 +381,35 @@ def export_dataset(
                     "Set allow_blocked=true to export anyway."
                 ),
             )
+    benchmark_metadata = {}
+    if reference_dataset_id:
+        if not store.dataset_exists(reference_dataset_id):
+            raise HTTPException(status_code=404, detail="reference dataset not found")
+        reference_records = list(store.iter_records(dataset_id=reference_dataset_id))
+        try:
+            benchmark_report = DatasetBenchmark(
+                min_overall_score=min_overall_score,
+                min_metric_score=min_metric_score,
+            ).compare(records, reference_records)
+        except ValueError as err:
+            raise HTTPException(status_code=422, detail=str(err)) from err
+        benchmark_metadata = {
+            "benchmark_reference_dataset_id": reference_dataset_id,
+            "benchmark_overall_score": benchmark_report.overall_score,
+            "benchmark_passed": benchmark_report.passed,
+            "benchmark_failing_metrics": benchmark_report.failing_metrics,
+            "benchmark_thresholds": benchmark_report.thresholds,
+        }
+        if not benchmark_report.passed and not allow_blocked:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Dataset failed benchmark gate for fine-tuning export. "
+                    f"Overall score: {benchmark_report.overall_score}. "
+                    f"Failing metrics: {benchmark_report.failing_metrics}. "
+                    "Set allow_blocked=true to export anyway."
+                ),
+            )
 
     if export_format == ExportFormat.PARQUET:
         try:
@@ -392,7 +424,11 @@ def export_dataset(
                 f"export_format={export_format.value}"
             ),
             record_count=record_count,
-            metadata={"transport": "api", "parquet_bytes": len(payload)},
+            metadata={
+                "transport": "api",
+                "parquet_bytes": len(payload),
+                **benchmark_metadata,
+            },
         )
         return Response(
             content=payload,
@@ -422,7 +458,11 @@ def export_dataset(
                     f"export_format={export_format.value}"
                 ),
                 record_count=record_count,
-                metadata={"transport": "api", "jsonl_bytes": byte_count},
+                metadata={
+                    "transport": "api",
+                    "jsonl_bytes": byte_count,
+                    **benchmark_metadata,
+                },
             )
 
     return StreamingResponse(_iter_jsonl(), media_type="application/x-ndjson")
