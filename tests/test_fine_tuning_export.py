@@ -97,6 +97,10 @@ def test_export_note_fact_sft_records_creates_document_level_examples():
     assert target["record_context"]["labs"][0]["name"] == "Lactate"
     assert target["record_context"]["vitals"][0]["name"] == "Heart rate"
     assert target["record_context"]["medication_history"][0]["name"] == "Ceftriaxone"
+    assert target["record_context"]["diagnoses"][0]["display"] == "Sepsis"
+    assert target["record_context"]["procedures"][0]["display"] == (
+        "Central venous catheter placement"
+    )
     assert target["record_context"]["imaging_labels"][0]["labels"][0]["display"] == "Opacity"
     assert example["metadata"]["note_type"] == "ed_note"
     assert example["metadata"]["export_profile"] == "note_fact_sft_jsonl"
@@ -144,6 +148,10 @@ def test_export_multimodal_record_preserves_imaging_labels_and_alignment_tasks()
     exported = export_multimodal_record(record)
 
     assert exported["clinical_context"]["imaging"][0]["image_id"] == "img-1"
+    assert exported["clinical_context"]["diagnoses"][0]["display"] == "Sepsis"
+    assert exported["clinical_context"]["procedures"][0]["display"] == (
+        "Central venous catheter placement"
+    )
     assert exported["images"][0]["labels"] == [
         {
             "system": "https://casecrawler.dev/synthetic-radiology-labels",
@@ -233,6 +241,9 @@ def test_export_parquet_record_flattens_modalities_for_tabular_storage():
     assert exported["patient_sex"] == "male"
     assert '"labs"' in exported["modalities"]
     assert "Lactate" in exported["labs_json"]
+    assert "Sepsis" in exported["diagnoses_json"]
+    assert "Central venous catheter placement" in exported["procedures_json"]
+    assert "Central venous catheter placement" in exported["procedure_names_json"]
     assert "ed_note" in exported["documents_json"]
     assert exported["synthetic"] is True
 
@@ -254,6 +265,10 @@ def test_export_tool_call_record_contains_clinical_extraction_call():
     assert assistant["tool_calls"][0]["function"]["name"] == "emit_synthetic_clinical_facts"
     assert "Lactate" in assistant["tool_calls"][0]["function"]["arguments"]
     assert "img-1" in assistant["tool_calls"][0]["function"]["arguments"]
+    assert "Central venous catheter placement" in assistant["tool_calls"][0]["function"][
+        "arguments"
+    ]
+    assert "procedures" in exported["tools"][0]["function"]["parameters"]["required"]
     assert exported["metadata"]["export_profile"] == "tool_call_jsonl"
 
 

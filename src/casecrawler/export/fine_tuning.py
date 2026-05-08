@@ -67,6 +67,8 @@ def export_note_fact_sft_records(record: SyntheticRecord) -> list[dict[str, Any]
         "topic": record.topic,
         "patient": record.patient.model_dump(),
         "encounters": [encounter.model_dump() for encounter in record.encounters],
+        "diagnoses": _diagnoses(record),
+        "procedures": _procedures(record),
         "labs": [lab.model_dump() for lab in record.labs],
         "vitals": [vital.model_dump() for vital in record.vitals],
         "medication_history": [med.model_dump() for med in record.medication_history],
@@ -453,6 +455,16 @@ def export_parquet_record(record: SyntheticRecord) -> dict[str, Any]:
             [encounter.model_dump() for encounter in record.encounters],
             sort_keys=True,
         ),
+        "diagnoses_json": json.dumps(_diagnoses(record), sort_keys=True),
+        "diagnosis_names_json": json.dumps(
+            [diagnosis["display"] for diagnosis in _diagnoses(record)],
+            sort_keys=True,
+        ),
+        "procedures_json": json.dumps(_procedures(record), sort_keys=True),
+        "procedure_names_json": json.dumps(
+            [procedure["display"] for procedure in _procedures(record)],
+            sort_keys=True,
+        ),
         "labs_json": json.dumps(
             [lab.model_dump() for lab in record.labs], sort_keys=True
         ),
@@ -548,6 +560,8 @@ def _clinical_context(record: SyntheticRecord) -> dict[str, Any]:
         "topic": record.topic,
         "patient": record.patient.model_dump(),
         "encounters": [encounter.model_dump() for encounter in record.encounters],
+        "diagnoses": _diagnoses(record),
+        "procedures": _procedures(record),
         "labs": [lab.model_dump() for lab in record.labs],
         "vitals": [vital.model_dump() for vital in record.vitals],
         "medication_history": [med.model_dump() for med in record.medication_history],
@@ -555,6 +569,28 @@ def _clinical_context(record: SyntheticRecord) -> dict[str, Any]:
         "documents": [document.model_dump() for document in record.documents],
         "imaging": [asset.model_dump() for asset in record.imaging],
     }
+
+
+def _diagnoses(record: SyntheticRecord) -> list[dict[str, Any]]:
+    return [
+        {
+            "encounter_id": encounter.encounter_id,
+            **diagnosis.model_dump(),
+        }
+        for encounter in record.encounters
+        for diagnosis in encounter.diagnoses
+    ]
+
+
+def _procedures(record: SyntheticRecord) -> list[dict[str, Any]]:
+    return [
+        {
+            "encounter_id": encounter.encounter_id,
+            **procedure.model_dump(),
+        }
+        for encounter in record.encounters
+        for procedure in encounter.procedures
+    ]
 
 
 def _metadata(record: SyntheticRecord) -> dict[str, Any]:
@@ -592,6 +628,8 @@ def _tool_schema() -> dict[str, Any]:
             "topic": {"type": "string"},
             "patient": {"type": "object"},
             "encounters": {"type": "array", "items": {"type": "object"}},
+            "diagnoses": {"type": "array", "items": {"type": "object"}},
+            "procedures": {"type": "array", "items": {"type": "object"}},
             "labs": {"type": "array", "items": {"type": "object"}},
             "vitals": {"type": "array", "items": {"type": "object"}},
             "medication_history": {"type": "array", "items": {"type": "object"}},
@@ -604,6 +642,8 @@ def _tool_schema() -> dict[str, Any]:
             "topic",
             "patient",
             "encounters",
+            "diagnoses",
+            "procedures",
             "labs",
             "vitals",
             "medication_history",
