@@ -109,6 +109,50 @@ def test_dataset_cli_passes_imaging_model_options(tmp_path, monkeypatch):
     assert captured[0].diffusers_model_id == "hf/test-cxr"
 
 
+def test_dataset_cli_passes_time_series_model_options(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    class FakePipeline:
+        async def generate(self, req: GenerationRequest):
+            captured.append(req)
+            return {
+                "dataset_id": "ds-test",
+                "generated": 0,
+                "approved": 0,
+                "records": [],
+            }
+
+    monkeypatch.setattr("casecrawler.generation.synthetic_pipeline.SyntheticPipeline", FakePipeline)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "generate-dataset",
+            "sepsis",
+            "--modalities",
+            "time_series",
+            "--time-series-backend",
+            "external",
+            "--time-series-model-profile",
+            "timediff",
+            "--time-series-command",
+            "timediff-sample,--checkpoint,local.pt",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured[0].modalities == [Modality.TIME_SERIES]
+    assert captured[0].time_series_backend == "external"
+    assert captured[0].time_series_model_profile == "timediff"
+    assert captured[0].time_series_command == [
+        "timediff-sample",
+        "--checkpoint",
+        "local.pt",
+    ]
+
+
 def test_dataset_cli_export_blocks_unready_dataset_without_override(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     store = DatasetStore()

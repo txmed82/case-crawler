@@ -67,6 +67,9 @@ class GenerationRequest(BaseModel):
     imaging_backend: Literal["placeholder", "diffusers"] | None = None
     imaging_model_profile: str | None = Field(default=None, min_length=1)
     diffusers_model_id: str | None = Field(default=None, min_length=1)
+    time_series_backend: Literal["deterministic", "external"] | None = None
+    time_series_model_profile: str | None = Field(default=None, min_length=1)
+    time_series_command: list[str] | None = Field(default=None, min_length=1)
     ingest_first: bool = False
     validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
 
