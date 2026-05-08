@@ -458,6 +458,7 @@ def test_dataset_api_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
         "medsynth_dialogue_note",
         "clinical_notes_to_fhir",
         "technetium_i",
+        "clinical_timeseries_reference",
     ]
     assert body["resolved_reference_dataset_id"] == reference_dataset_id
     assert body["resolved_reference_key"] == "synthclinicalnotes"
@@ -500,6 +501,7 @@ def test_dataset_api_seeds_recipe_reference_fixtures(tmp_path, monkeypatch):
         "medsynth_dialogue_note",
         "clinical_notes_to_fhir",
         "technetium_i",
+        "clinical_timeseries_reference",
     }
     assert plan.json()["ready"] is True
     assert plan.json()["missing_reference_keys"] == []
@@ -529,6 +531,7 @@ def test_dataset_api_quality_report_includes_recipe_benchmark_readiness(
         "medsynth_dialogue_note",
         "clinical_notes_to_fhir",
         "technetium_i",
+        "clinical_timeseries_reference",
     ]
     assert "clinical_notes_to_fhir" in body["missing_reference_keys"]
     assert body["benchmark_thresholds"] == {
@@ -537,7 +540,7 @@ def test_dataset_api_quality_report_includes_recipe_benchmark_readiness(
     }
     assert body["task_export_reference_readiness"]["time_series_jsonl"][
         "recommended_reference_keys"
-    ] == ["synthea_fhir"]
+    ] == ["clinical_timeseries_reference", "synthea_fhir"]
 
 
 def test_dataset_api_runs_recipe_benchmark_suite(tmp_path, monkeypatch):
@@ -1026,10 +1029,14 @@ def test_dataset_api_lists_hf_reference_catalog(tmp_path, monkeypatch):
     assert any(item["key"] == "rexgradient_160k" for item in datasets)
     assert any(item["key"] == "synthea_fhir" for item in datasets)
     assert any(item["key"] == "technetium_i" for item in datasets)
+    assert any(item["key"] == "clinical_timeseries_reference" for item in datasets)
     asclepius = next(item for item in datasets if item["key"] == "asclepius")
     rexgradient = next(item for item in datasets if item["key"] == "rexgradient_160k")
     synthea = next(item for item in datasets if item["key"] == "synthea_fhir")
     technetium = next(item for item in datasets if item["key"] == "technetium_i")
+    timeseries = next(
+        item for item in datasets if item["key"] == "clinical_timeseries_reference"
+    )
     assert asclepius["repo_id"] == "starmpcc/Asclepius-Synthetic-Clinical-Notes"
     assert asclepius["license"]
     assert rexgradient["repo_id"] == "rajpurkarlab/ReXGradient-160K"
@@ -1044,6 +1051,9 @@ def test_dataset_api_lists_hf_reference_catalog(tmp_path, monkeypatch):
     assert rexgradient["image_modality"] == "XR"
     assert rexgradient["fixture_available"] is False
     assert technetium["fixture_available"] is True
+    assert timeseries["source"] == "casecrawler-fixture"
+    assert timeseries["time_series_field"] == "time_series"
+    assert timeseries["fixture_available"] is True
 
 
 def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
@@ -1083,6 +1093,9 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert references["synthchex_75k"]["image_modality"] == "XR"
     assert references["radiology_report_consistency"]["fixture_available"] is True
     assert references["synthea_fhir"]["source"] == "synthea"
+    assert references["clinical_timeseries_reference"]["source"] == (
+        "casecrawler-fixture"
+    )
     assert "cxr_pneumonia_dreambooth" in {
         profile["name"] for profile in body["imaging_model_profiles"]
     }

@@ -5,7 +5,22 @@ from casecrawler.integrations.huggingface import (
     import_reference_rows,
 )
 from casecrawler.integrations.synthea import SyntheaAdapter
-from casecrawler.models.synthetic import SyntheticRecord
+from casecrawler.models.synthetic import (
+    ClinicalDocument,
+    Code,
+    ComplexityProfile,
+    Encounter,
+    LabObservation,
+    MedicationStatement,
+    Modality,
+    Provenance,
+    SyntheticPatient,
+    SyntheticRecord,
+    TimeSeriesChannel,
+    TimeSeriesPoint,
+    ValidationReport,
+    VitalObservation,
+)
 from casecrawler.storage.dataset_store import DatasetStore
 
 
@@ -16,6 +31,7 @@ FIXTURE_REFERENCE_KEYS = [
     "technetium_i",
     "synthclinicalnotes",
     "augmented_clinical_notes",
+    "clinical_timeseries_reference",
     "synthchex_75k",
     "radiology_report_consistency",
     "synthetic_chest_xray_pneumonia",
@@ -30,6 +46,8 @@ def import_reference_fixture(
 ) -> list[SyntheticRecord]:
     if reference_key == "synthea_fhir":
         return _limit_records(_synthea_fixture_records(dataset_id), limit)
+    if reference_key == "clinical_timeseries_reference":
+        return _limit_records(_clinical_timeseries_fixture_records(dataset_id), limit)
     try:
         rows = _FIXTURE_ROWS[reference_key]
         spec = REFERENCE_DATASETS[reference_key]
@@ -128,6 +146,196 @@ def _synthea_fixture_records(dataset_id: str) -> list[SyntheticRecord]:
                 "path": "casecrawler-bundled-fixture",
                 "format": "fhir_resources",
                 "patient_id": "fixture-synthea-patient",
+            },
+        )
+    ]
+
+
+def _clinical_timeseries_fixture_records(dataset_id: str) -> list[SyntheticRecord]:
+    return [
+        SyntheticRecord(
+            record_id="fixture-timeseries-icu-1",
+            dataset_id=dataset_id,
+            topic="sepsis",
+            complexity=ComplexityProfile.COMPLEX,
+            modalities=[
+                Modality.STRUCTURED_EHR,
+                Modality.CLINICAL_TEXT,
+                Modality.LABS,
+                Modality.VITALS,
+                Modality.TIME_SERIES,
+            ],
+            patient=SyntheticPatient(
+                patient_id="fixture-timeseries-patient-1",
+                age=67,
+                sex="female",
+                demographics={"source": "casecrawler-bundled-fixture"},
+            ),
+            encounters=[
+                Encounter(
+                    encounter_id="fixture-timeseries-enc-1",
+                    start="2026-01-01T00:00:00",
+                    end="2026-01-01T06:00:00",
+                    setting="icu",
+                    reason="Sepsis with shock physiology",
+                    diagnoses=[
+                        Code(
+                            system="http://snomed.info/sct",
+                            code="91302008",
+                            display="Sepsis",
+                        )
+                    ],
+                )
+            ],
+            labs=[
+                LabObservation(
+                    name="Lactate",
+                    loinc="2524-7",
+                    value=4.1,
+                    unit="mmol/L",
+                    reference_low=0.5,
+                    reference_high=2.2,
+                    flag="H",
+                    effective_time="2026-01-01T00:15:00",
+                    specimen="blood",
+                ),
+                LabObservation(
+                    name="Creatinine",
+                    loinc="2160-0",
+                    value=1.8,
+                    unit="mg/dL",
+                    reference_low=0.6,
+                    reference_high=1.2,
+                    flag="H",
+                    effective_time="2026-01-01T00:15:00",
+                    specimen="serum",
+                ),
+            ],
+            vitals=[
+                VitalObservation(
+                    name="Heart rate",
+                    value=122,
+                    unit="/min",
+                    effective_time="2026-01-01T00:00:00",
+                ),
+                VitalObservation(
+                    name="Systolic blood pressure",
+                    value=86,
+                    unit="mmHg",
+                    effective_time="2026-01-01T00:00:00",
+                ),
+                VitalObservation(
+                    name="SpO2",
+                    value=92,
+                    unit="%",
+                    effective_time="2026-01-01T00:00:00",
+                ),
+            ],
+            medication_history=[
+                MedicationStatement(
+                    name="Norepinephrine",
+                    rxnorm="7512",
+                    dose="0.08 mcg/kg/min",
+                    route="IV",
+                    frequency="continuous",
+                    status="active",
+                    start="2026-01-01T00:30:00",
+                ),
+                MedicationStatement(
+                    name="Ceftriaxone",
+                    rxnorm="2193",
+                    dose="2 g",
+                    route="IV",
+                    frequency="daily",
+                    status="active",
+                    start="2026-01-01T00:20:00",
+                ),
+            ],
+            time_series=[
+                TimeSeriesChannel(
+                    name="heart_rate",
+                    unit="/min",
+                    generation_backend="casecrawler-reference-fixture",
+                    sampling_rate_hz=None,
+                    points=[
+                        TimeSeriesPoint(
+                            timestamp="2026-01-01T00:00:00",
+                            values={"value": 122},
+                        ),
+                        TimeSeriesPoint(
+                            timestamp="2026-01-01T01:00:00",
+                            values={"value": 116},
+                        ),
+                        TimeSeriesPoint(
+                            timestamp="2026-01-01T02:00:00",
+                            values={"value": 109},
+                        ),
+                    ],
+                ),
+                TimeSeriesChannel(
+                    name="lactate",
+                    unit="mmol/L",
+                    generation_backend="casecrawler-reference-fixture",
+                    sampling_rate_hz=None,
+                    points=[
+                        TimeSeriesPoint(
+                            timestamp="2026-01-01T00:15:00",
+                            values={"value": 4.1},
+                        ),
+                        TimeSeriesPoint(
+                            timestamp="2026-01-01T02:15:00",
+                            values={"value": 3.2},
+                        ),
+                        TimeSeriesPoint(
+                            timestamp="2026-01-01T04:15:00",
+                            values={"value": 2.4},
+                        ),
+                    ],
+                ),
+            ],
+            documents=[
+                ClinicalDocument(
+                    document_id="fixture-timeseries-nursing-1",
+                    note_type="nursing_note",
+                    author_role="nurse",
+                    timestamp="2026-01-01T02:30:00",
+                    clean_text=(
+                        "Nursing note: heart rate improving from 122 to 109 "
+                        "after fluids and norepinephrine; lactate downtrending."
+                    ),
+                    messy_text="nsg: HR 122->109, lactate 4.1->2.4, NE cont",
+                    extracted_facts={
+                        "time_series_channels": ["heart_rate", "lactate"],
+                        "medications": ["Norepinephrine", "Ceftriaxone"],
+                    },
+                )
+            ],
+            provenance=Provenance(
+                generator="casecrawler-bundled-reference-fixture",
+                model=None,
+                source_refs=[
+                    {
+                        "reference_key": "clinical_timeseries_reference",
+                        "source": "casecrawler-bundled-fixture",
+                    }
+                ],
+                created_at="2026-01-01T06:00:00",
+            ),
+            validation=ValidationReport(
+                schema_score=1.0,
+                clinical_consistency_score=0.95,
+                privacy_score=1.0,
+                utility_score=0.95,
+                modality_alignment_score=None,
+                approved=True,
+            ),
+            metadata={
+                "reference_key": "clinical_timeseries_reference",
+                "reference_dataset": (
+                    "casecrawler-bundled-fixture:clinical_timeseries_reference"
+                ),
+                "reference_license": "synthetic-fixture",
+                "reference_split": "fixture",
             },
         )
     ]

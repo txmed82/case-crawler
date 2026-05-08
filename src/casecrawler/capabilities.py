@@ -102,7 +102,42 @@ def reference_dataset_capabilities() -> list[dict[str, object]]:
         }
         for key, spec in REFERENCE_DATASETS.items()
     )
+    known_keys = {str(dataset["key"]) for dataset in datasets}
+    for key in FIXTURE_REFERENCE_KEYS:
+        if key in known_keys:
+            continue
+        datasets.append(
+            {
+                "key": key,
+                "repo_id": None,
+                "split": "fixture",
+                "license": "synthetic-fixture",
+                "description": _fixture_reference_description(key),
+                "image_field": None,
+                "image_label_field": None,
+                "image_modality": None,
+                "image_body_region": None,
+                "lab_values_field": None,
+                "vital_values_field": None,
+                "medications_field": None,
+                "time_series_field": "time_series",
+                "gated": False,
+                "use_policy": "offline_benchmark_fixture",
+                "source": "casecrawler-fixture",
+                "fixture_available": True,
+            }
+        )
     return datasets
+
+
+def _fixture_reference_description(key: str) -> str:
+    descriptions = {
+        "clinical_timeseries_reference": (
+            "Bundled ICU-style synthetic time-series reference with labs, vitals, "
+            "medication history, and nursing-note context."
+        )
+    }
+    return descriptions.get(key, "Bundled synthetic benchmark fixture.")
 
 
 def image_validator_capabilities() -> list[dict[str, object]]:

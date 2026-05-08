@@ -26,6 +26,10 @@ def test_generation_recipe_catalog_includes_multimodal_training_profiles():
     assert "medsynth_dialogue_note" in recipes["full_multimodal_acute_care"].recommended_reference_keys
     assert "synthea_fhir" in recipes["icu_timeseries_notes"].recommended_reference_keys
     assert "technetium_i" in recipes["icu_timeseries_notes"].recommended_reference_keys
+    assert (
+        "clinical_timeseries_reference"
+        in recipes["icu_timeseries_notes"].recommended_reference_keys
+    )
     assert recipes["full_multimodal_acute_care"].benchmark_min_overall_score == 0.7
 
 
