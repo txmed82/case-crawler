@@ -141,7 +141,18 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
             '"effectiveDateTime":"2026-01-01T00:05:00"}},'
             '{"resource":{"resourceType":"MedicationStatement","id":"med-metformin",'
             '"medicationCodeableConcept":{"text":"Metformin"},'
-            '"status":"active","dosage":[{"route":{"text":"PO"},"text":"500 mg twice daily"}]}}'
+            '"status":"active","dosage":[{"route":{"text":"PO"},"text":"500 mg twice daily"}]}},'
+            '{"resource":{"resourceType":"Condition","id":"cond-diabetes",'
+            '"code":{"coding":[{"system":"http://snomed.info/sct","code":"44054006",'
+            '"display":"Diabetes mellitus type 2"}],"text":"Type 2 diabetes mellitus"}}},'
+            '{"resource":{"resourceType":"Procedure","id":"proc-foot",'
+            '"code":{"coding":[{"system":"http://snomed.info/sct","code":"225358003",'
+            '"display":"Foot examination"}],"text":"Diabetic foot examination"}}},'
+            '{"resource":{"resourceType":"DiagnosticReport","id":"dr-hba1c",'
+            '"code":{"coding":[{"system":"http://loinc.org","code":"58410-2",'
+            '"display":"Complete blood count report"}],"text":"Lab report"},'
+            '"effectiveDateTime":"2026-01-01T00:10:00",'
+            '"conclusion":"HbA1c is elevated and consistent with diabetes."}}'
             ']}'
         ),
         "valid": True,
@@ -172,6 +183,19 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
     assert record.documents[0].extracted_facts["vital_values"][0]["value"] == 88.0
     assert record.documents[0].extracted_facts["medications"] == ["Metformin"]
     assert record.documents[0].extracted_facts["medication_details"][0]["route"] == "PO"
+    assert record.documents[0].extracted_facts["diagnoses"][0] == {
+        "system": "http://snomed.info/sct",
+        "code": "44054006",
+        "display": "Type 2 diabetes mellitus",
+    }
+    assert record.documents[0].extracted_facts["procedures"] == [
+        "Diabetic foot examination"
+    ]
+    assert record.documents[0].extracted_facts["procedure_details"][0] == {
+        "system": "http://snomed.info/sct",
+        "code": "225358003",
+        "display": "Diabetic foot examination",
+    }
     assert record.modalities == [
         Modality.STRUCTURED_EHR,
         Modality.CLINICAL_TEXT,
@@ -187,6 +211,17 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
     assert record.vitals[0].value == 88
     assert record.medication_history[0].name == "Metformin"
     assert record.medication_history[0].route == "PO"
+    assert record.encounters[0].diagnoses[0].code == "44054006"
+    assert record.encounters[0].procedures[0].display == "Diabetic foot examination"
+    assert record.documents[1].note_type == "diagnostic_report"
+    assert record.documents[1].clean_text == (
+        "HbA1c is elevated and consistent with diabetes."
+    )
+    assert record.documents[1].extracted_facts["diagnostic_report_code"] == {
+        "system": "http://loinc.org",
+        "code": "58410-2",
+        "display": "Lab report",
+    }
     assert record.topic == "easy"
     assert record.metadata["reference_dataset"] == "ai-galileo/clinical-notes-to-fhir"
 
