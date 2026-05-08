@@ -5,6 +5,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from casecrawler.imaging.file_metadata import raster_dimensions
 from casecrawler.models.evaluation import BenchmarkMetric, BenchmarkReport, CohortProfile
 from casecrawler.models.synthetic import Modality, SyntheticRecord, TimeSeriesChannel
 
@@ -348,6 +349,18 @@ class DatasetBenchmark:
                 "imaging_label_pair_overlap",
                 set(generated_profile.imaging_label_pair_counts),
                 set(reference_profile.imaging_label_pair_counts),
+            ),
+            _closeness_metric(
+                "mean_imaging_width",
+                generated_profile.mean_imaging_width,
+                reference_profile.mean_imaging_width,
+                tolerance=64.0,
+            ),
+            _closeness_metric(
+                "mean_imaging_height",
+                generated_profile.mean_imaging_height,
+                reference_profile.mean_imaging_height,
+                tolerance=64.0,
             ),
             _closeness_metric(
                 "approved_rate",
@@ -778,6 +791,18 @@ def _profile_metrics(
             set(reference_profile.imaging_label_pair_counts),
         ),
         _closeness_metric(
+            "mean_imaging_width",
+            generated_profile.mean_imaging_width,
+            reference_profile.mean_imaging_width,
+            tolerance=64.0,
+        ),
+        _closeness_metric(
+            "mean_imaging_height",
+            generated_profile.mean_imaging_height,
+            reference_profile.mean_imaging_height,
+            tolerance=64.0,
+        ),
+        _closeness_metric(
             "approved_rate",
             generated_profile.approved_rate,
             reference_profile.approved_rate,
@@ -830,6 +855,8 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     imaging_model_policy_counts: Counter[str] = Counter()
     imaging_label_counts: Counter[str] = Counter()
     imaging_label_pair_counts: Counter[str] = Counter()
+    imaging_widths: list[int] = []
+    imaging_heights: list[int] = []
     ages: list[int] = []
     document_lengths: list[int] = []
     messy_document_values: list[int] = []
@@ -919,6 +946,11 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             imaging_modality_counts[asset.modality] += 1
             imaging_body_region_counts[asset.body_region] += 1
             imaging_backend_counts[asset.generation_backend] += 1
+            if asset.file_path:
+                width, height = raster_dimensions(asset.file_path)
+                if width is not None and height is not None:
+                    imaging_widths.append(width)
+                    imaging_heights.append(height)
             asset_labels = sorted(
                 {
                     _imaging_label_key(label.display, label.code)
@@ -989,6 +1021,8 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
         imaging_label_counts=dict(sorted(imaging_label_counts.items())),
         imaging_label_pair_counts=dict(sorted(imaging_label_pair_counts.items())),
+        mean_imaging_width=_mean(imaging_widths),
+        mean_imaging_height=_mean(imaging_heights),
         approved_rate=_mean([int(value) for value in approved_values])
         if approved_values
         else None,

@@ -1,3 +1,8 @@
+import struct
+import zlib
+
+import pytest
+
 from casecrawler.models.synthetic import (
     ClinicalDocument,
     Code,
@@ -15,7 +20,6 @@ from casecrawler.models.synthetic import (
     ValidationReport,
     VitalObservation,
 )
-import pytest
 
 from casecrawler.validation.benchmark import (
     DatasetBenchmark,
@@ -521,6 +525,79 @@ def test_dataset_benchmark_compares_imaging_finding_labels():
     assert label_metric.details["reference_only"] == ["pleural effusion"]
     assert distribution_metric.score == 0.0
     assert any("imaging_label_overlap" in warning for warning in report.warnings)
+
+
+def test_profile_records_summarizes_imaging_file_dimensions(tmp_path):
+    first_image = tmp_path / "first.png"
+    second_image = tmp_path / "second.png"
+    first_image.write_bytes(_png_bytes(width=64, height=48))
+    second_image.write_bytes(_png_bytes(width=96, height=80))
+
+    records = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "imaging": [
+                    _record("rec-1", "ds-gen").imaging[0].model_copy(
+                        update={"file_path": str(first_image)}
+                    )
+                ]
+            }
+        ),
+        _record("rec-2", "ds-gen").model_copy(
+            update={
+                "imaging": [
+                    _record("rec-2", "ds-gen").imaging[0].model_copy(
+                        update={"file_path": str(second_image)}
+                    )
+                ]
+            }
+        ),
+    ]
+
+    profile = profile_records(records)
+
+    assert profile.artifact_counts["imaging_file_assets"] == 2
+    assert profile.mean_imaging_width == 80
+    assert profile.mean_imaging_height == 64
+
+
+def test_dataset_benchmark_fails_on_imaging_dimension_mismatch(tmp_path):
+    generated_image = tmp_path / "generated.png"
+    reference_image = tmp_path / "reference.png"
+    generated_image.write_bytes(_png_bytes(width=64, height=64))
+    reference_image.write_bytes(_png_bytes(width=256, height=256))
+    generated_base = _record("rec-1", "ds-gen")
+    reference_base = _record("ref-1", "ds-ref")
+    generated = [
+        generated_base.model_copy(
+            update={
+                "imaging": [
+                    generated_base.imaging[0].model_copy(
+                        update={"file_path": str(generated_image)}
+                    )
+                ]
+            }
+        )
+    ]
+    reference = [
+        reference_base.model_copy(
+            update={
+                "imaging": [
+                    reference_base.imaging[0].model_copy(
+                        update={"file_path": str(reference_image)}
+                    )
+                ]
+            }
+        )
+    ]
+
+    report = DatasetBenchmark(min_metric_score=0.5).compare(generated, reference)
+    metrics = {metric.name: metric for metric in report.metrics}
+
+    assert metrics["mean_imaging_width"].score == 0.0
+    assert metrics["mean_imaging_height"].score == 0.0
+    assert "mean_imaging_width" in report.failing_metrics
+    assert "mean_imaging_height" in report.failing_metrics
 
 
 def test_dataset_benchmark_compares_modality_alignment_scores():
@@ -1170,3 +1247,23 @@ def test_dataset_benchmark_normalizes_mixed_timezone_time_series():
     )
 
     assert duration_metric.generated_value == 6
+
+
+def _png_bytes(*, width: int, height: int) -> bytes:
+    raw = b"".join(b"\x00" + (b"\x80" * width) for _ in range(height))
+    chunks = [
+        b"\x89PNG\r\n\x1a\n",
+        _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)),
+        _png_chunk(b"IDAT", zlib.compress(raw)),
+        _png_chunk(b"IEND", b""),
+    ]
+    return b"".join(chunks)
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + chunk_type
+        + data
+        + struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
+    )
