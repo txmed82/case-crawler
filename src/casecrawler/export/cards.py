@@ -103,6 +103,11 @@ def build_model_card(
         for record in records
         for asset in record.imaging
     )
+    time_series_backends = Counter(
+        channel.generation_backend
+        for record in records
+        for channel in record.time_series
+    )
     generation_overrides = _generation_override_counts(records)
     return "\n".join(
         [
@@ -127,6 +132,10 @@ def build_model_card(
             "## Imaging Backends",
             "",
             *_counter_lines(backends or Counter({"none": 1})),
+            "",
+            "## Time-Series Backends",
+            "",
+            *_counter_lines(time_series_backends or Counter({"none": 1})),
             "",
             "## Request-Scoped Overrides",
             "",
