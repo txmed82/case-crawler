@@ -459,6 +459,8 @@ def test_dataset_benchmark_compares_longitudinal_profiles():
         "imaging_backend_distribution",
         "imaging_model_policy_overlap",
         "imaging_model_policy_distribution",
+        "image_validator_policy_overlap",
+        "image_validator_policy_distribution",
         "imaging_label_overlap",
         "imaging_label_distribution",
         "imaging_label_pair_overlap",
@@ -850,6 +852,64 @@ def test_dataset_benchmark_compares_imaging_model_policies():
     assert overlap_metric.score == 0.0
     assert distribution_metric.score == 0.0
     assert "imaging_model_policy_overlap" in report.failing_metrics
+
+
+def test_dataset_benchmark_compares_image_validator_policies():
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "metadata": {
+                    "image_validator_policy": {
+                        "profile": "lexical",
+                        "backend": "lexical",
+                        "model_id": None,
+                        "license": "casecrawler",
+                        "gated": False,
+                        "use_policy": "deterministic_screening_only",
+                    }
+                }
+            }
+        )
+    ]
+    reference = [
+        _record("ref-1", "ds-ref").model_copy(
+            update={
+                "metadata": {
+                    "image_validator_policy": {
+                        "profile": "biomedclip",
+                        "backend": "open_clip",
+                        "model_id": (
+                            "hf-hub:microsoft/"
+                            "BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+                        ),
+                        "license": "mit",
+                        "gated": False,
+                        "use_policy": "open_model_validate_image_text_alignment",
+                    }
+                }
+            }
+        )
+    ]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    overlap_metric = next(
+        metric for metric in report.metrics if metric.name == "image_validator_policy_overlap"
+    )
+    distribution_metric = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "image_validator_policy_distribution"
+    )
+
+    assert report.generated_profile.image_validator_policy_counts == {
+        (
+            "profile=lexical|backend=lexical|license=casecrawler|"
+            "gated=false|use_policy=deterministic screening only"
+        ): 1
+    }
+    assert overlap_metric.score == 0.0
+    assert distribution_metric.score == 0.0
+    assert "image_validator_policy_overlap" in report.failing_metrics
 
 
 def test_dataset_benchmark_compares_imaging_report_label_evidence():
