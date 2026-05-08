@@ -147,6 +147,9 @@ def test_dataset_cli_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert benchmark_profile["profile"]["dataset_id"] == dataset_id
     assert exports[0].metadata["split_package"] is True
     assert exports[0].metadata["seed"] == "unit-test"
+    assert exports[0].metadata["multimodal_release_ready"] is False
+    assert "benchmark_reference" in exports[0].metadata["multimodal_release_missing"]
+    assert exports[0].metadata["core_artifact_coverage"]["records"] is True
     assert "benchmark_profile.json" in exports[0].metadata["audit_artifacts"]
     verified = runner.invoke(cli, ["verify-split-package", "split-package"])
     assert verified.exit_code == 0
