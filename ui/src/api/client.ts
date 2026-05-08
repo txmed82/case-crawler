@@ -241,6 +241,10 @@ export interface DatasetCapabilitiesResponse {
     };
   }>;
   cohort_constraints: string[];
+  release_coverage_requirements: Array<{
+    key: string;
+    description: string;
+  }>;
   imaging_model_profiles: Array<{
     name: string;
     model_id: string;
