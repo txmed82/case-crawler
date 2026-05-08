@@ -87,6 +87,58 @@ class TextGenerator:
                     f"and response to active medications: {medications or 'none documented'}."
                 ),
             ),
+            *(
+                [
+                    _document(
+                        record,
+                        "lab_report",
+                        "laboratory",
+                        timestamp,
+                        (
+                            f"Laboratory report for {record.topic}. Reported results: "
+                            f"{labs}. Abnormal flags and reference ranges are preserved "
+                            "for synthetic training and validation workflows."
+                        ),
+                    )
+                ]
+                if record.labs
+                else []
+            ),
+            *(
+                [
+                    _document(
+                        record,
+                        "vital_signs_flowsheet",
+                        "nurse",
+                        timestamp,
+                        (
+                            f"Vital signs flowsheet for {record.topic}. Recorded values: "
+                            f"{vitals}. Values are time-stamped synthetic observations "
+                            "for trend review."
+                        ),
+                    )
+                ]
+                if record.vitals
+                else []
+            ),
+            *(
+                [
+                    _document(
+                        record,
+                        "medication_administration_record",
+                        "pharmacist",
+                        timestamp,
+                        (
+                            f"Medication administration record for {record.topic}. "
+                            f"Active and historical medications: {medications}. "
+                            "Doses, routes, frequencies, and statuses are synthetic "
+                            "and reconciled to the structured medication history."
+                        ),
+                    )
+                ]
+                if record.medication_history
+                else []
+            ),
             _document(
                 record,
                 "discharge_summary",
@@ -145,6 +197,12 @@ def _messy_text(note_type: str, clean_text: str) -> str:
         return f"prog note - {shorthand}"
     if note_type == "nursing_note":
         return f"MAR: {shorthand}; I/O ck, fall scrn, meds given per synthetic MAR"
+    if note_type == "lab_report":
+        return f"lab rpt: {shorthand}"
+    if note_type == "vital_signs_flowsheet":
+        return f"VS flowsheet: {shorthand}"
+    if note_type == "medication_administration_record":
+        return f"MAR: {shorthand}"
     if note_type == "discharge_summary":
         return f"d/c summ: {shorthand}"
     if note_type == "radiology_report":
@@ -297,7 +355,9 @@ def _clinical_document_prompt(record: SyntheticRecord) -> str:
         f"Time series: {[channel.model_dump() for channel in record.time_series]}\n"
         f"Imaging: {[asset.model_dump() for asset in record.imaging]}\n"
         "Required note types: ed_note, progress_note, nursing_note, "
-        "discharge_summary, radiology_report when relevant.\n"
+        "lab_report when labs are present, vital_signs_flowsheet when vitals "
+        "are present, medication_administration_record when medication history "
+        "is present, discharge_summary, and radiology_report when relevant.\n"
         "Each document must be synthetic, internally consistent with the structured "
         "facts, and include a messy_text variant with common clinical shorthand or "
         "message/OCR-style noise."

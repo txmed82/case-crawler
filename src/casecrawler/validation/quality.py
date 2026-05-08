@@ -172,6 +172,12 @@ def _count_missing_expected_documents(
         "nursing_note",
         "discharge_summary",
     }
+    if Modality.LABS in record.modalities or record.labs:
+        expected.add("lab_report")
+    if Modality.VITALS in record.modalities or record.vitals:
+        expected.add("vital_signs_flowsheet")
+    if Modality.STRUCTURED_EHR in record.modalities or record.medication_history:
+        expected.add("medication_administration_record")
     if Modality.IMAGING in record.modalities:
         expected.add("radiology_report")
 
@@ -192,6 +198,9 @@ def _count_mismatched_document_author_roles(
         "progress_note": {"physician"},
         "nursing_note": {"nurse"},
         "discharge_summary": {"physician"},
+        "lab_report": {"laboratory"},
+        "vital_signs_flowsheet": {"nurse"},
+        "medication_administration_record": {"nurse", "pharmacist"},
         "radiology_report": {"radiologist"},
     }
     mismatches = 0

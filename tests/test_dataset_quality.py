@@ -69,7 +69,21 @@ def _record(record_id: str, *, approved: bool = True, issues=None) -> SyntheticR
                 author_role="physician",
                 timestamp="2026-01-01T00:00:00",
                 clean_text="Discharge summary.",
-            )
+            ),
+            ClinicalDocument(
+                document_id=f"doc-{record_id}-lab",
+                note_type="lab_report",
+                author_role="laboratory",
+                timestamp="2026-01-01T00:00:00",
+                clean_text="Lab report.",
+            ),
+            ClinicalDocument(
+                document_id=f"doc-{record_id}-mar",
+                note_type="medication_administration_record",
+                author_role="pharmacist",
+                timestamp="2026-01-01T00:00:00",
+                clean_text="Medication administration record.",
+            ),
         ],
         labs=[
             LabObservation(
@@ -212,6 +226,7 @@ def test_quality_report_requires_expected_clinical_document_types():
     assert report.issue_counts_by_field["documents.nursing_note.missing"] == 1
     assert report.issue_counts_by_field["documents.discharge_summary.missing"] == 1
     assert report.issue_counts_by_field["documents.radiology_report.missing"] == 1
+    assert report.issue_counts_by_field["documents.lab_report.missing"] == 1
     assert any("expected clinical document types" in item for item in report.recommendations)
 
 
@@ -255,6 +270,20 @@ def test_quality_report_requires_expected_clinical_document_author_roles():
                     timestamp="2026-01-01T00:00:00",
                     clean_text="Radiology report.",
                 ),
+                ClinicalDocument(
+                    document_id="doc-lab",
+                    note_type="lab_report",
+                    author_role="physician",
+                    timestamp="2026-01-01T00:00:00",
+                    clean_text="Lab report.",
+                ),
+                ClinicalDocument(
+                    document_id="doc-mar",
+                    note_type="medication_administration_record",
+                    author_role="physician",
+                    timestamp="2026-01-01T00:00:00",
+                    clean_text="Medication administration record.",
+                ),
             ],
             "imaging": [
                 ImagingAsset(
@@ -277,6 +306,13 @@ def test_quality_report_requires_expected_clinical_document_author_roles():
     assert report.issue_counts_by_field["documents.nursing_note.author_role"] == 1
     assert report.issue_counts_by_field["documents.discharge_summary.author_role"] == 1
     assert report.issue_counts_by_field["documents.radiology_report.author_role"] == 1
+    assert report.issue_counts_by_field["documents.lab_report.author_role"] == 1
+    assert (
+        report.issue_counts_by_field[
+            "documents.medication_administration_record.author_role"
+        ]
+        == 1
+    )
     assert any("expected clinical document author roles" in item for item in report.recommendations)
 
 
