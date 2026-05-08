@@ -61,6 +61,70 @@ def export_sft_record(record: SyntheticRecord, task: str = "summarize") -> dict[
     }
 
 
+def export_note_fact_sft_records(record: SyntheticRecord) -> list[dict[str, Any]]:
+    examples: list[dict[str, Any]] = []
+    target = {
+        "topic": record.topic,
+        "patient": record.patient.model_dump(),
+        "encounters": [encounter.model_dump() for encounter in record.encounters],
+        "labs": [lab.model_dump() for lab in record.labs],
+        "vitals": [vital.model_dump() for vital in record.vitals],
+        "medication_history": [med.model_dump() for med in record.medication_history],
+        "imaging_labels": [
+            {
+                "image_id": asset.image_id,
+                "modality": asset.modality,
+                "body_region": asset.body_region,
+                "labels": [label.model_dump() for label in asset.labels],
+                "report_text": asset.report_text,
+            }
+            for asset in record.imaging
+        ],
+        "provenance": record.provenance.model_dump(),
+        "synthetic": True,
+    }
+    for document in record.documents:
+        examples.append(
+            {
+                "record_id": record.record_id,
+                "dataset_id": record.dataset_id,
+                "document_id": document.document_id,
+                "task": "extract_clinical_facts_from_note",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Extract structured clinical facts from synthetic "
+                            "healthcare documentation. Preserve uncertainty and "
+                            "synthetic provenance."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Note type: {document.note_type}\n"
+                            f"Author role: {document.author_role}\n"
+                            f"Timestamp: {document.timestamp}\n\n"
+                            f"{document.messy_text or document.clean_text}"
+                        ),
+                    },
+                    {
+                        "role": "assistant",
+                        "content": json.dumps(target, sort_keys=True),
+                    },
+                ],
+                "metadata": {
+                    **_metadata(record),
+                    "document_id": document.document_id,
+                    "note_type": document.note_type,
+                    "author_role": document.author_role,
+                    "export_profile": "note_fact_sft_jsonl",
+                },
+            }
+        )
+    return examples
+
+
 def export_chat_record(record: SyntheticRecord) -> dict[str, Any]:
     return {
         "record_id": record.record_id,
@@ -425,6 +489,13 @@ def export_record(record: SyntheticRecord, export_format: str | ExportFormat) ->
     resolved_format = ExportFormat(export_format)
     if resolved_format == ExportFormat.SFT_JSONL:
         return export_sft_record(record)
+    if resolved_format == ExportFormat.NOTE_FACT_SFT_JSONL:
+        return {
+            "record_id": record.record_id,
+            "dataset_id": record.dataset_id,
+            "examples": export_note_fact_sft_records(record),
+            "metadata": {**_metadata(record), "export_profile": "note_fact_sft_jsonl"},
+        }
     if resolved_format == ExportFormat.CHAT_JSONL:
         return export_chat_record(record)
     if resolved_format == ExportFormat.TOOL_CALL_JSONL:
@@ -442,6 +513,16 @@ def export_record(record: SyntheticRecord, export_format: str | ExportFormat) ->
     if resolved_format == ExportFormat.PARQUET:
         return export_parquet_record(record)
     raise ValueError(f"Export format {resolved_format.value} is not implemented yet.")
+
+
+def export_record_payloads(
+    record: SyntheticRecord,
+    export_format: str | ExportFormat,
+) -> list[dict[str, Any]]:
+    resolved_format = ExportFormat(export_format)
+    if resolved_format == ExportFormat.NOTE_FACT_SFT_JSONL:
+        return export_note_fact_sft_records(record)
+    return [export_record(record, resolved_format)]
 
 
 def _clinical_context(record: SyntheticRecord) -> dict[str, Any]:

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from casecrawler.config import get_config
 from casecrawler.export.cards import build_dataset_card, build_model_card
-from casecrawler.export.fine_tuning import export_parquet_bytes, export_record
+from casecrawler.export.fine_tuning import export_parquet_bytes, export_record_payloads
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.dataset import (
     ExportFormat,
@@ -572,10 +572,11 @@ def export_dataset(
         byte_count = 0
         try:
             for record in records:
-                line = json.dumps(export_record(record, export_format), sort_keys=True)
-                record_count += 1
-                byte_count += len(line.encode("utf-8")) + 1
-                yield line + "\n"
+                for payload in export_record_payloads(record, export_format):
+                    line = json.dumps(payload, sort_keys=True)
+                    record_count += 1
+                    byte_count += len(line.encode("utf-8")) + 1
+                    yield line + "\n"
         finally:
             store.save_export_manifest(
                 dataset_id=dataset_id,

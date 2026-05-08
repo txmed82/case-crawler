@@ -27,6 +27,7 @@ const modalityOptions: { value: SyntheticModality; label: string }[] = [
 
 const exportFormatOptions: { value: ExportFormat; label: string }[] = [
   { value: "sft_jsonl", label: "SFT" },
+  { value: "note_fact_sft_jsonl", label: "Note facts" },
   { value: "chat_jsonl", label: "Chat" },
   { value: "tool_call_jsonl", label: "Tool calls" },
   { value: "multimodal_jsonl", label: "Multimodal" },

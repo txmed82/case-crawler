@@ -74,6 +74,25 @@ def test_dataset_api_lists_and_exports_records(tmp_path, monkeypatch):
     assert json.loads(first_line)["dataset_id"] == dataset_id
 
 
+def test_dataset_api_exports_note_fact_sft_examples(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    dataset_id = generated.json()["dataset_id"]
+
+    exported = client.get(
+        f"/api/datasets/{dataset_id}/export",
+        params={"export_format": "note_fact_sft_jsonl"},
+    )
+
+    assert exported.status_code == 200
+    lines = [json.loads(line) for line in exported.text.strip().splitlines()]
+    assert len(lines) > 1
+    assert {line["task"] for line in lines} == {"extract_clinical_facts_from_note"}
+    assert all(line["dataset_id"] == dataset_id for line in lines)
+    assert all(line["document_id"] for line in lines)
+
+
 def test_dataset_api_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

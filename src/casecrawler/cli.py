@@ -767,6 +767,7 @@ def reviews_mark(
         [
             "raw_jsonl",
             "sft_jsonl",
+            "note_fact_sft_jsonl",
             "chat_jsonl",
             "tool_call_jsonl",
             "multimodal_jsonl",
@@ -819,7 +820,7 @@ def export_dataset(
     min_metric_score: float,
 ) -> None:
     """Export synthetic datasets to fine-tuning files."""
-    from casecrawler.export.fine_tuning import export_parquet_dataset, export_record
+    from casecrawler.export.fine_tuning import export_parquet_dataset, export_record_payloads
     from casecrawler.models.dataset import ExportFormat
     from casecrawler.storage.dataset_store import DatasetStore
     from casecrawler.validation.benchmark import DatasetBenchmark
@@ -899,8 +900,9 @@ def export_dataset(
         record_count = 0
         with open(output, "w") as f:
             for record in records:
-                f.write(json.dumps(export_record(record, export_format), sort_keys=True) + "\n")
-                record_count += 1
+                for payload in export_record_payloads(record, export_format):
+                    f.write(json.dumps(payload, sort_keys=True) + "\n")
+                    record_count += 1
     if dataset_id:
         store.save_export_manifest(
             dataset_id=dataset_id,
