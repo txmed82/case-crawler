@@ -1191,6 +1191,9 @@ def export_dataset_splits(
             "seed": manifest["seed"],
             "ratios": manifest["ratios"],
             "audit_artifacts": manifest["audit_artifacts"],
+            "multimodal_release_ready": report.multimodal_release_ready,
+            "multimodal_release_missing": report.multimodal_release_missing,
+            "core_artifact_coverage": report.core_artifact_coverage,
             **benchmark_metadata,
             "splits": {
                 name: {

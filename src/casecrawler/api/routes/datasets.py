@@ -860,6 +860,9 @@ def export_dataset_splits(
             "audit_artifacts": {
                 name: Path(path).name for name, path in manifest["audit_artifacts"].items()
             },
+            "multimodal_release_ready": report.multimodal_release_ready,
+            "multimodal_release_missing": report.multimodal_release_missing,
+            "core_artifact_coverage": report.core_artifact_coverage,
             **benchmark_metadata,
             "splits": {
                 name: {

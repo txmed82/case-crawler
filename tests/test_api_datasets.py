@@ -139,6 +139,11 @@ def test_dataset_api_exports_split_fine_tuning_package(tmp_path, monkeypatch):
         assert "Dataset Card" in archive.read("dataset_card.md").decode()
     assert listed.json()["exports"][0]["metadata"]["split_package"] is True
     assert listed.json()["exports"][0]["metadata"]["transport"] == "api"
+    assert listed.json()["exports"][0]["metadata"]["multimodal_release_ready"] is False
+    assert "benchmark_reference" in listed.json()["exports"][0]["metadata"][
+        "multimodal_release_missing"
+    ]
+    assert listed.json()["exports"][0]["metadata"]["core_artifact_coverage"]["records"] is True
     assert "benchmark_profile.json" in listed.json()["exports"][0]["metadata"][
         "audit_artifacts"
     ]
