@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -377,6 +378,71 @@ def test_structured_reference_fields_map_labs_vitals_meds_and_time_series():
         Modality.VITALS,
         Modality.TIME_SERIES,
     ]
+
+
+def test_structured_reference_fields_accept_json_encoded_columns():
+    spec = reference_dataset_spec(
+        repo_id="example/json-structured-reference",
+        split="validation",
+        license="mit",
+        note_field="note",
+        lab_values_field="labs_json",
+        vital_values_field="vitals_json",
+        medications_field="medications_json",
+        time_series_field="signals_json",
+    )
+    row = {
+        "note": "Progress note: 67-year-old female with septic shock.",
+        "labs_json": json.dumps(
+            [
+                {
+                    "name": "Creatinine",
+                    "value": "2.1",
+                    "unit": "mg/dL",
+                    "effective_time": "2026-01-01T01:00:00",
+                }
+            ]
+        ),
+        "vitals_json": json.dumps(
+            [
+                {
+                    "name": "MAP",
+                    "value": "61",
+                    "unit": "mmHg",
+                    "effective_time": "2026-01-01T01:05:00",
+                }
+            ]
+        ),
+        "medications_json": json.dumps(
+            [{"name": "Norepinephrine", "status": "active"}]
+        ),
+        "signals_json": json.dumps(
+            [
+                {
+                    "name": "arterial_pressure",
+                    "unit": "mmHg",
+                    "points": [
+                        {
+                            "timestamp": "2026-01-01T01:05:00",
+                            "values": {"mean": "61"},
+                        }
+                    ],
+                }
+            ]
+        ),
+    }
+
+    record = reference_row_to_record(
+        row,
+        dataset_id="ds-json-structured",
+        spec=spec,
+    )
+
+    assert record.labs[0].name == "Creatinine"
+    assert record.labs[0].value == 2.1
+    assert record.vitals[0].value == 61
+    assert record.medication_history[0].name == "Norepinephrine"
+    assert record.time_series[0].points[0].values == {"mean": 61.0}
 
 
 def test_radiology_consistency_reference_row_maps_image_evidence_to_instruction():

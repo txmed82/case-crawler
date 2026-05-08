@@ -713,6 +713,13 @@ def _string_list(value: object) -> list[str]:
 
 
 def _list_of_dicts(value: object) -> list[dict]:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+    if isinstance(value, dict):
+        return [value]
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
