@@ -76,9 +76,10 @@ export default function GeneratePage() {
   const [llmModel, setLlmModel] = useState("");
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState("");
   const [imagingBackend, setImagingBackend] =
-    useState<"placeholder" | "diffusers">("placeholder");
+    useState<"placeholder" | "diffusers" | "external">("placeholder");
   const [imagingProfile, setImagingProfile] = useState("");
   const [diffusersModelId, setDiffusersModelId] = useState("");
+  const [imagingCommand, setImagingCommand] = useState("");
   const [timeSeriesBackend, setTimeSeriesBackend] =
     useState<"deterministic" | "external">("deterministic");
   const [timeSeriesProfile, setTimeSeriesProfile] = useState("");
@@ -212,6 +213,10 @@ export default function GeneratePage() {
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
+    const parsedImagingCommand = imagingCommand
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
     const parsedTimeSeriesCommand = timeSeriesCommand
       .split(",")
       .map((value) => value.trim())
@@ -249,9 +254,14 @@ export default function GeneratePage() {
           ? { ollama_base_url: ollamaBaseUrl.trim() }
           : {}),
         ...(includesImaging ? { imaging_backend: imagingBackend } : {}),
-        ...(includesImaging && imagingProfile ? { imaging_model_profile: imagingProfile } : {}),
-        ...(includesImaging && diffusersModelId.trim()
+        ...(includesImaging && imagingBackend === "diffusers" && imagingProfile
+          ? { imaging_model_profile: imagingProfile }
+          : {}),
+        ...(includesImaging && imagingBackend === "diffusers" && diffusersModelId.trim()
           ? { diffusers_model_id: diffusersModelId.trim() }
+          : {}),
+        ...(includesImaging && imagingBackend === "external" && parsedImagingCommand.length > 0
+          ? { imaging_command: parsedImagingCommand }
           : {}),
         ...(includesTimeSeries ? { time_series_backend: timeSeriesBackend } : {}),
         ...(includesTimeSeries && timeSeriesProfile
@@ -301,9 +311,19 @@ export default function GeneratePage() {
             }
           : {}),
         imaging_backend: imagingBackend,
-        ...(imagingProfile ? { imaging_model_profile: imagingProfile } : {}),
-        ...(diffusersModelId.trim()
+        ...(imagingBackend === "diffusers" && imagingProfile
+          ? { imaging_model_profile: imagingProfile }
+          : {}),
+        ...(imagingBackend === "diffusers" && diffusersModelId.trim()
           ? { diffusers_model_id: diffusersModelId.trim() }
+          : {}),
+        ...(imagingBackend === "external" && imagingCommand.trim()
+          ? {
+              imaging_command: imagingCommand
+                .split(",")
+                .map((value) => value.trim())
+                .filter(Boolean),
+            }
           : {}),
       });
       setReleaseResult(resp);
@@ -750,19 +770,22 @@ export default function GeneratePage() {
         )}
 
         {includesImaging && (
-          <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,18rem)_minmax(0,1fr)]">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,18rem)_minmax(0,1fr)_minmax(0,1fr)]">
             <label className="space-y-1 text-sm font-medium text-gray-700">
               <span>Imaging backend</span>
               <select
                 aria-label="Imaging backend"
                 value={imagingBackend}
                 onChange={(event) =>
-                  setImagingBackend(event.target.value as "placeholder" | "diffusers")
+                  setImagingBackend(
+                    event.target.value as "placeholder" | "diffusers" | "external"
+                  )
                 }
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
               >
                 <option value="placeholder">Placeholder</option>
                 <option value="diffusers">Diffusers</option>
+                <option value="external">External</option>
               </select>
             </label>
             <label className="space-y-1 text-sm font-medium text-gray-700">
@@ -771,7 +794,8 @@ export default function GeneratePage() {
                 aria-label="Imaging model profile"
                 value={imagingProfile}
                 onChange={(event) => setImagingProfile(event.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+                disabled={imagingBackend !== "diffusers"}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal disabled:opacity-50"
               >
                 <option value="">Config default</option>
                 {(capabilities?.imaging_model_profiles ?? []).map((profile) => (
@@ -788,8 +812,21 @@ export default function GeneratePage() {
                 type="text"
                 value={diffusersModelId}
                 onChange={(event) => setDiffusersModelId(event.target.value)}
+                disabled={imagingBackend !== "diffusers"}
                 placeholder="Use profile or config default"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal disabled:opacity-50"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>External command</span>
+              <input
+                aria-label="Imaging external command"
+                type="text"
+                value={imagingCommand}
+                onChange={(event) => setImagingCommand(event.target.value)}
+                disabled={imagingBackend !== "external"}
+                placeholder="hf-image-sample,--profile,cxr"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal disabled:opacity-50"
               />
             </label>
           </div>
