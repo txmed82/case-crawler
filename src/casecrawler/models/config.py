@@ -66,6 +66,7 @@ class SyntheticConfig(BaseModel):
             ExportFormat.RAW_JSONL,
             ExportFormat.SFT_JSONL,
             ExportFormat.NOTE_FACT_SFT_JSONL,
+            ExportFormat.CLINICAL_OBSERVATION_JSONL,
             ExportFormat.MEDICATION_RECONCILIATION_JSONL,
             ExportFormat.CHAT_JSONL,
             ExportFormat.TOOL_CALL_JSONL,

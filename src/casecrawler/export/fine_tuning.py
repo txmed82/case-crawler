@@ -141,6 +141,105 @@ def export_note_fact_sft_records(record: SyntheticRecord) -> list[dict[str, Any]
     return examples
 
 
+def export_clinical_observation_records(record: SyntheticRecord) -> list[dict[str, Any]]:
+    """Export observation-level lab and vital interpretation examples."""
+    examples: list[dict[str, Any]] = []
+    clinical_context = _clinical_context(record)
+    note_context = [
+        {
+            "document_id": document.document_id,
+            "note_type": document.note_type,
+            "author_role": document.author_role,
+            "timestamp": document.timestamp,
+            "extracted_facts": document.extracted_facts,
+        }
+        for document in record.documents
+    ]
+    for lab in record.labs:
+        lab_flag = lab.flag or _numeric_reference_flag(
+            lab.value,
+            lab.reference_low,
+            lab.reference_high,
+        )
+        examples.append(
+            {
+                "record_id": record.record_id,
+                "dataset_id": record.dataset_id,
+                "task": "clinical_lab_observation_interpretation",
+                "input": {
+                    "patient": record.patient.model_dump(),
+                    "encounters": [
+                        encounter.model_dump() for encounter in record.encounters
+                    ],
+                    "observation": lab.model_dump(),
+                    "observation_kind": "lab",
+                    "notes": note_context,
+                    "medication_history": [
+                        medication.model_dump()
+                        for medication in record.medication_history
+                    ],
+                },
+                "target": {
+                    "name": lab.name,
+                    "loinc": lab.loinc,
+                    "value": lab.value,
+                    "unit": lab.unit,
+                    "reference_low": lab.reference_low,
+                    "reference_high": lab.reference_high,
+                    "flag": lab_flag,
+                    "effective_time": lab.effective_time,
+                    "specimen": lab.specimen,
+                    "abnormal": _is_abnormal_lab(lab.value, lab_flag),
+                },
+                "clinical_context": clinical_context,
+                "metadata": {
+                    **_metadata(record),
+                    "export_profile": "clinical_observation_jsonl",
+                    "observation_kind": "lab",
+                    "observation_name": lab.name,
+                },
+            }
+        )
+    for vital in record.vitals:
+        direction = _vital_abnormality(vital.name, vital.value)
+        examples.append(
+            {
+                "record_id": record.record_id,
+                "dataset_id": record.dataset_id,
+                "task": "clinical_vital_observation_interpretation",
+                "input": {
+                    "patient": record.patient.model_dump(),
+                    "encounters": [
+                        encounter.model_dump() for encounter in record.encounters
+                    ],
+                    "observation": vital.model_dump(),
+                    "observation_kind": "vital",
+                    "notes": note_context,
+                    "medication_history": [
+                        medication.model_dump()
+                        for medication in record.medication_history
+                    ],
+                },
+                "target": {
+                    "name": vital.name,
+                    "value": vital.value,
+                    "unit": vital.unit,
+                    "effective_time": vital.effective_time,
+                    "abnormal": direction is not None,
+                    "direction": direction,
+                },
+                "clinical_context": clinical_context,
+                "metadata": {
+                    **_metadata(record),
+                    "export_profile": "clinical_observation_jsonl",
+                    "observation_kind": "vital",
+                    "observation_name": vital.name,
+                },
+            }
+        )
+    return examples
+
+
 def export_chat_record(record: SyntheticRecord) -> dict[str, Any]:
     return {
         "record_id": record.record_id,
@@ -691,6 +790,16 @@ def export_record(record: SyntheticRecord, export_format: str | ExportFormat) ->
             "examples": export_note_fact_sft_records(record),
             "metadata": {**_metadata(record), "export_profile": "note_fact_sft_jsonl"},
         }
+    if resolved_format == ExportFormat.CLINICAL_OBSERVATION_JSONL:
+        return {
+            "record_id": record.record_id,
+            "dataset_id": record.dataset_id,
+            "examples": export_clinical_observation_records(record),
+            "metadata": {
+                **_metadata(record),
+                "export_profile": "clinical_observation_jsonl",
+            },
+        }
     if resolved_format == ExportFormat.MEDICATION_RECONCILIATION_JSONL:
         return {
             "record_id": record.record_id,
@@ -734,6 +843,8 @@ def export_record_payloads(
     resolved_format = ExportFormat(export_format)
     if resolved_format == ExportFormat.NOTE_FACT_SFT_JSONL:
         return export_note_fact_sft_records(record)
+    if resolved_format == ExportFormat.CLINICAL_OBSERVATION_JSONL:
+        return export_clinical_observation_records(record)
     if resolved_format == ExportFormat.MEDICATION_RECONCILIATION_JSONL:
         return export_medication_reconciliation_records(record)
     if resolved_format == ExportFormat.TIME_SERIES_JSONL:
@@ -787,6 +898,47 @@ def _metadata(record: SyntheticRecord) -> dict[str, Any]:
         "modalities": [m.value for m in record.modalities],
         "synthetic": True,
     }
+
+
+def _numeric_reference_flag(
+    value: float | str,
+    reference_low: float | None,
+    reference_high: float | None,
+) -> str | None:
+    if not isinstance(value, (int, float)):
+        return None
+    if reference_low is not None and value < reference_low:
+        return "L"
+    if reference_high is not None and value > reference_high:
+        return "H"
+    return None
+
+
+def _is_abnormal_lab(value: float | str, flag: str | None) -> bool:
+    if flag:
+        return flag.upper() not in {"N", "NORMAL"}
+    return False
+
+
+def _vital_abnormality(name: str, value: float) -> str | None:
+    normalized = name.lower().replace("_", " ")
+    if normalized in {"hr", "heart rate"}:
+        if value > 100:
+            return "high"
+        if value < 50:
+            return "low"
+    if normalized in {"sbp", "systolic bp", "systolic blood pressure"}:
+        if value < 90:
+            return "low"
+        if value > 180:
+            return "high"
+    if normalized in {"spo2", "oxygen saturation"} and value < 94:
+        return "low"
+    if normalized in {"temperature", "temp"} and value >= 38:
+        return "high"
+    if normalized in {"respiratory rate", "rr"} and value > 22:
+        return "high"
+    return None
 
 
 def _record_text(record: SyntheticRecord) -> str:
