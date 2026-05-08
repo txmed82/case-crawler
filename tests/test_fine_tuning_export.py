@@ -247,7 +247,27 @@ def test_export_multimodal_record_preserves_imaging_labels_and_alignment_tasks()
             "labels": ["Opacity"],
         }
     ]
-    assert exported["supervised_tasks"][0]["target"]["labels"] == ["Opacity"]
+    supervised_tasks = {task["task"]: task for task in exported["supervised_tasks"]}
+    assert set(supervised_tasks) == {
+        "radiology_image_report_alignment",
+        "radiology_report_generation",
+        "radiology_label_extraction",
+    }
+    assert supervised_tasks["radiology_image_report_alignment"]["target"]["labels"] == [
+        "Opacity"
+    ]
+    assert supervised_tasks["radiology_report_generation"]["input"]["labels"] == [
+        "Opacity"
+    ]
+    assert supervised_tasks["radiology_report_generation"]["target"]["report_text"] == (
+        "Right lower lobe opacity concerning for pneumonia."
+    )
+    assert supervised_tasks["radiology_label_extraction"]["input"]["report_text"] == (
+        "Right lower lobe opacity concerning for pneumonia."
+    )
+    assert supervised_tasks["radiology_label_extraction"]["target"]["labels"] == [
+        "Opacity"
+    ]
 
 
 def test_export_multimodal_record_inlines_existing_image_bytes(tmp_path):
@@ -272,6 +292,7 @@ def test_export_multimodal_record_inlines_existing_image_bytes(tmp_path):
     assert image["image_metadata"]["height"] == 48
     assert image["image_metadata"]["byte_size"] == image_path.stat().st_size
     assert len(image["image_metadata"]["sha256"]) == 64
+    assert exported["supervised_tasks"][0]["input"]["image_metadata"]["width"] == 64
 
 
 def test_export_fhir_record_contains_training_bundle_resources():
