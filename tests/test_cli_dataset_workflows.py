@@ -444,6 +444,10 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     assert image_artifact["package_path"] in manifest["files"]
     assert quality["multimodal_release_ready"] is True
     assert benchmark["passed"] is True
+    assert benchmark["thresholds"] == {
+        "min_overall_score": 0.1,
+        "min_metric_score": 0.0,
+    }
     assert benchmark_suite["passed"] is True
     assert release_summary["dataset_id"] == body["dataset_id"]
     assert release_summary["task_coverage"] == manifest["task_coverage"]

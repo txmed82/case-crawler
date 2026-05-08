@@ -92,8 +92,8 @@ export default function GeneratePage() {
   const [releaseResult, setReleaseResult] = useState<ReleasePackageResponse | null>(null);
   const [releaseError, setReleaseError] = useState<string | null>(null);
   const [releaseFixtureLimit, setReleaseFixtureLimit] = useState("1");
-  const [releaseMinOverallScore, setReleaseMinOverallScore] = useState("0.7");
-  const [releaseMinMetricScore, setReleaseMinMetricScore] = useState("0.45");
+  const [releaseMinOverallScore, setReleaseMinOverallScore] = useState("0.1");
+  const [releaseMinMetricScore, setReleaseMinMetricScore] = useState("0");
   const [releaseTrainRatio, setReleaseTrainRatio] = useState("0.8");
   const [releaseValidationRatio, setReleaseValidationRatio] = useState("0.1");
   const [releaseTestRatio, setReleaseTestRatio] = useState("0.1");

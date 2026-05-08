@@ -216,9 +216,9 @@ reference fixtures for the generated recipe, runs the benchmark gate, writes
 dataset/model cards plus quality and benchmark audit reports, copies file-backed
 radiology images into the package `images/` directory, exports
 train/validation/test JSONL splits, and verifies strict multimodal release
-readiness. The default benchmark thresholds are intentionally set to zero for
-fixture smoke tests; pass higher `--min-overall-score` and `--min-metric-score`
-values when benchmarking against larger imported reference datasets.
+readiness. The default benchmark thresholds are a non-zero bundled-fixture smoke
+gate: `--min-overall-score 0.1` and `--min-metric-score 0.0`. Raise them when
+benchmarking against larger imported reference datasets.
 
 Benchmark reports compare generated cohorts to stored reference datasets and
 return explicit pass/fail gates plus failing metric names. They compare across

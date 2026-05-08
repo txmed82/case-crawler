@@ -108,7 +108,7 @@ class ReleasePackageRequest(BaseModel):
     time_series_model_profile: str | None = Field(default=None, min_length=1)
     time_series_command: list[str] | None = Field(default=None, min_length=1)
     fixture_limit: int = Field(default=1, ge=1)
-    min_overall_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    min_overall_score: float = Field(default=0.1, ge=0.0, le=1.0)
     min_metric_score: float = Field(default=0.0, ge=0.0, le=1.0)
 
 

@@ -374,6 +374,10 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     assert set(time_series_files).issubset(manifest["files"])
     assert quality["multimodal_release_ready"] is True
     assert benchmark["passed"] is True
+    assert benchmark["thresholds"] == {
+        "min_overall_score": 0.1,
+        "min_metric_score": 0.0,
+    }
     assert benchmark_suite["passed"] is True
     assert benchmark_suite["reference_count"] >= 1
     assert summary["dataset_id"] == dataset_id
