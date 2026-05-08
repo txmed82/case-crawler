@@ -47,6 +47,7 @@ def test_bundled_reference_fixtures_cover_release_benchmark_keys():
         "clinical_timeseries_reference",
         "synthchex_75k",
         "radiology_report_consistency",
+        "betrac_2026",
     }.issubset(set(FIXTURE_REFERENCE_KEYS))
 
 
@@ -135,6 +136,7 @@ async def test_seed_recommended_reference_fixtures_imports_recipe_references(tmp
         "synthclinicalnotes",
         "augmented_clinical_notes",
         "medsynth_dialogue_note",
+        "betrac_2026",
         "clinical_notes_to_fhir",
         "technetium_i",
         "clinical_timeseries_reference",
@@ -181,6 +183,12 @@ def test_reference_dataset_catalog_includes_clinical_note_fhir_and_radiology_ben
     assert catalog["medsynth_dialogue_note"].question_field == "Dialogue"
     assert catalog["medsynth_dialogue_note"].task_field == "ICD10_desc"
     assert catalog["medsynth_dialogue_note"].license == "unspecified"
+    assert catalog["betrac_2026"].repo_id == "BeTraC/betrac-2026"
+    assert catalog["betrac_2026"].license == "cc-by-4.0"
+    assert catalog["betrac_2026"].note_field == "soap.txt"
+    assert catalog["betrac_2026"].question_field == "transcript.txt"
+    assert catalog["betrac_2026"].answer_field == "json"
+    assert catalog["betrac_2026"].patient_id_field == "__key__"
     assert catalog["technetium_i"].repo_id == "temlm-foundation/Technetium-I"
     assert catalog["technetium_i"].license == "eupl-1.2"
     assert catalog["technetium_i"].note_field == "text"
@@ -245,6 +253,42 @@ def test_medsynth_dialogue_note_row_maps_dialogue_and_icd_metadata():
     }
     assert record.metadata["reference_dataset"] == "Ahmad0067/MedSynth"
     assert record.metadata["reference_key"] == "medsynth_dialogue_note"
+    assert record.modalities == [Modality.CLINICAL_TEXT]
+
+
+def test_betrac_2026_row_maps_transcript_to_soap_reference():
+    row = {
+        "__key__": "dialog_0060_0120",
+        "transcript.txt": (
+            "DOCTOR: What brings you in today?\n"
+            "PATIENT: I have had a cough and shortness of breath."
+        ),
+        "soap.txt": (
+            "**1. Subjective**\n"
+            "- **Chief Complaint:** Cough and shortness of breath.\n"
+            "**2. Assessment**\n"
+            "65-year-old female with suspected pneumonia."
+        ),
+        "json": '{"version":"0.0.2","timestamp":"2025-07-24T07:10:36Z"}',
+    }
+
+    record = reference_row_to_record(
+        row,
+        dataset_id="ds-betrac",
+        spec=REFERENCE_DATASETS["betrac_2026"],
+        reference_key="betrac_2026",
+    )
+
+    assert record.dataset_id == "ds-betrac"
+    assert record.patient.age == 65
+    assert record.patient.sex == "female"
+    assert record.topic == "doctor_patient_dialogue_to_soap"
+    assert record.documents[0].clean_text == row["soap.txt"]
+    assert record.documents[0].extracted_facts["instruction"] == row["transcript.txt"]
+    assert record.documents[0].extracted_facts["answer"] == row["json"]
+    assert record.patient.demographics["source_patient_id"] == "dialog_0060_0120"
+    assert record.metadata["reference_dataset"] == "BeTraC/betrac-2026"
+    assert record.metadata["reference_license"] == "cc-by-4.0"
     assert record.modalities == [Modality.CLINICAL_TEXT]
 
 

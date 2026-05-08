@@ -38,6 +38,7 @@ FIXTURE_REFERENCE_KEYS = [
     "synthchex_75k",
     "radiology_report_consistency",
     "synthetic_chest_xray_pneumonia",
+    "betrac_2026",
 ]
 
 
@@ -408,6 +409,22 @@ _FIXTURE_ROWS: dict[str, list[dict]] = {
             "Dialogue": "[doctor] Any allergies? [patient] None. [doctor] We will start antibiotics.",
             "ICD10": "J18.9",
             "ICD10_desc": "Pneumonia, unspecified organism",
+        }
+    ],
+    "betrac_2026": [
+        {
+            "__key__": "fixture-dialog-1",
+            "transcript.txt": (
+                "DOCTOR: What brings you in today?\n"
+                "PATIENT: I have had cough, fever, and shortness of breath."
+            ),
+            "soap.txt": (
+                "**1. Subjective**\n"
+                "- **Chief Complaint:** Cough, fever, and shortness of breath.\n"
+                "**2. Assessment**\n"
+                "67-year-old female with suspected pneumonia."
+            ),
+            "json": '{"version":"fixture","source":"casecrawler"}',
         }
     ],
     "technetium_i": [

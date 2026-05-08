@@ -721,6 +721,7 @@ def test_dataset_api_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
         "synthclinicalnotes",
         "augmented_clinical_notes",
         "medsynth_dialogue_note",
+        "betrac_2026",
         "clinical_notes_to_fhir",
         "technetium_i",
         "clinical_timeseries_reference",
@@ -735,6 +736,7 @@ def test_dataset_api_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
     assert note_fact_readiness["available_reference_keys"] == ["synthclinicalnotes"]
     assert note_fact_readiness["missing_reference_keys"] == [
         "augmented_clinical_notes",
+        "betrac_2026",
         "clinical_notes_to_fhir",
         "technetium_i",
     ]
@@ -764,6 +766,7 @@ def test_dataset_api_seeds_recipe_reference_fixtures(tmp_path, monkeypatch):
         "synthclinicalnotes",
         "augmented_clinical_notes",
         "medsynth_dialogue_note",
+        "betrac_2026",
         "clinical_notes_to_fhir",
         "technetium_i",
         "clinical_timeseries_reference",
@@ -794,6 +797,7 @@ def test_dataset_api_quality_report_includes_recipe_benchmark_readiness(
         "synthclinicalnotes",
         "augmented_clinical_notes",
         "medsynth_dialogue_note",
+        "betrac_2026",
         "clinical_notes_to_fhir",
         "technetium_i",
         "clinical_timeseries_reference",
@@ -855,6 +859,7 @@ def test_dataset_api_runs_recipe_benchmark_suite(tmp_path, monkeypatch):
     assert note_fact_results["reference_count"] == 2
     assert note_fact_results["missing_reference_keys"] == [
         "augmented_clinical_notes",
+        "betrac_2026",
         "technetium_i",
     ]
 

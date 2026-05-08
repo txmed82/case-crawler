@@ -105,6 +105,7 @@ Optional backends are intentionally lazy:
 - `synthetic.clinical_text_noise_profile` controls deterministic messy-note variants: `standard`, `message`, `ocr`, or `heavy`
 - `synthetic.clinical_text_backend: external` wraps local or Hugging Face note generators as stdin/stdout commands and validates their returned `ClinicalDocument[]` records
 - Clinical text model profiles include MedGemma (`google/medgemma-4b-it`), Meditron (`epfl-llm/meditron-7b`), and a generic external note-generator contract; `casecrawler clinical-text-models` lists the adapter metadata
+- Registered Hugging Face references include BeTraC/Synth-DoPaCo (`BeTraC/betrac-2026`) for doctor-patient transcript to SOAP-note benchmarking
 
 ## CLI Reference
 
@@ -130,6 +131,7 @@ casecrawler generate-dataset "mixed acute care cohort" \
 casecrawler datasets capabilities
 casecrawler reference-datasets
 casecrawler import-reference-dataset asclepius --dataset-id ds-asclepius-ref --limit 100
+casecrawler import-reference-dataset betrac_2026 --dataset-id ds-betrac-ref --limit 100
 casecrawler import-reference-dataset clinical_notes_to_fhir --dataset-id ds-fhir-ref --limit 100
 casecrawler import-reference-dataset radiology_report_consistency --dataset-id ds-rad-ref --limit 100
 casecrawler import-reference-dataset synthchex_75k --dataset-id ds-synthchex-ref --limit 100
@@ -231,9 +233,10 @@ gate by passing a reference dataset id and thresholds, which prevents unbenchmar
 or underperforming synthetic data from silently becoming fine-tuning input.
 
 Registered Hugging Face reference datasets include synthetic clinical notes,
-clinical-note-to-FHIR rows, radiology consistency rows, de-identification and
-ICD-coding references such as Technetium-I, Synthea imports, and image-reference
-datasets such as SynthCheX-75K-v2 and synthetic chest X-ray pneumonia. Custom
+doctor-patient dialogue to SOAP-note rows, clinical-note-to-FHIR rows,
+radiology consistency rows, de-identification and ICD-coding references such as
+Technetium-I, Synthea imports, and image-reference datasets such as
+SynthCheX-75K-v2 and synthetic chest X-ray pneumonia. Custom
 Hugging Face imports can map text fields, FHIR answer fields, PHI annotations,
 diagnosis-code fields, image fields, image-label fields, explicit lab/vital
 arrays, medication-history arrays, and time-series channel arrays into the local
