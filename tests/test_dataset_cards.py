@@ -1,6 +1,7 @@
 from casecrawler.export.cards import build_dataset_card, build_model_card
 from casecrawler.models.dataset import DatasetManifest, ExportFormat
 from casecrawler.models.synthetic import (
+    ClinicalDocument,
     ComplexityProfile,
     Modality,
     Provenance,
@@ -26,6 +27,9 @@ def test_build_dataset_card_includes_validation_and_use_limits():
     assert "reference=ds-ref" in card
     assert "## Recommended Benchmark Plan" in card
     assert "synthchex_75k" in card
+    assert "## Extracted Fact Targets" in card
+    assert "- lab_values: 1" in card
+    assert "- medications: 1" in card
 
 
 def test_build_model_card_documents_generator_and_validation_gates():
@@ -50,6 +54,20 @@ def _record() -> SyntheticRecord:
         modalities=[Modality.CLINICAL_TEXT],
         patient=SyntheticPatient(patient_id="pat-1", age=64, sex="male"),
         encounters=[],
+        documents=[
+            ClinicalDocument(
+                document_id="doc-1",
+                note_type="progress_note",
+                author_role="physician",
+                timestamp="2026-05-06T10:00:00",
+                clean_text="Progress note with extracted facts.",
+                extracted_facts={
+                    "lab_values": [{"name": "Lactate", "value": 3.4, "unit": "mmol/L"}],
+                    "medications": ["Ceftriaxone"],
+                    "empty_target": [],
+                },
+            )
+        ],
         provenance=Provenance(
             generator="unit-test-generator",
             model="unit-test-model",
