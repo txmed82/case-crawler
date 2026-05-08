@@ -435,6 +435,11 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     assert release_summary["quality_report"]["mean_time_series_duration_hours"] >= 0
     assert release_summary["benchmark_suite"]["passed"] is True
     assert benchmark_suite["reference_count"] >= 1
+    assert (
+        release_summary["benchmark_suite"]["recommended_reference_keys"]
+        == benchmark_suite["recommended_reference_keys"]
+    )
+    assert release_summary["benchmark_suite"]["results"] == benchmark_suite["results"]
     assert body["benchmark_suite"]["passed"] is True
     assert body["benchmark_suite"]["reference_count"] == benchmark_suite["reference_count"]
     assert release_verified.exit_code == 0, release_verified.output

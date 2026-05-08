@@ -3845,6 +3845,16 @@ def _verify_release_summary_benchmark_suite_results(
 ) -> None:
     results = benchmark_suite.get("results")
     if results is None:
+        if benchmark_suite.get("passed") is True:
+            issues.append(
+                {
+                    "field": f"{field_prefix}.results",
+                    "message": (
+                        "Release package summary benchmark_suite marks passed "
+                        "true but is missing results."
+                    ),
+                }
+            )
         return
     if not isinstance(results, list):
         issues.append(
