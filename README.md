@@ -167,6 +167,11 @@ casecrawler export-dataset --dataset-id <dataset_id> --format fhir_ndjson --outp
 casecrawler export-dataset --dataset-id <dataset_id> --format parquet --output records.parquet
 ```
 
+Datasets generated with `--require-human-review` are blocked from export until
+each record is approved through `casecrawler reviews mark <record_id> --status
+approved` or the matching REST review endpoint. Quality reports surface missing
+human approvals as `human_review.missing` blockers.
+
 Benchmark reports compare generated cohorts to stored reference datasets and
 return explicit pass/fail gates plus failing metric names. They compare across
 demographics, note types, artifact density, declared-modality artifact coverage,

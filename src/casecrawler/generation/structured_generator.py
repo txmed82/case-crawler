@@ -115,6 +115,7 @@ class StructuredGenerator:
                 "requested_export_formats": [
                     export_format.value for export_format in req.export_formats
                 ],
+                "require_human_review": req.require_human_review,
                 "generation_overrides": _metadata_generation_overrides(req),
             },
         )
@@ -317,12 +318,15 @@ def _metadata_generation_overrides(req: GenerationRequest) -> dict:
         "time_series_backend",
         "time_series_model_profile",
         "time_series_command",
+        "require_human_review",
         "validation_threshold",
     ]
     metadata = {}
     for field in optional_fields:
         value = getattr(req, field)
         if value is None:
+            continue
+        if field == "require_human_review" and value is False:
             continue
         metadata[field] = value
     return metadata

@@ -214,3 +214,34 @@ def test_dataset_store_tracks_human_review_queue_and_effective_approval(tmp_path
     assert store.list_review_queue(dataset_id="ds-1") == []
     assert store.list_records(dataset_id="ds-1", approved=True)[0].record_id == "rec-review"
     assert store.get_manifest("ds-1").approved_count == 1
+
+
+def test_dataset_store_queues_required_human_review_even_when_validation_passes(tmp_path):
+    store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
+    record = SyntheticRecord(
+        record_id="rec-required-review",
+        dataset_id="ds-1",
+        topic="sepsis",
+        complexity=ComplexityProfile.MODERATE,
+        modalities=[Modality.CLINICAL_TEXT],
+        patient=SyntheticPatient(patient_id="pat-1", age=64, sex="male"),
+        encounters=[],
+        provenance=Provenance(
+            generator="unit-test",
+            created_at="2026-05-06T10:00:00",
+        ),
+        validation=ValidationReport(
+            schema_score=1.0,
+            clinical_consistency_score=1.0,
+            privacy_score=1.0,
+            utility_score=1.0,
+            approved=True,
+        ),
+        metadata={"require_human_review": True},
+    )
+
+    store.save_record(record)
+
+    assert store.list_review_queue(dataset_id="ds-1")[0].record_id == (
+        "rec-required-review"
+    )

@@ -123,6 +123,43 @@ def test_quality_report_marks_fully_approved_dataset_export_ready():
     assert report.recommendations == []
 
 
+def test_quality_report_blocks_export_when_required_human_review_is_missing():
+    record = _record("rec-1").model_copy(
+        update={"metadata": {"require_human_review": True}}
+    )
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.export_ready is False
+    assert report.issue_counts_by_field["human_review.missing"] == 1
+    assert (
+        "Complete required human review before exporting generated datasets."
+        in report.recommendations
+    )
+
+
+def test_quality_report_accepts_required_human_review_approval():
+    record = _record("rec-1").model_copy(
+        update={
+            "metadata": {
+                "require_human_review": True,
+                "human_review": {
+                    "status": "approved",
+                    "reviewer": "clinical-reviewer",
+                    "notes": [],
+                    "reviewed_at": "2026-01-01T00:00:00",
+                    "metadata": {},
+                },
+            }
+        }
+    )
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.export_ready is True
+    assert "human_review.missing" not in report.issue_counts_by_field
+
+
 def test_quality_report_requires_declared_modality_artifacts():
     record = _record("rec-1").model_copy(
         update={

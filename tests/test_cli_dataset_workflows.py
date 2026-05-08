@@ -89,6 +89,64 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     assert {line["task"] for line in note_fact_lines} == {"extract_clinical_facts_from_note"}
 
 
+def test_dataset_cli_blocks_export_until_required_human_review(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generate = runner.invoke(
+        cli,
+        ["generate-dataset", "sepsis", "--count", "1", "--require-human-review"],
+    )
+    assert generate.exit_code == 0
+    match = re.search(r"Dataset: (ds-[0-9a-f-]+)", generate.output)
+    assert match, f"Failed to find dataset id in output: {generate.output}"
+    dataset_id = match.group(1)
+    record_id = DatasetStore().list_records(dataset_id=dataset_id)[0].record_id
+
+    blocked = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--output",
+            "synthetic.jsonl",
+            "--format",
+            "sft_jsonl",
+        ],
+    )
+    marked = runner.invoke(
+        cli,
+        [
+            "reviews",
+            "mark",
+            record_id,
+            "--status",
+            "approved",
+            "--reviewer",
+            "clinical-reviewer",
+        ],
+    )
+    exported = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--output",
+            "synthetic.jsonl",
+            "--format",
+            "sft_jsonl",
+        ],
+    )
+
+    assert blocked.exit_code != 0
+    assert "human_review.missing" in blocked.output
+    assert marked.exit_code == 0
+    assert exported.exit_code == 0
+    assert (tmp_path / "synthetic.jsonl").exists()
+
+
 def test_dataset_cli_lists_generation_recipes():
     result = CliRunner().invoke(cli, ["generation-recipes"])
 
