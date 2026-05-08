@@ -6,6 +6,7 @@ from casecrawler.validation.clinical_rules import (
     validate_imaging_asset_clinical_shape,
     validate_document_extracted_fact_alignment,
     validate_lab_flags,
+    validate_lab_plausible_ranges,
     validate_medication_history,
     validate_medication_safety,
     validate_observation_units,
@@ -38,6 +39,7 @@ class SyntheticValidator:
         issues = [
             *validate_temporal_consistency(record),
             *validate_lab_flags(record),
+            *validate_lab_plausible_ranges(record),
             *validate_observation_units(record),
             *validate_vitals(record),
             *validate_medication_history(record),

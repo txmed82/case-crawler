@@ -122,6 +122,46 @@ def test_validator_rejects_invalid_lab_reference_ranges_and_flag_direction():
     assert sum(issue.field == "labs.flag_direction" for issue in report.issues) == 2
 
 
+def test_validator_rejects_implausible_lab_magnitudes():
+    bad = _record(
+        labs=[
+            LabObservation(
+                name="Creatinine",
+                value=-0.2,
+                unit="mg/dL",
+                reference_low=0.6,
+                reference_high=1.3,
+                flag="L",
+                effective_time="2026-05-06T08:30:00",
+            ),
+            LabObservation(
+                name="Potassium",
+                value=18.0,
+                unit="mmol/L",
+                reference_low=3.5,
+                reference_high=5.1,
+                flag="H",
+                effective_time="2026-05-06T08:35:00",
+            ),
+            LabObservation(
+                name="Glucose",
+                value=float("inf"),
+                unit="mg/dL",
+                reference_low=70,
+                reference_high=100,
+                flag="H",
+                effective_time="2026-05-06T08:40:00",
+            ),
+        ]
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert sum(issue.field == "labs.plausible_range" for issue in report.issues) == 2
+    assert any(issue.field == "labs.value" for issue in report.issues)
+
+
 def test_validator_rejects_known_lab_and_vital_unit_conflicts():
     bad = _record(
         labs=[

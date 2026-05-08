@@ -45,6 +45,32 @@ _EXPECTED_VITAL_UNITS = {
     "temp": {"c", "f"},
 }
 
+_PLAUSIBLE_LAB_RANGES = {
+    "anion-gap": (-5.0, 60.0),
+    "bicarbonate": (0.0, 60.0),
+    "bnp": (0.0, 100000.0),
+    "bun": (0.0, 250.0),
+    "co2": (0.0, 60.0),
+    "cr": (0.0, 25.0),
+    "creatinine": (0.0, 25.0),
+    "d-dimer": (0.0, 100000.0),
+    "egfr": (0.0, 200.0),
+    "glucose": (0.0, 1200.0),
+    "hemoglobin": (0.0, 25.0),
+    "hgb": (0.0, 25.0),
+    "inr": (0.5, 20.0),
+    "k": (0.0, 10.0),
+    "lactate": (0.0, 30.0),
+    "na": (90.0, 190.0),
+    "ph": (6.5, 8.0),
+    "platelets": (0.0, 2000.0),
+    "plt": (0.0, 2000.0),
+    "potassium": (0.0, 10.0),
+    "sodium": (90.0, 190.0),
+    "troponin-i": (0.0, 1000.0),
+    "wbc": (0.0, 500.0),
+}
+
 
 def validate_temporal_consistency(record: SyntheticRecord) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
@@ -424,6 +450,41 @@ def validate_lab_flags(record: SyntheticRecord) -> list[ValidationIssue]:
                             message=f"{lab.name} is above range but flagged low.",
                         )
                     )
+    return issues
+
+
+def validate_lab_plausible_ranges(record: SyntheticRecord) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    for lab in record.labs:
+        if not isinstance(lab.value, int | float):
+            continue
+        value = float(lab.value)
+        if not isfinite(value):
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.LABS,
+                    field="labs.value",
+                    message=f"{lab.name} has a non-finite numeric value.",
+                )
+            )
+            continue
+        plausible_range = _PLAUSIBLE_LAB_RANGES.get(_normalize_name(lab.name))
+        if plausible_range is None:
+            continue
+        lower, upper = plausible_range
+        if not lower <= value <= upper:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.LABS,
+                    field="labs.plausible_range",
+                    message=(
+                        f"{lab.name} value {value:g} is outside the plausible "
+                        f"synthetic clinical range {lower:g}-{upper:g}."
+                    ),
+                )
+            )
     return issues
 
 
