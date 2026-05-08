@@ -89,6 +89,8 @@ export default function GeneratePage() {
   const [referenceAnswerField, setReferenceAnswerField] = useState("");
   const [referenceTaskField, setReferenceTaskField] = useState("");
   const [referencePatientIdField, setReferencePatientIdField] = useState("");
+  const [referenceImageField, setReferenceImageField] = useState("");
+  const [referenceImageLabelField, setReferenceImageLabelField] = useState("");
   const [referenceLimit, setReferenceLimit] = useState("25");
   const [isImportingReference, setIsImportingReference] = useState(false);
   const [referenceImportResult, setReferenceImportResult] =
@@ -284,6 +286,10 @@ export default function GeneratePage() {
               ...(referenceTaskField.trim() ? { task_field: referenceTaskField.trim() } : {}),
               ...(referencePatientIdField.trim()
                 ? { patient_id_field: referencePatientIdField.trim() }
+                : {}),
+              ...(referenceImageField.trim() ? { image_field: referenceImageField.trim() } : {}),
+              ...(referenceImageLabelField.trim()
+                ? { image_label_field: referenceImageLabelField.trim() }
                 : {}),
             }),
         ...(referenceSplit.trim() ? { split: referenceSplit.trim() } : {}),
@@ -772,7 +778,7 @@ export default function GeneratePage() {
         </div>
 
         {referenceImportMode === "custom" && (
-          <div className="mt-4 grid gap-4 md:grid-cols-[repeat(5,minmax(0,1fr))]">
+          <div className="mt-4 grid gap-4 md:grid-cols-[repeat(4,minmax(0,1fr))]">
             <label className="space-y-1 text-sm font-medium text-gray-700">
               <span>Note field</span>
               <input
@@ -824,6 +830,28 @@ export default function GeneratePage() {
                 value={referencePatientIdField}
                 onChange={(event) => setReferencePatientIdField(event.target.value)}
                 placeholder="patient_id"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Image field</span>
+              <input
+                aria-label="Reference image field"
+                type="text"
+                value={referenceImageField}
+                onChange={(event) => setReferenceImageField(event.target.value)}
+                placeholder="image"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Image label field</span>
+              <input
+                aria-label="Reference image label field"
+                type="text"
+                value={referenceImageLabelField}
+                onChange={(event) => setReferenceImageLabelField(event.target.value)}
+                placeholder="label"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
               />
             </label>

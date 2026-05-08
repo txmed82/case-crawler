@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from casecrawler.integrations.huggingface import (
@@ -41,6 +43,15 @@ def test_reference_dataset_catalog_includes_clinical_note_fhir_and_radiology_ben
     assert catalog["radiology_report_consistency"].question_field == "imaging_findings"
     assert catalog["radiology_report_consistency"].answer_field == "expected_decision"
     assert catalog["radiology_report_consistency"].license == "mit"
+    assert catalog["synthchex_75k"].repo_id == "raman07/SynthCheX-75K-v2"
+    assert catalog["synthchex_75k"].image_field == "image"
+    assert catalog["synthetic_chest_xray_pneumonia"].repo_id == (
+        "chimbiwide/synthetic-chest-xray-pneumonia"
+    )
+    assert catalog["synthetic_chest_xray_pneumonia"].image_label_map == {
+        "0": "normal",
+        "1": "pneumonia",
+    }
 
 
 def test_asclepius_row_maps_to_synthetic_record():
@@ -179,6 +190,32 @@ def test_radiology_consistency_reference_row_maps_image_evidence_to_instruction(
     assert record.metadata["reference_dataset"] == (
         "ClarusC64/image-report-consistency-radiology-v01"
     )
+
+
+def test_image_reference_row_persists_image_asset(tmp_path):
+    class FakeImage:
+        def save(self, path):
+            path.write_bytes(b"fake-image")
+
+    row = {"image": FakeImage(), "label": 1}
+
+    record = reference_row_to_record(
+        row,
+        dataset_id="ds-image",
+        spec=REFERENCE_DATASETS["synthetic_chest_xray_pneumonia"],
+        image_output_dir=tmp_path,
+    )
+
+    assert record.modalities == [Modality.CLINICAL_TEXT, Modality.IMAGING]
+    assert record.documents[0].clean_text.endswith("labeled pneumonia.")
+    assert record.imaging[0].file_path is not None
+    assert record.imaging[0].generation_backend == (
+        "huggingface-reference:chimbiwide/synthetic-chest-xray-pneumonia"
+    )
+    assert record.imaging[0].modality == "XR"
+    assert record.imaging[0].body_region == "chest"
+    assert {label.display for label in record.imaging[0].labels} == {"Pneumonia"}
+    assert Path(record.imaging[0].file_path).read_bytes() == b"fake-image"
 
 
 def test_import_reference_rows_honors_limit_and_stable_ids():

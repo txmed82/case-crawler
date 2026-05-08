@@ -189,6 +189,10 @@ def reference_datasets() -> None:
 @click.option("--answer-field", default=None, help="Optional answer/completion field")
 @click.option("--task-field", default=None, help="Optional task field")
 @click.option("--patient-id-field", default=None, help="Optional source patient id field")
+@click.option("--image-field", default=None, help="Optional image field for multimodal references")
+@click.option("--image-label-field", default=None, help="Optional image label field")
+@click.option("--image-modality", default="XR", help="Imaging modality for image references")
+@click.option("--image-body-region", default="chest", help="Body region for image references")
 @click.option("--limit", default=100, type=int, help="Maximum reference rows to import")
 @click.option(
     "--no-streaming",
@@ -206,6 +210,10 @@ def import_reference_dataset(
     answer_field: str | None,
     task_field: str | None,
     patient_id_field: str | None,
+    image_field: str | None,
+    image_label_field: str | None,
+    image_modality: str,
+    image_body_region: str,
     limit: int,
     no_streaming: bool,
 ) -> None:
@@ -240,6 +248,10 @@ def import_reference_dataset(
                 answer_field=answer_field,
                 task_field=task_field,
                 patient_id_field=patient_id_field,
+                image_field=image_field,
+                image_label_field=image_label_field,
+                image_modality=image_modality,
+                image_body_region=image_body_region,
                 description="User-specified Hugging Face reference dataset.",
             )
             rows = load_huggingface_dataset(
