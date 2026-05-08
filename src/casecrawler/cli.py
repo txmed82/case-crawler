@@ -223,6 +223,10 @@ def generation_recipes() -> None:
 @click.option("--image-label-field", default=None, help="Optional image label field")
 @click.option("--image-modality", default="XR", help="Imaging modality for image references")
 @click.option("--image-body-region", default="chest", help="Body region for image references")
+@click.option("--lab-values-field", default=None, help="Optional structured lab array field")
+@click.option("--vital-values-field", default=None, help="Optional structured vital array field")
+@click.option("--medications-field", default=None, help="Optional medication-history array field")
+@click.option("--time-series-field", default=None, help="Optional time-series channel array field")
 @click.option("--limit", default=100, type=int, help="Maximum reference rows to import")
 @click.option(
     "--no-streaming",
@@ -244,6 +248,10 @@ def import_reference_dataset(
     image_label_field: str | None,
     image_modality: str,
     image_body_region: str,
+    lab_values_field: str | None,
+    vital_values_field: str | None,
+    medications_field: str | None,
+    time_series_field: str | None,
     limit: int,
     no_streaming: bool,
 ) -> None:
@@ -282,6 +290,10 @@ def import_reference_dataset(
                 image_label_field=image_label_field,
                 image_modality=image_modality,
                 image_body_region=image_body_region,
+                lab_values_field=lab_values_field,
+                vital_values_field=vital_values_field,
+                medications_field=medications_field,
+                time_series_field=time_series_field,
                 description="User-specified Hugging Face reference dataset.",
             )
             rows = load_huggingface_dataset(

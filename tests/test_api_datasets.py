@@ -803,6 +803,36 @@ def test_dataset_api_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
                 "prompt": "Extract diagnosis.",
                 "completion": "COPD.",
                 "task_name": "extraction",
+                "labs": [
+                    {
+                        "name": "PaCO2",
+                        "value": 51,
+                        "unit": "mmHg",
+                        "flag": "H",
+                        "effective_time": "2026-01-01T00:00:00",
+                    }
+                ],
+                "vitals": [
+                    {
+                        "name": "SpO2",
+                        "value": 91,
+                        "unit": "%",
+                        "effective_time": "2026-01-01T00:05:00",
+                    }
+                ],
+                "medications": [{"name": "Albuterol", "route": "inhaled"}],
+                "signals": [
+                    {
+                        "name": "respiratory_rate",
+                        "unit": "/min",
+                        "points": [
+                            {
+                                "timestamp": "2026-01-01T00:05:00",
+                                "values": {"value": 24},
+                            }
+                        ],
+                    }
+                ],
             }
         ]
 
@@ -823,6 +853,10 @@ def test_dataset_api_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
             "answer_field": "completion",
             "task_field": "task_name",
             "patient_id_field": "subject_id",
+            "lab_values_field": "labs",
+            "vital_values_field": "vitals",
+            "medications_field": "medications",
+            "time_series_field": "signals",
             "limit": 1,
         },
     )
@@ -836,6 +870,10 @@ def test_dataset_api_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     assert record.metadata["reference_key"] == "org/custom-synthetic-notes"
     assert record.metadata["reference_license"] == "cc-by-4.0"
     assert record.documents[0].extracted_facts["instruction"] == "Extract diagnosis."
+    assert record.labs[0].name == "PaCO2"
+    assert record.vitals[0].name == "SpO2"
+    assert record.medication_history[0].name == "Albuterol"
+    assert record.time_series[0].name == "respiratory_rate"
 
 
 def test_dataset_api_imports_synthea_fhir_directory(tmp_path, monkeypatch):

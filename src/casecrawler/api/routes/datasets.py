@@ -39,6 +39,10 @@ class ReferenceImportRequest(BaseModel):
     image_label_field: str | None = None
     image_modality: str = "XR"
     image_body_region: str = "chest"
+    lab_values_field: str | None = None
+    vital_values_field: str | None = None
+    medications_field: str | None = None
+    time_series_field: str | None = None
     limit: int | None = Field(default=None, ge=1)
 
 
@@ -116,6 +120,10 @@ def list_reference_catalog():
             "image_label_field": spec.image_label_field,
             "image_modality": spec.image_modality,
             "image_body_region": spec.image_body_region,
+            "lab_values_field": spec.lab_values_field,
+            "vital_values_field": spec.vital_values_field,
+            "medications_field": spec.medications_field,
+            "time_series_field": spec.time_series_field,
             "gated": spec.gated,
             "use_policy": spec.use_policy,
             "source": "huggingface",
@@ -239,14 +247,18 @@ def import_reference_dataset(req: ReferenceImportRequest):
             note_field=req.note_field,
             question_field=req.question_field,
             answer_field=req.answer_field,
-                task_field=req.task_field,
-                patient_id_field=req.patient_id_field,
-                image_field=req.image_field,
-                image_label_field=req.image_label_field,
-                image_modality=req.image_modality,
-                image_body_region=req.image_body_region,
-                description="User-specified Hugging Face reference dataset.",
-            )
+            task_field=req.task_field,
+            patient_id_field=req.patient_id_field,
+            image_field=req.image_field,
+            image_label_field=req.image_label_field,
+            image_modality=req.image_modality,
+            image_body_region=req.image_body_region,
+            lab_values_field=req.lab_values_field,
+            vital_values_field=req.vital_values_field,
+            medications_field=req.medications_field,
+            time_series_field=req.time_series_field,
+            description="User-specified Hugging Face reference dataset.",
+        )
         try:
             rows = load_huggingface_dataset(req.repo_id, split=split, streaming=True)
             records = import_reference_rows(

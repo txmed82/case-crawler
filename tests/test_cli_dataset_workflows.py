@@ -893,6 +893,36 @@ def test_dataset_cli_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
                 "prompt": "Extract diagnosis.",
                 "completion": "COPD.",
                 "task_name": "extraction",
+                "labs": [
+                    {
+                        "name": "PaCO2",
+                        "value": 51,
+                        "unit": "mmHg",
+                        "flag": "H",
+                        "effective_time": "2026-01-01T00:00:00",
+                    }
+                ],
+                "vitals": [
+                    {
+                        "name": "SpO2",
+                        "value": 91,
+                        "unit": "%",
+                        "effective_time": "2026-01-01T00:05:00",
+                    }
+                ],
+                "medications": [{"name": "Albuterol", "route": "inhaled"}],
+                "signals": [
+                    {
+                        "name": "respiratory_rate",
+                        "unit": "/min",
+                        "points": [
+                            {
+                                "timestamp": "2026-01-01T00:05:00",
+                                "values": {"value": 24},
+                            }
+                        ],
+                    }
+                ],
             }
         ]
 
@@ -923,6 +953,14 @@ def test_dataset_cli_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
             "task_name",
             "--patient-id-field",
             "subject_id",
+            "--lab-values-field",
+            "labs",
+            "--vital-values-field",
+            "vitals",
+            "--medications-field",
+            "medications",
+            "--time-series-field",
+            "signals",
             "--limit",
             "1",
         ],
@@ -935,6 +973,10 @@ def test_dataset_cli_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     assert record.metadata["reference_key"] == "org/custom-synthetic-notes"
     assert record.metadata["reference_dataset"] == "org/custom-synthetic-notes"
     assert record.documents[0].extracted_facts["instruction"] == "Extract diagnosis."
+    assert record.labs[0].name == "PaCO2"
+    assert record.vitals[0].name == "SpO2"
+    assert record.medication_history[0].name == "Albuterol"
+    assert record.time_series[0].name == "respiratory_rate"
 
 
 def test_dataset_cli_benchmark_reports_missing_reference_cleanly(tmp_path, monkeypatch):
