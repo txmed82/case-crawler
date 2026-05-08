@@ -84,6 +84,11 @@ def test_build_model_card_documents_generator_and_validation_gates(tmp_path):
         "- profile=cxr_pneumonia_dreambooth license=openrail++ "
         "gated=False use_policy=openrail_review_outputs_before_release: 1"
     ) in card
+    assert "## Image Validator Policies" in card
+    assert (
+        "- profile=biomedclip backend=open_clip license=mit "
+        "gated=False use_policy=open_model_validate_image_text_alignment: 1"
+    ) in card
     assert "## Time-Series Backends" in card
     assert "- external:timediff-sample: 1" in card
     assert "## Time-Series Units" in card
@@ -238,6 +243,17 @@ def _record(tmp_path) -> SyntheticRecord:
                 "license": "openrail++",
                 "gated": False,
                 "use_policy": "openrail_review_outputs_before_release",
+            },
+            "image_validator_policy": {
+                "profile": "biomedclip",
+                "backend": "open_clip",
+                "model_id": (
+                    "hf-hub:microsoft/"
+                    "BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+                ),
+                "license": "mit",
+                "gated": False,
+                "use_policy": "open_model_validate_image_text_alignment",
             },
         },
     )

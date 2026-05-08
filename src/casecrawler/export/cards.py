@@ -154,6 +154,7 @@ def build_model_card(
     procedure_counts = _procedure_counts(records)
     generation_overrides = _generation_override_counts(records)
     imaging_model_policies = _imaging_model_policy_counts(records)
+    image_validator_policies = _image_validator_policy_counts(records)
     diagnosis_code_system_counts = _diagnosis_code_system_counts(records)
     diagnosis_code_counts = _diagnosis_code_counts(records)
     phi_entity_counts = _phi_entity_counts(records)
@@ -185,6 +186,10 @@ def build_model_card(
             "## Imaging Model Policies",
             "",
             *_counter_lines(imaging_model_policies or Counter({"none": 1})),
+            "",
+            "## Image Validator Policies",
+            "",
+            *_counter_lines(image_validator_policies or Counter({"none": 1})),
             "",
             "## Time-Series Backends",
             "",
@@ -383,6 +388,24 @@ def _imaging_model_policy_counts(records: list[SyntheticRecord]) -> Counter[str]
         gated = policy.get("gated")
         counter[
             f"profile={profile} license={license_name} gated={gated} use_policy={use_policy}"
+        ] += 1
+    return counter
+
+
+def _image_validator_policy_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        policy = record.metadata.get("image_validator_policy", {})
+        if not isinstance(policy, dict):
+            continue
+        profile = policy.get("profile") or "unspecified"
+        backend = policy.get("backend") or "unspecified"
+        use_policy = policy.get("use_policy") or "review_license_before_use"
+        license_name = policy.get("license") or "unspecified"
+        gated = policy.get("gated")
+        counter[
+            f"profile={profile} backend={backend} license={license_name} "
+            f"gated={gated} use_policy={use_policy}"
         ] += 1
     return counter
 
