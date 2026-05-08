@@ -20,7 +20,9 @@ import pytest
 from casecrawler.validation.benchmark import (
     DatasetBenchmark,
     _distribution_metric,
+    load_benchmark_profile_artifact,
     profile_records,
+    write_benchmark_profile_artifact,
 )
 
 
@@ -264,6 +266,43 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
     assert report.passed is True
     assert report.failing_metrics == []
     assert report.thresholds == {"min_overall_score": 0.75, "min_metric_score": 0.5}
+
+
+def test_dataset_benchmark_compares_portable_profile_artifacts(tmp_path):
+    generated = [
+        _record("rec-1", "ds-gen", age=60, sex="male"),
+        _record("rec-2", "ds-gen", age=62, sex="female"),
+    ]
+    reference = [
+        _record("ref-1", "ds-ref", age=61, sex="male"),
+        _record("ref-2", "ds-ref", age=63, sex="female"),
+    ]
+
+    generated_artifact = write_benchmark_profile_artifact(
+        generated,
+        tmp_path / "generated-profile.json",
+    )
+    reference_artifact = write_benchmark_profile_artifact(
+        reference,
+        tmp_path / "reference-profile.json",
+    )
+    report = DatasetBenchmark().compare_profiles(
+        load_benchmark_profile_artifact(tmp_path / "generated-profile.json"),
+        load_benchmark_profile_artifact(tmp_path / "reference-profile.json"),
+    )
+
+    assert generated_artifact["artifact_type"] == "casecrawler_benchmark_profile"
+    assert reference_artifact["schema_version"] == 1
+    assert report.generated_dataset_id == "ds-gen"
+    assert report.reference_dataset_id == "ds-ref"
+    assert report.overall_score > 0.8
+
+
+def test_dataset_benchmark_rejects_invalid_profile_artifact(tmp_path):
+    (tmp_path / "bad-profile.json").write_text('{"artifact_type": "unknown"}')
+
+    with pytest.raises(ValueError, match="unsupported artifact_type"):
+        load_benchmark_profile_artifact(tmp_path / "bad-profile.json")
 
 
 def test_dataset_benchmark_profiles_longitudinal_encounter_depth():

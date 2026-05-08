@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -343,6 +344,346 @@ class DatasetBenchmark:
             metrics=metrics,
             warnings=warnings,
         )
+
+    def compare_profiles(
+        self,
+        generated_profile: CohortProfile,
+        reference_profile: CohortProfile,
+    ) -> BenchmarkReport:
+        metrics = _profile_metrics(generated_profile, reference_profile)
+        overall = sum(metric.score for metric in metrics) / len(metrics)
+        rounded_overall = round(overall, 4)
+        failing_metrics = [
+            metric.name for metric in metrics if metric.score < self._min_metric_score
+        ]
+        passed = rounded_overall >= self._min_overall_score and not failing_metrics
+        warnings = _warnings(generated_profile, reference_profile, metrics)
+        if rounded_overall < self._min_overall_score:
+            warnings.append(
+                "Overall benchmark score "
+                f"{rounded_overall:.2f} is below required "
+                f"{self._min_overall_score:.2f}."
+            )
+        for metric_name in failing_metrics:
+            warnings.append(
+                f"Benchmark gate failed: {metric_name} below "
+                f"{self._min_metric_score:.2f}."
+            )
+        return BenchmarkReport(
+            generated_dataset_id=generated_profile.dataset_id,
+            reference_dataset_id=reference_profile.dataset_id,
+            overall_score=rounded_overall,
+            passed=passed,
+            failing_metrics=failing_metrics,
+            thresholds={
+                "min_overall_score": self._min_overall_score,
+                "min_metric_score": self._min_metric_score,
+            },
+            generated_profile=generated_profile,
+            reference_profile=reference_profile,
+            metrics=metrics,
+            warnings=warnings,
+        )
+
+
+def benchmark_profile_artifact(profile: CohortProfile) -> dict:
+    return {
+        "schema_version": 1,
+        "artifact_type": "casecrawler_benchmark_profile",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "profile": profile.model_dump(mode="json"),
+    }
+
+
+def write_benchmark_profile_artifact(
+    records: list[SyntheticRecord],
+    output_path: str | Path,
+) -> dict:
+    artifact = benchmark_profile_artifact(profile_records(records))
+    Path(output_path).write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    return artifact
+
+
+def load_benchmark_profile_artifact(path: str | Path) -> CohortProfile:
+    payload = json.loads(Path(path).read_text())
+    if not isinstance(payload, dict):
+        raise ValueError("Benchmark profile artifact must be a JSON object.")
+    if payload.get("artifact_type") != "casecrawler_benchmark_profile":
+        raise ValueError("Benchmark profile artifact has an unsupported artifact_type.")
+    if payload.get("schema_version") != 1:
+        raise ValueError("Benchmark profile artifact has an unsupported schema_version.")
+    profile = payload.get("profile")
+    if not isinstance(profile, dict):
+        raise ValueError("Benchmark profile artifact is missing a profile object.")
+    return CohortProfile.model_validate(profile)
+
+
+def _profile_metrics(
+    generated_profile: CohortProfile,
+    reference_profile: CohortProfile,
+) -> list[BenchmarkMetric]:
+    return [
+        _ratio_metric(
+            "record_count",
+            generated_profile.record_count,
+            reference_profile.record_count,
+        ),
+        _jaccard_metric(
+            "modality_overlap",
+            set(generated_profile.modality_counts),
+            set(reference_profile.modality_counts),
+        ),
+        _closeness_metric(
+            "mean_age",
+            generated_profile.mean_age,
+            reference_profile.mean_age,
+            tolerance=25.0,
+        ),
+        _distribution_metric(
+            "sex_distribution",
+            generated_profile.sex_counts,
+            reference_profile.sex_counts,
+        ),
+        _closeness_metric(
+            "mean_document_chars",
+            generated_profile.mean_document_chars,
+            reference_profile.mean_document_chars,
+            tolerance=2500.0,
+        ),
+        _jaccard_metric(
+            "note_type_overlap",
+            set(generated_profile.note_type_counts),
+            set(reference_profile.note_type_counts),
+        ),
+        _jaccard_metric(
+            "document_author_role_overlap",
+            set(generated_profile.document_author_role_counts),
+            set(reference_profile.document_author_role_counts),
+        ),
+        _distribution_metric(
+            "document_author_role_distribution",
+            generated_profile.document_author_role_counts,
+            reference_profile.document_author_role_counts,
+        ),
+        _closeness_metric(
+            "messy_document_rate",
+            generated_profile.messy_document_rate,
+            reference_profile.messy_document_rate,
+            tolerance=0.5,
+        ),
+        _jaccard_metric(
+            "extracted_fact_key_overlap",
+            set(generated_profile.extracted_fact_key_counts),
+            set(reference_profile.extracted_fact_key_counts),
+        ),
+        _distribution_metric(
+            "extracted_fact_key_distribution",
+            generated_profile.extracted_fact_key_counts,
+            reference_profile.extracted_fact_key_counts,
+        ),
+        *_fact_density_metrics(
+            generated_profile.extracted_fact_density,
+            reference_profile.extracted_fact_density,
+        ),
+        *_density_metrics(
+            generated_profile.artifact_density,
+            reference_profile.artifact_density,
+        ),
+        _closeness_metric(
+            "longitudinal_record_rate",
+            generated_profile.longitudinal_record_rate,
+            reference_profile.longitudinal_record_rate,
+            tolerance=0.5,
+        ),
+        _closeness_metric(
+            "mean_encounter_span_hours",
+            generated_profile.mean_encounter_span_hours,
+            reference_profile.mean_encounter_span_hours,
+            tolerance=72.0,
+        ),
+        _closeness_metric(
+            "mean_observations_per_encounter",
+            generated_profile.mean_observations_per_encounter,
+            reference_profile.mean_observations_per_encounter,
+            tolerance=8.0,
+        ),
+        *_coverage_metrics(
+            generated_profile.modality_artifact_coverage,
+            reference_profile.modality_artifact_coverage,
+        ),
+        _jaccard_metric(
+            "lab_name_overlap",
+            set(generated_profile.lab_name_counts),
+            set(reference_profile.lab_name_counts),
+        ),
+        _distribution_metric(
+            "lab_flag_distribution",
+            generated_profile.lab_flag_counts,
+            reference_profile.lab_flag_counts,
+        ),
+        *_numeric_summary_metrics(
+            prefix="lab_value_mean",
+            generated_summaries=generated_profile.lab_numeric_summaries,
+            reference_summaries=reference_profile.lab_numeric_summaries,
+            tolerance=50.0,
+        ),
+        _jaccard_metric(
+            "vital_name_overlap",
+            set(generated_profile.vital_name_counts),
+            set(reference_profile.vital_name_counts),
+        ),
+        *_numeric_summary_metrics(
+            prefix="vital_value_mean",
+            generated_summaries=generated_profile.vital_numeric_summaries,
+            reference_summaries=reference_profile.vital_numeric_summaries,
+            tolerance=25.0,
+        ),
+        _jaccard_metric(
+            "procedure_name_overlap",
+            set(generated_profile.procedure_name_counts),
+            set(reference_profile.procedure_name_counts),
+        ),
+        _distribution_metric(
+            "procedure_name_distribution",
+            generated_profile.procedure_name_counts,
+            reference_profile.procedure_name_counts,
+        ),
+        _jaccard_metric(
+            "diagnosis_code_system_overlap",
+            set(generated_profile.diagnosis_code_system_counts),
+            set(reference_profile.diagnosis_code_system_counts),
+        ),
+        _distribution_metric(
+            "diagnosis_code_system_distribution",
+            generated_profile.diagnosis_code_system_counts,
+            reference_profile.diagnosis_code_system_counts,
+        ),
+        _jaccard_metric(
+            "diagnosis_code_overlap",
+            set(generated_profile.diagnosis_code_counts),
+            set(reference_profile.diagnosis_code_counts),
+        ),
+        _distribution_metric(
+            "diagnosis_code_distribution",
+            generated_profile.diagnosis_code_counts,
+            reference_profile.diagnosis_code_counts,
+        ),
+        _jaccard_metric(
+            "phi_entity_overlap",
+            set(generated_profile.phi_entity_counts),
+            set(reference_profile.phi_entity_counts),
+        ),
+        _distribution_metric(
+            "phi_entity_distribution",
+            generated_profile.phi_entity_counts,
+            reference_profile.phi_entity_counts,
+        ),
+        _jaccard_metric(
+            "medication_name_overlap",
+            set(generated_profile.medication_name_counts),
+            set(reference_profile.medication_name_counts),
+        ),
+        _distribution_metric(
+            "medication_route_distribution",
+            generated_profile.medication_route_counts,
+            reference_profile.medication_route_counts,
+        ),
+        _distribution_metric(
+            "medication_status_distribution",
+            generated_profile.medication_status_counts,
+            reference_profile.medication_status_counts,
+        ),
+        _jaccard_metric(
+            "time_series_channel_overlap",
+            set(generated_profile.time_series_channel_counts),
+            set(reference_profile.time_series_channel_counts),
+        ),
+        _jaccard_metric(
+            "time_series_backend_overlap",
+            set(generated_profile.time_series_backend_counts),
+            set(reference_profile.time_series_backend_counts),
+        ),
+        _distribution_metric(
+            "time_series_backend_distribution",
+            generated_profile.time_series_backend_counts,
+            reference_profile.time_series_backend_counts,
+        ),
+        _closeness_metric(
+            "mean_time_series_points",
+            generated_profile.mean_time_series_points,
+            reference_profile.mean_time_series_points,
+            tolerance=12.0,
+        ),
+        _closeness_metric(
+            "mean_time_series_duration_hours",
+            generated_profile.mean_time_series_duration_hours,
+            reference_profile.mean_time_series_duration_hours,
+            tolerance=48.0,
+        ),
+        *_numeric_summary_metrics(
+            prefix="time_series_value_mean",
+            generated_summaries=generated_profile.time_series_numeric_summaries,
+            reference_summaries=reference_profile.time_series_numeric_summaries,
+            tolerance=25.0,
+        ),
+        _jaccard_metric(
+            "imaging_modality_overlap",
+            set(generated_profile.imaging_modality_counts),
+            set(reference_profile.imaging_modality_counts),
+        ),
+        _jaccard_metric(
+            "imaging_body_region_overlap",
+            set(generated_profile.imaging_body_region_counts),
+            set(reference_profile.imaging_body_region_counts),
+        ),
+        _jaccard_metric(
+            "imaging_backend_overlap",
+            set(generated_profile.imaging_backend_counts),
+            set(reference_profile.imaging_backend_counts),
+        ),
+        _distribution_metric(
+            "imaging_backend_distribution",
+            generated_profile.imaging_backend_counts,
+            reference_profile.imaging_backend_counts,
+        ),
+        _jaccard_metric(
+            "imaging_model_policy_overlap",
+            set(generated_profile.imaging_model_policy_counts),
+            set(reference_profile.imaging_model_policy_counts),
+        ),
+        _distribution_metric(
+            "imaging_model_policy_distribution",
+            generated_profile.imaging_model_policy_counts,
+            reference_profile.imaging_model_policy_counts,
+        ),
+        _jaccard_metric(
+            "imaging_label_overlap",
+            set(generated_profile.imaging_label_counts),
+            set(reference_profile.imaging_label_counts),
+        ),
+        _distribution_metric(
+            "imaging_label_distribution",
+            generated_profile.imaging_label_counts,
+            reference_profile.imaging_label_counts,
+        ),
+        _jaccard_metric(
+            "imaging_label_pair_overlap",
+            set(generated_profile.imaging_label_pair_counts),
+            set(reference_profile.imaging_label_pair_counts),
+        ),
+        _closeness_metric(
+            "approved_rate",
+            generated_profile.approved_rate,
+            reference_profile.approved_rate,
+            tolerance=0.5,
+        ),
+        _closeness_metric(
+            "mean_modality_alignment_score",
+            generated_profile.mean_modality_alignment_score,
+            reference_profile.mean_modality_alignment_score,
+            tolerance=0.5,
+        ),
+    ]
 
 
 def profile_records(records: list[SyntheticRecord]) -> CohortProfile:

@@ -867,6 +867,63 @@ def test_dataset_cli_benchmark_against_reference_dataset(tmp_path, monkeypatch):
     assert report["thresholds"] == {"min_overall_score": 0.2, "min_metric_score": 0.0}
 
 
+def test_dataset_cli_exports_and_compares_benchmark_profiles(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    generated = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "2"])
+    reference = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "2"])
+    assert generated.exit_code == 0
+    assert reference.exit_code == 0
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output).group(1)
+    reference_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", reference.output).group(1)
+
+    generated_profile = runner.invoke(
+        cli,
+        [
+            "export-benchmark-profile",
+            "--dataset-id",
+            dataset_id,
+            "--output",
+            "generated-profile.json",
+        ],
+    )
+    reference_profile = runner.invoke(
+        cli,
+        [
+            "export-benchmark-profile",
+            "--dataset-id",
+            reference_id,
+            "--output",
+            "reference-profile.json",
+        ],
+    )
+    compared = runner.invoke(
+        cli,
+        [
+            "benchmark-profile",
+            "--profile",
+            "generated-profile.json",
+            "--reference-profile",
+            "reference-profile.json",
+            "--min-overall-score",
+            "0.2",
+            "--min-metric-score",
+            "0",
+            "--output",
+            "profile-benchmark.json",
+        ],
+    )
+
+    assert generated_profile.exit_code == 0
+    assert reference_profile.exit_code == 0
+    assert compared.exit_code == 0
+    profile_payload = json.loads((tmp_path / "generated-profile.json").read_text())
+    assert profile_payload["artifact_type"] == "casecrawler_benchmark_profile"
+    report = json.loads((tmp_path / "profile-benchmark.json").read_text())
+    assert report["generated_dataset_id"] == dataset_id
+    assert report["reference_dataset_id"] == reference_id
+
+
 def test_dataset_cli_benchmark_reports_failing_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

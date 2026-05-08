@@ -1235,6 +1235,92 @@ def benchmark_dataset(
         click.echo(f"Warning: {warning}")
 
 
+@cli.command("export-benchmark-profile")
+@click.option("--dataset-id", required=True, help="Dataset id to profile")
+@click.option("--output", required=True, help="Benchmark profile JSON output path")
+def export_benchmark_profile(dataset_id: str, output: str) -> None:
+    """Export a portable benchmark profile artifact for a stored dataset."""
+    from casecrawler.storage.dataset_store import DatasetStore
+    from casecrawler.validation.benchmark import write_benchmark_profile_artifact
+
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise click.ClickException(f"Dataset {dataset_id} not found.")
+    records = list(store.iter_records(dataset_id=dataset_id))
+    try:
+        artifact = write_benchmark_profile_artifact(records, output)
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    profile = artifact["profile"]
+    click.echo(
+        "Exported benchmark profile "
+        f"dataset={profile['dataset_id']} records={profile['record_count']} "
+        f"output={output}"
+    )
+
+
+@cli.command("benchmark-profile")
+@click.option("--profile", "profile_path", required=True, help="Generated profile JSON")
+@click.option(
+    "--reference-profile",
+    required=True,
+    help="Reference benchmark profile JSON",
+)
+@click.option(
+    "--min-overall-score",
+    default=0.75,
+    type=click.FloatRange(0.0, 1.0),
+    show_default=True,
+)
+@click.option(
+    "--min-metric-score",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    show_default=True,
+)
+@click.option("--output", default=None, help="Optional JSON report path")
+def benchmark_profile(
+    profile_path: str,
+    reference_profile: str,
+    min_overall_score: float,
+    min_metric_score: float,
+    output: str | None,
+) -> None:
+    """Compare two portable benchmark profile artifacts."""
+    from casecrawler.validation.benchmark import (
+        DatasetBenchmark,
+        load_benchmark_profile_artifact,
+    )
+
+    try:
+        generated_profile = load_benchmark_profile_artifact(profile_path)
+        reference = load_benchmark_profile_artifact(reference_profile)
+        report = DatasetBenchmark(
+            min_overall_score=min_overall_score,
+            min_metric_score=min_metric_score,
+        ).compare_profiles(generated_profile, reference)
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    payload = report.model_dump_json(indent=2)
+    if output:
+        try:
+            with open(output, "w") as f:
+                f.write(payload + "\n")
+        except OSError as exc:
+            raise click.ClickException(
+                f"Failed to write benchmark report to {output}: {exc}"
+            ) from exc
+    click.echo(f"Benchmark: {report.generated_dataset_id} vs {report.reference_dataset_id}")
+    click.echo(f"Overall score: {report.overall_score:.4f}")
+    click.echo(f"Passed: {str(report.passed).lower()}")
+    if report.failing_metrics:
+        click.echo(f"Failing metrics: {', '.join(report.failing_metrics)}")
+    for metric in report.metrics:
+        click.echo(f"  {metric.name}: {metric.score:.4f}")
+    for warning in report.warnings:
+        click.echo(f"Warning: {warning}")
+
+
 @cli.command("document-dataset")
 @click.option("--dataset-id", required=True, help="Dataset id")
 @click.option("--output", required=True, help="Markdown output path")
