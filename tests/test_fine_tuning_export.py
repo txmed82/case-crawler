@@ -6,6 +6,7 @@ from casecrawler.export.fine_tuning import (
     export_dpo_record,
     export_chat_record,
     export_fhir_record,
+    export_medication_reconciliation_records,
     export_multimodal_record,
     export_note_fact_sft_records,
     export_parquet_record,
@@ -211,6 +212,55 @@ def test_export_time_series_records_creates_channel_level_training_examples():
     assert example["metadata"]["export_profile"] == "time_series_jsonl"
 
 
+def test_export_medication_reconciliation_records_creates_medication_level_examples():
+    record = _multimodal_record()
+
+    examples = export_medication_reconciliation_records(record)
+
+    assert len(examples) == 1
+    example = examples[0]
+    assert example["record_id"] == "rec-1"
+    assert example["task"] == "medication_reconciliation"
+    assert example["input"]["candidate_medication"] == "Ceftriaxone"
+    assert example["input"]["notes"][0]["extracted_medications"] == ["Ceftriaxone"]
+    assert example["target"]["normalized_name"] == "Ceftriaxone"
+    assert example["target"]["rxnorm"] == "2193"
+    assert example["target"]["dose"] == "2 g"
+    assert example["target"]["route"] == "IV"
+    assert example["target"]["frequency"] == "daily"
+    assert example["target"]["status"] == "active"
+    assert example["target"]["active"] is True
+    assert example["clinical_context"]["medication_history"][0]["name"] == "Ceftriaxone"
+    assert example["metadata"]["export_profile"] == "medication_reconciliation_jsonl"
+
+
+def test_export_medication_reconciliation_records_marks_inactive_medications():
+    record = _multimodal_record().model_copy(
+        update={
+            "medication_history": [
+                MedicationStatement(
+                    name="Warfarin",
+                    rxnorm="11289",
+                    dose="5 mg",
+                    route="oral",
+                    frequency="daily",
+                    status="stopped",
+                    start="2026-05-01",
+                    end="2026-05-06",
+                )
+            ]
+        }
+    )
+
+    examples = export_medication_reconciliation_records(record)
+
+    assert examples[0]["target"]["active"] is False
+    assert examples[0]["target"]["period"] == {
+        "start": "2026-05-01",
+        "end": "2026-05-06",
+    }
+
+
 def test_export_record_dispatches_time_series_profile_as_multiple_payloads():
     record = _multimodal_record()
 
@@ -220,6 +270,17 @@ def test_export_record_dispatches_time_series_profile_as_multiple_payloads():
     assert exported["metadata"]["export_profile"] == "time_series_jsonl"
     assert exported["examples"] == payloads
     assert payloads[0]["channel"]["name"] == "heart_rate"
+
+
+def test_export_record_dispatches_medication_reconciliation_profile():
+    record = _multimodal_record()
+
+    exported = export_record(record, "medication_reconciliation_jsonl")
+    payloads = export_record_payloads(record, "medication_reconciliation_jsonl")
+
+    assert exported["metadata"]["export_profile"] == "medication_reconciliation_jsonl"
+    assert exported["examples"] == payloads
+    assert payloads[0]["target"]["normalized_name"] == "Ceftriaxone"
 
 
 def test_export_multimodal_record_preserves_imaging_labels_and_alignment_tasks():

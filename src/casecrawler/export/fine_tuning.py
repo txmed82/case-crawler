@@ -309,6 +309,69 @@ def export_time_series_records(record: SyntheticRecord) -> list[dict[str, Any]]:
     return examples
 
 
+def export_medication_reconciliation_records(
+    record: SyntheticRecord,
+) -> list[dict[str, Any]]:
+    """Export medication-level reconciliation examples."""
+    examples: list[dict[str, Any]] = []
+    clinical_context = _clinical_context(record)
+    note_context = [
+        {
+            "document_id": document.document_id,
+            "note_type": document.note_type,
+            "author_role": document.author_role,
+            "timestamp": document.timestamp,
+            "text": document.messy_text or document.clean_text,
+            "extracted_medications": document.extracted_facts.get("medications", []),
+            "extracted_medication_details": document.extracted_facts.get(
+                "medication_details", []
+            ),
+        }
+        for document in record.documents
+    ]
+    for medication in record.medication_history:
+        examples.append(
+            {
+                "record_id": record.record_id,
+                "dataset_id": record.dataset_id,
+                "task": "medication_reconciliation",
+                "input": {
+                    "patient": record.patient.model_dump(),
+                    "encounters": [
+                        encounter.model_dump() for encounter in record.encounters
+                    ],
+                    "labs": [lab.model_dump() for lab in record.labs],
+                    "vitals": [vital.model_dump() for vital in record.vitals],
+                    "notes": note_context,
+                    "candidate_medication": medication.name,
+                },
+                "target": {
+                    "medication": medication.model_dump(),
+                    "normalized_name": medication.name,
+                    "rxnorm": medication.rxnorm,
+                    "dose": medication.dose,
+                    "route": medication.route,
+                    "frequency": medication.frequency,
+                    "status": medication.status,
+                    "active": medication.status.lower()
+                    not in {"stopped", "inactive", "discontinued", "held"},
+                    "period": {
+                        "start": medication.start,
+                        "end": medication.end,
+                    },
+                },
+                "clinical_context": clinical_context,
+                "metadata": {
+                    **_metadata(record),
+                    "export_profile": "medication_reconciliation_jsonl",
+                    "medication_name": medication.name,
+                    "rxnorm": medication.rxnorm,
+                },
+            }
+        )
+    return examples
+
+
 def _multimodal_image_payload(asset) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "image_id": asset.image_id,
@@ -628,6 +691,16 @@ def export_record(record: SyntheticRecord, export_format: str | ExportFormat) ->
             "examples": export_note_fact_sft_records(record),
             "metadata": {**_metadata(record), "export_profile": "note_fact_sft_jsonl"},
         }
+    if resolved_format == ExportFormat.MEDICATION_RECONCILIATION_JSONL:
+        return {
+            "record_id": record.record_id,
+            "dataset_id": record.dataset_id,
+            "examples": export_medication_reconciliation_records(record),
+            "metadata": {
+                **_metadata(record),
+                "export_profile": "medication_reconciliation_jsonl",
+            },
+        }
     if resolved_format == ExportFormat.CHAT_JSONL:
         return export_chat_record(record)
     if resolved_format == ExportFormat.TOOL_CALL_JSONL:
@@ -661,6 +734,8 @@ def export_record_payloads(
     resolved_format = ExportFormat(export_format)
     if resolved_format == ExportFormat.NOTE_FACT_SFT_JSONL:
         return export_note_fact_sft_records(record)
+    if resolved_format == ExportFormat.MEDICATION_RECONCILIATION_JSONL:
+        return export_medication_reconciliation_records(record)
     if resolved_format == ExportFormat.TIME_SERIES_JSONL:
         return export_time_series_records(record)
     return [export_record(record, resolved_format)]
