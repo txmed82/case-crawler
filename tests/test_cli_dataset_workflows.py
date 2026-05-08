@@ -404,6 +404,26 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     assert benchmark_suite["passed"] is True
     assert release_summary["dataset_id"] == body["dataset_id"]
     assert release_summary["task_coverage"] == manifest["task_coverage"]
+    assert release_summary["objective_coverage"]["complete"] is True
+    assert release_summary["objective_coverage"]["missing"] == []
+    assert (
+        release_summary["objective_coverage"]["criteria"]["physician_notes"][
+            "satisfied"
+        ]
+        is True
+    )
+    assert (
+        release_summary["objective_coverage"]["criteria"]["nursing_notes"][
+            "satisfied"
+        ]
+        is True
+    )
+    assert (
+        release_summary["objective_coverage"]["criteria"]["fine_tuning_exports"][
+            "satisfied"
+        ]
+        is True
+    )
     assert release_summary["quality_report"]["multimodal_release_ready"] is True
     assert (
         release_summary["quality_report"]["imaging_report_label_evidence_rate"]
