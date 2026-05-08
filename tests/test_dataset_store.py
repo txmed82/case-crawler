@@ -164,6 +164,35 @@ def test_dataset_store_manifest_includes_reference_keys(tmp_path):
     )
 
 
+def test_dataset_store_manifest_includes_technetium_reference_keys(tmp_path):
+    store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
+    record = SyntheticRecord(
+        record_id="rec-ref",
+        dataset_id="ds-ref-technetium",
+        topic="clinical_deidentification_icd_coding",
+        complexity=ComplexityProfile.MODERATE,
+        modalities=[Modality.STRUCTURED_EHR, Modality.CLINICAL_TEXT],
+        patient=SyntheticPatient(patient_id="pat-1", age=64, sex="female"),
+        encounters=[],
+        provenance=Provenance(
+            generator="huggingface-reference-import",
+            created_at="2026-05-06T10:00:00",
+        ),
+        metadata={
+            "reference_key": "technetium_i",
+            "reference_dataset": "temlm-foundation/Technetium-I",
+        },
+    )
+
+    store.save_record(record)
+    manifest = store.get_manifest("ds-ref-technetium")
+
+    assert manifest.metadata["primary_reference_key"] == "technetium_i"
+    assert manifest.metadata["primary_reference_dataset"] == (
+        "temlm-foundation/Technetium-I"
+    )
+
+
 def test_dataset_store_tracks_human_review_queue_and_effective_approval(tmp_path):
     store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
     record = SyntheticRecord(

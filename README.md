@@ -182,10 +182,12 @@ gate by passing a reference dataset id and thresholds, which prevents unbenchmar
 or underperforming synthetic data from silently becoming fine-tuning input.
 
 Registered Hugging Face reference datasets include synthetic clinical notes,
-clinical-note-to-FHIR rows, radiology consistency rows, Synthea imports, and
-image-reference datasets such as SynthCheX-75K-v2 and synthetic chest X-ray
-pneumonia. Custom Hugging Face imports can map text fields, FHIR answer fields,
-image fields, and image-label fields into the local `SyntheticRecord` schema.
+clinical-note-to-FHIR rows, radiology consistency rows, de-identification and
+ICD-coding references such as Technetium-I, Synthea imports, and image-reference
+datasets such as SynthCheX-75K-v2 and synthetic chest X-ray pneumonia. Custom
+Hugging Face imports can map text fields, FHIR answer fields, PHI annotations,
+diagnosis-code fields, image fields, and image-label fields into the local
+`SyntheticRecord` schema.
 
 ## REST API
 

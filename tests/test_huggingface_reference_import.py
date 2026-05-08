@@ -63,6 +63,14 @@ def test_reference_dataset_catalog_includes_clinical_note_fhir_and_radiology_ben
     assert catalog["medsynth_dialogue_note"].question_field == "Dialogue"
     assert catalog["medsynth_dialogue_note"].task_field == "ICD10_desc"
     assert catalog["medsynth_dialogue_note"].license == "unspecified"
+    assert catalog["technetium_i"].repo_id == "temlm-foundation/Technetium-I"
+    assert catalog["technetium_i"].license == "eupl-1.2"
+    assert catalog["technetium_i"].note_field == "text"
+    assert catalog["technetium_i"].patient_id_field == "note_id"
+    assert catalog["technetium_i"].note_type_field == "note_type"
+    assert catalog["technetium_i"].phi_annotations_field == "phi_annotations"
+    assert catalog["technetium_i"].diagnosis_codes_field == "icd_codes"
+    assert catalog["technetium_i"].quality_score_field == "quality_score"
 
 
 def test_asclepius_row_maps_to_synthetic_record():
@@ -120,6 +128,55 @@ def test_medsynth_dialogue_note_row_maps_dialogue_and_icd_metadata():
     assert record.metadata["reference_dataset"] == "Ahmad0067/MedSynth"
     assert record.metadata["reference_key"] == "medsynth_dialogue_note"
     assert record.modalities == [Modality.CLINICAL_TEXT]
+
+
+def test_technetium_i_row_maps_phi_annotations_and_icd_codes():
+    row = {
+        "note_id": "TEMLM_000001",
+        "source": "temlm_generated",
+        "note_type": "discharge_summary",
+        "admission_date": "2015-03-15T00:00:00",
+        "discharge_date": "2015-03-22T00:00:00",
+        "text": (
+            "DISCHARGE SUMMARY\n\n"
+            "Patient Name: Smith, John\n"
+            "Patient is a 72-year-old male with congestive heart failure."
+        ),
+        "phi_annotations": [
+            {"entity_type": "NAME", "text": "Smith", "start": 32, "end": 37},
+            {"entity_type": "AGE", "text": "72-year-old", "start": 57, "end": 68},
+        ],
+        "icd_codes": ["428.0", "401.9"],
+        "quality_score": 0.95,
+    }
+
+    record = reference_row_to_record(
+        row,
+        dataset_id="ds-technetium",
+        spec=REFERENCE_DATASETS["technetium_i"],
+        reference_key="technetium_i",
+        split="validation",
+    )
+
+    assert record.dataset_id == "ds-technetium"
+    assert record.patient.age == 72
+    assert record.patient.sex == "male"
+    assert record.topic == "clinical_deidentification_icd_coding"
+    assert record.documents[0].note_type == "discharge_summary"
+    assert record.documents[0].extracted_facts["phi_annotations"] == row["phi_annotations"]
+    assert record.documents[0].extracted_facts["phi_entity_counts"] == {
+        "AGE": 1,
+        "NAME": 1,
+    }
+    assert record.documents[0].extracted_facts["diagnoses"] == [
+        {"system": "ICD-9-CM", "code": "428.0", "display": "ICD-9-CM 428.0"},
+        {"system": "ICD-9-CM", "code": "401.9", "display": "ICD-9-CM 401.9"},
+    ]
+    assert record.documents[0].extracted_facts["source_quality_score"] == 0.95
+    assert record.encounters[0].diagnoses[0].code == "428.0"
+    assert record.metadata["reference_key"] == "technetium_i"
+    assert record.metadata["reference_license"] == "eupl-1.2"
+    assert record.modalities == [Modality.STRUCTURED_EHR, Modality.CLINICAL_TEXT]
 
 
 def test_fhir_reference_row_preserves_bundle_and_validation_fields():

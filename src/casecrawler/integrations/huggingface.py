@@ -43,12 +43,18 @@ class HuggingFaceReferenceDataset:
     question_field: str | None = None
     answer_field: str | None = None
     task_field: str | None = None
+    default_task: str = "clinical_note"
     patient_id_field: str | None = None
     image_field: str | None = None
     image_label_field: str | None = None
     image_label_map: dict[str, str] | None = None
     image_modality: str = "XR"
     image_body_region: str = "chest"
+    note_type_field: str | None = None
+    phi_annotations_field: str | None = None
+    diagnosis_codes_field: str | None = None
+    diagnosis_code_system: str = "ICD-9-CM"
+    quality_score_field: str | None = None
     gated: bool = False
     use_policy: str = "review_license_before_use"
     description: str = ""
@@ -179,6 +185,24 @@ REFERENCE_DATASETS: dict[str, HuggingFaceReferenceDataset] = {
             "normal and pneumonia labels."
         ),
     ),
+    "technetium_i": HuggingFaceReferenceDataset(
+        repo_id="temlm-foundation/Technetium-I",
+        split="validation",
+        license="eupl-1.2",
+        note_field="text",
+        task_field=None,
+        default_task="clinical_deidentification_icd_coding",
+        patient_id_field="note_id",
+        note_type_field="note_type",
+        phi_annotations_field="phi_annotations",
+        diagnosis_codes_field="icd_codes",
+        diagnosis_code_system="ICD-9-CM",
+        quality_score_field="quality_score",
+        description=(
+            "Large synthetic clinical NLP reference set with PHI annotations "
+            "and ICD-9-CM labels for de-identification and coding validation."
+        ),
+    ),
 }
 
 
@@ -220,12 +244,18 @@ def reference_dataset_spec(
     question_field: str | None = None,
     answer_field: str | None = None,
     task_field: str | None = None,
+    default_task: str = "clinical_note",
     patient_id_field: str | None = None,
     image_field: str | None = None,
     image_label_field: str | None = None,
     image_label_map: dict[str, str] | None = None,
     image_modality: str = "XR",
     image_body_region: str = "chest",
+    note_type_field: str | None = None,
+    phi_annotations_field: str | None = None,
+    diagnosis_codes_field: str | None = None,
+    diagnosis_code_system: str = "ICD-9-CM",
+    quality_score_field: str | None = None,
     description: str = "",
 ) -> HuggingFaceReferenceDataset:
     return HuggingFaceReferenceDataset(
@@ -236,12 +266,18 @@ def reference_dataset_spec(
         question_field=question_field,
         answer_field=answer_field,
         task_field=task_field,
+        default_task=default_task,
         patient_id_field=patient_id_field,
         image_field=image_field,
         image_label_field=image_label_field,
         image_label_map=image_label_map,
         image_modality=image_modality,
         image_body_region=image_body_region,
+        note_type_field=note_type_field,
+        phi_annotations_field=phi_annotations_field,
+        diagnosis_codes_field=diagnosis_codes_field,
+        diagnosis_code_system=diagnosis_code_system,
+        quality_score_field=quality_score_field,
         description=description,
     )
 
@@ -297,7 +333,7 @@ def reference_row_to_record(
         note = f"Synthetic reference {spec.image_body_region} {spec.image_modality} labeled {image_label}."
     question = _coerce_text(row.get(spec.question_field)) if spec.question_field else ""
     answer = _coerce_text(row.get(spec.answer_field)) if spec.answer_field else ""
-    task = _coerce_text(row.get(spec.task_field)) if spec.task_field else "clinical_note"
+    task = _coerce_text(row.get(spec.task_field)) if spec.task_field else spec.default_task
     patient_source_id = (
         _coerce_text(row.get(spec.patient_id_field))
         if spec.patient_id_field
@@ -314,6 +350,11 @@ def reference_row_to_record(
         answer,
         stable_seed=stable_seed,
     )
+    if spec.diagnosis_codes_field:
+        diagnoses = [
+            *diagnoses,
+            *_diagnosis_codes(row.get(spec.diagnosis_codes_field), spec),
+        ]
     imaging = [
         *_radiology_artifacts(row, spec, stable_seed, report_text=note),
         *_image_reference_artifacts(
@@ -334,7 +375,7 @@ def reference_row_to_record(
     )
     document = ClinicalDocument(
         document_id=f"doc-{uuid5(NAMESPACE_URL, stable_seed + ':document')}",
-        note_type=_note_type(note, spec=spec),
+        note_type=_note_type(note, spec=spec, row=row),
         author_role="synthetic_reference",
         timestamp="2026-01-01T00:00:00",
         clean_text=note,
@@ -456,7 +497,16 @@ def _reference_modalities(
     return modalities
 
 
-def _note_type(note: str, *, spec: HuggingFaceReferenceDataset | None = None) -> str:
+def _note_type(
+    note: str,
+    *,
+    spec: HuggingFaceReferenceDataset | None = None,
+    row: dict | None = None,
+) -> str:
+    if spec and row is not None and spec.note_type_field:
+        note_type = _coerce_text(row.get(spec.note_type_field))
+        if note_type:
+            return _normalize_note_type(note_type)
     if spec and spec.repo_id == "ClarusC64/image-report-consistency-radiology-v01":
         return "radiology_report"
     prefix = note[:80].lower()
@@ -465,6 +515,10 @@ def _note_type(note: str, *, spec: HuggingFaceReferenceDataset | None = None) ->
     if "progress note" in prefix:
         return "progress_note"
     return "clinical_note"
+
+
+def _normalize_note_type(value: str) -> str:
+    return "_".join(value.lower().replace("-", "_").split())
 
 
 def _source_fields(row: dict, spec: HuggingFaceReferenceDataset) -> dict:
@@ -504,6 +558,18 @@ def _reference_extracted_facts(
         "answer": answer,
         "source_fields": _source_fields(row, spec),
     }
+    phi_annotations = (
+        _list_of_dicts(row.get(spec.phi_annotations_field))
+        if spec.phi_annotations_field
+        else []
+    )
+    if phi_annotations:
+        facts["phi_annotations"] = phi_annotations
+        facts["phi_entity_counts"] = _phi_entity_counts(phi_annotations)
+    if spec.quality_score_field:
+        quality_score = _numeric_or_none(row.get(spec.quality_score_field))
+        if quality_score is not None:
+            facts["source_quality_score"] = quality_score
     if labs:
         facts["lab_values"] = [
             {
@@ -572,6 +638,57 @@ def _reference_extracted_facts(
             if label.display
         ]
     return facts
+
+
+def _diagnosis_codes(value: object, spec: HuggingFaceReferenceDataset) -> list[Code]:
+    codes = _string_list(value)
+    return [
+        Code(
+            system=spec.diagnosis_code_system,
+            code=code,
+            display=f"{spec.diagnosis_code_system} {code}",
+        )
+        for code in codes
+    ]
+
+
+def _string_list(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if isinstance(value, list | tuple | set):
+        return [
+            str(item).strip()
+            for item in value
+            if str(item).strip()
+        ]
+    return [str(value).strip()] if str(value).strip() else []
+
+
+def _list_of_dicts(value: object) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _phi_entity_counts(annotations: list[dict]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for annotation in annotations:
+        entity_type = _coerce_text(annotation.get("entity_type"))
+        if not entity_type:
+            continue
+        counts[entity_type] = counts.get(entity_type, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _numeric_or_none(value: object) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _fhir_artifacts(

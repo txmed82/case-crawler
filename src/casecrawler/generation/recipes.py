@@ -128,6 +128,7 @@ RECIPES: dict[str, GenerationRecipe] = {
             "augmented_clinical_notes",
             "medsynth_dialogue_note",
             "clinical_notes_to_fhir",
+            "technetium_i",
         ],
         benchmark_min_overall_score=0.75,
         benchmark_min_metric_score=0.5,
