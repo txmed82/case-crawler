@@ -235,6 +235,25 @@ class DatasetStore:
         ).fetchall()
         return [row["dataset_id"] for row in rows]
 
+    def find_reference_dataset_id(
+        self,
+        reference_keys: list[str],
+        *,
+        exclude_dataset_id: str | None = None,
+    ) -> str | None:
+        if not reference_keys:
+            return None
+        candidates = [
+            manifest
+            for manifest in self.list_manifests()
+            if manifest.dataset_id != exclude_dataset_id
+        ]
+        for reference_key in reference_keys:
+            for manifest in candidates:
+                if manifest.metadata.get("primary_reference_key") == reference_key:
+                    return manifest.dataset_id
+        return None
+
     def get_manifest(self, dataset_id: str) -> DatasetManifest:
         records = list(self.iter_records(dataset_id=dataset_id))
         if not records:

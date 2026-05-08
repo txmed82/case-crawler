@@ -555,15 +555,23 @@ export function datasetExportUrl(
   datasetId: string,
   exportFormat: ExportFormat = "sft_jsonl",
   benchmarkGate?: {
-    referenceDatasetId: string;
-    minOverallScore: number;
-    minMetricScore: number;
+    referenceDatasetId?: string;
+    autoBenchmark?: boolean;
+    minOverallScore?: number;
+    minMetricScore?: number;
   }
 ): string {
   const qs = new URLSearchParams({ export_format: exportFormat });
   if (benchmarkGate?.referenceDatasetId) {
     qs.set("reference_dataset_id", benchmarkGate.referenceDatasetId);
+  }
+  if (benchmarkGate?.autoBenchmark) {
+    qs.set("auto_benchmark", "true");
+  }
+  if (benchmarkGate?.minOverallScore !== undefined) {
     qs.set("min_overall_score", String(benchmarkGate.minOverallScore));
+  }
+  if (benchmarkGate?.minMetricScore !== undefined) {
     qs.set("min_metric_score", String(benchmarkGate.minMetricScore));
   }
   return `${BASE}/datasets/${datasetId}/export?${qs}`;
