@@ -645,6 +645,23 @@ def datasets_benchmark_plan(dataset_id: str) -> None:
     click.echo(json.dumps(build_benchmark_plan_summary(store, dataset_id), indent=2))
 
 
+@datasets_group.command("benchmark-suite")
+@click.argument("dataset_id")
+def datasets_benchmark_suite(dataset_id: str) -> None:
+    """Run recipe benchmark comparisons against all imported recommended references."""
+    from casecrawler.storage.dataset_store import DatasetStore
+    from casecrawler.validation.benchmark_selection import run_recommended_benchmark_suite
+
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise click.ClickException(f"Dataset {dataset_id} not found.")
+    try:
+        suite = run_recommended_benchmark_suite(store, dataset_id)
+    except (LookupError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(json.dumps(suite, indent=2))
+
+
 @cli.command("validate")
 @click.option("--dataset-id", default=None, help="Dataset id prefix or exact id")
 def validate_dataset(dataset_id: str | None) -> None:
