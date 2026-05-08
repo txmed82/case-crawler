@@ -1,5 +1,11 @@
 # CaseCrawler Ingestion Engine — Implementation Plan
 
+> **Archived legacy plan:** This plan is retained for historical context only.
+> It is superseded by
+> `docs/superpowers/plans/2026-05-06-healthcare-synthetic-data-platform.md`.
+> Ingestion remains supporting infrastructure for grounded synthetic healthcare
+> dataset generation, not a standalone education-case roadmap.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a modular medical knowledge ingestion engine that crawls, normalizes, chunks, embeds, and stores content from multiple medical data sources into ChromaDB.

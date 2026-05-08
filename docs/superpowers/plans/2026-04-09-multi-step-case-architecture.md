@@ -1,5 +1,12 @@
 # Multi-Step Case Architecture Implementation Plan
 
+> **Archived legacy plan:** This plan is retained for historical context only.
+> It is superseded by
+> `docs/superpowers/plans/2026-05-06-healthcare-synthetic-data-platform.md`.
+> Do not use it as current product direction. CaseCrawler is now a
+> dataset-first synthetic healthcare data engine for AI training and evaluation,
+> not a medical education case-player project.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Evolve the single-turn case generation pipeline into a multi-phase, temporally staged system with structured diagnostics, plan-then-generate architecture, and AI training data export.

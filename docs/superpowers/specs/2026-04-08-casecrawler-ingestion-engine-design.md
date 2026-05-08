@@ -1,8 +1,14 @@
 # CaseCrawler Ingestion Engine — Design Spec
 
 **Date:** 2026-04-08
-**Status:** Draft
+**Status:** Archived legacy concept
 **License:** Apache 2.0
+
+> This spec is retained only as historical design context. It is superseded by
+> `docs/superpowers/plans/2026-05-06-healthcare-synthetic-data-platform.md`.
+> CaseCrawler now keeps ingestion as supporting infrastructure for grounded
+> synthetic healthcare dataset generation rather than as a precursor to
+> education-oriented case generation.
 
 ---
 
