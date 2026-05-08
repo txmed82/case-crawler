@@ -110,6 +110,7 @@ export interface DatasetGenerateRequest {
   modalities?: SyntheticModality[];
   export_formats?: ExportFormat[];
   clinical_text_backend?: "deterministic" | "llm" | "external";
+  clinical_text_noise_profile?: "standard" | "message" | "ocr" | "heavy";
   clinical_text_model_profile?: string;
   clinical_text_command?: string[];
   llm_provider?: string;
@@ -146,6 +147,7 @@ export interface ReleasePackageRequest {
   test_ratio?: number;
   cohort_constraints?: Record<string, unknown>;
   clinical_text_backend?: "deterministic" | "llm" | "external";
+  clinical_text_noise_profile?: "standard" | "message" | "ocr" | "heavy";
   clinical_text_model_profile?: string;
   clinical_text_command?: string[];
   llm_provider?: string;

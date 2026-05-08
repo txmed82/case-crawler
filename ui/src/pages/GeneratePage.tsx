@@ -44,10 +44,17 @@ const exportFormatOptions: { value: ExportFormat; label: string }[] = [
 ];
 
 const llmProviderOptions = ["anthropic", "openai", "openrouter", "ollama"] as const;
+const clinicalTextNoiseOptions = [
+  { value: "standard", label: "Standard" },
+  { value: "message", label: "Message" },
+  { value: "ocr", label: "OCR" },
+  { value: "heavy", label: "Heavy" },
+] as const;
 
 const sexOptions = ["female", "male", "other"] as const;
 type SexOption = (typeof sexOptions)[number];
 type LlmProviderOption = (typeof llmProviderOptions)[number];
+type ClinicalTextNoiseProfile = (typeof clinicalTextNoiseOptions)[number]["value"];
 type ReferenceImportMode = "registered" | "custom" | "local";
 
 export default function GeneratePage() {
@@ -76,6 +83,8 @@ export default function GeneratePage() {
   const [exportFormats, setExportFormats] = useState<ExportFormat[]>(["sft_jsonl"]);
   const [clinicalTextBackend, setClinicalTextBackend] =
     useState<"deterministic" | "llm" | "external">("deterministic");
+  const [clinicalTextNoiseProfile, setClinicalTextNoiseProfile] =
+    useState<ClinicalTextNoiseProfile>("standard");
   const [clinicalTextProfile, setClinicalTextProfile] = useState("");
   const [clinicalTextCommand, setClinicalTextCommand] = useState("");
   const [llmProvider, setLlmProvider] = useState<LlmProviderOption>("ollama");
@@ -269,6 +278,9 @@ export default function GeneratePage() {
         modalities,
         export_formats: exportFormats,
         ...(includesClinicalText ? { clinical_text_backend: clinicalTextBackend } : {}),
+        ...(includesClinicalText
+          ? { clinical_text_noise_profile: clinicalTextNoiseProfile }
+          : {}),
         ...(includesClinicalText && clinicalTextBackend === "llm"
           ? { llm_provider: llmProvider }
           : {}),
@@ -392,6 +404,7 @@ export default function GeneratePage() {
           ? { cohort_constraints: cohortConstraints }
           : {}),
         clinical_text_backend: clinicalTextBackend,
+        clinical_text_noise_profile: clinicalTextNoiseProfile,
         ...(clinicalTextBackend === "llm" ? { llm_provider: llmProvider } : {}),
         ...(clinicalTextBackend === "llm" && llmModel.trim()
           ? { llm_model: llmModel.trim() }
@@ -861,7 +874,7 @@ export default function GeneratePage() {
         </div>
 
         {includesClinicalText && (
-          <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,12rem)_minmax(0,16rem)_minmax(0,1fr)]">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,12rem)_minmax(0,12rem)_minmax(0,16rem)_minmax(0,1fr)]">
             <label className="space-y-1 text-sm font-medium text-gray-700">
               <span>Text backend</span>
               <select
@@ -877,6 +890,23 @@ export default function GeneratePage() {
                 <option value="deterministic">Deterministic</option>
                 <option value="llm">LLM</option>
                 <option value="external">External</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Noise</span>
+              <select
+                aria-label="Clinical text noise profile"
+                value={clinicalTextNoiseProfile}
+                onChange={(event) =>
+                  setClinicalTextNoiseProfile(event.target.value as ClinicalTextNoiseProfile)
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              >
+                {clinicalTextNoiseOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="space-y-1 text-sm font-medium text-gray-700">
