@@ -999,6 +999,7 @@ def test_verify_jsonl_split_package_validates_release_package_summary_artifact(
         "generated": 3,
         "approved": 3,
         "seeded_references": {"imported": ["ds-ref"]},
+        "task_coverage": [],
         "quality_report": {
             "export_ready": True,
             "multimodal_release_ready": True,
@@ -1089,6 +1090,7 @@ def test_verify_jsonl_split_package_validates_release_package_summary_artifact(
         "audit_artifacts.release_package_summary.json.quality_report."
         "mean_time_series_duration_hours"
     ) in issue_fields
+    assert "audit_artifacts.release_package_summary.json.task_coverage" in issue_fields
     assert (
         "audit_artifacts.release_package_summary.json.benchmark.failing_metrics"
         in issue_fields

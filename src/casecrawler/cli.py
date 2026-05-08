@@ -735,6 +735,7 @@ def generate_release_package(
     from casecrawler.export.cards import build_dataset_card, build_model_card
     from casecrawler.export.fine_tuning import (
         export_jsonl_split_package,
+        summarize_export_task_coverage,
         verify_jsonl_split_package,
     )
     from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
@@ -854,6 +855,10 @@ def generate_release_package(
                 "generated": result["generated"],
                 "approved": result["approved"],
                 "seeded_references": seeded_references,
+                "task_coverage": summarize_export_task_coverage(
+                    records,
+                    export_format,
+                ),
                 "quality_report": {
                     "export_ready": quality_report.export_ready,
                     "multimodal_release_ready": quality_report.multimodal_release_ready,
