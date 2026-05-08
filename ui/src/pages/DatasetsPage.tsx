@@ -971,6 +971,15 @@ function QualityPanel({
               label="Image policies"
               value={Object.keys(quality.imaging_model_policy_counts).length}
             />
+            <Metric
+              label="Code systems"
+              value={Object.keys(quality.diagnosis_code_system_counts).length}
+            />
+            <Metric
+              label="Diagnosis codes"
+              value={Object.keys(quality.diagnosis_code_counts).length}
+            />
+            <Metric label="PHI entities" value={Object.keys(quality.phi_entity_counts).length} />
           </div>
           {quality.recommended_reference_keys.length > 0 && (
             <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
