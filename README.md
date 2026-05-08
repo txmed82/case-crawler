@@ -173,12 +173,28 @@ casecrawler export-dataset-splits \
   --min-overall-score 0.8 \
   --min-metric-score 0.5 \
   --output-dir finetune-package
+casecrawler generate-release-package "mixed acute care cohort" \
+  --count 25 \
+  --output-dir release-package \
+  --format multimodal_jsonl \
+  --seed casecrawler
+casecrawler verify-split-package --require-multimodal-release release-package
 ```
 
 Datasets generated with `--require-human-review` are blocked from export until
 each record is approved through `casecrawler reviews mark <record_id> --status
 approved` or the matching REST review endpoint. Quality reports surface missing
 human approvals as `human_review.missing` blockers.
+
+`generate-release-package` is the shortest offline smoke path for a fine-tuning
+ready multimodal package. It generates with the full multimodal acute-care
+recipe by default, writes file-backed synthetic radiology images, seeds bundled
+reference fixtures for the generated recipe, runs the benchmark gate, writes
+dataset/model cards plus quality and benchmark audit reports, exports
+train/validation/test JSONL splits, and verifies strict multimodal release
+readiness. The default benchmark thresholds are intentionally set to zero for
+fixture smoke tests; pass higher `--min-overall-score` and `--min-metric-score`
+values when benchmarking against larger imported reference datasets.
 
 Benchmark reports compare generated cohorts to stored reference datasets and
 return explicit pass/fail gates plus failing metric names. They compare across
@@ -210,12 +226,31 @@ Start the server with `casecrawler serve` or `docker compose up`.
 | `/api/sources` | GET | List available sources |
 | `/api/datasets/capabilities` | GET | List modalities, export formats, validators, and model/profile adapters |
 | `/api/datasets/generate` | POST | Generate synthetic healthcare records |
+| `/api/datasets/release-package` | POST | Generate, benchmark, export, and return a multimodal release package zip |
 | `/api/datasets/reference-catalog` | GET | List registered Hugging Face reference datasets |
 | `/api/datasets/reference-import` | POST | Import registered reference datasets into local storage |
 | `/api/datasets/synthea-import` | POST | Import Synthea FHIR JSON bundles or NDJSON directories into local storage |
 | `/api/datasets/{dataset_id}/benchmark` | GET | Compare a generated dataset to a reference dataset with configurable pass/fail thresholds |
+| `/api/datasets/{dataset_id}/reference-fixtures` | POST | Seed bundled benchmark fixtures for a generated dataset recipe |
+| `/api/datasets/{dataset_id}/benchmark-plan` | GET | Show recommended reference readiness for a generated dataset |
 | `/api/datasets/{dataset_id}/quality` | GET | Summarize validation and fine-tuning export readiness |
 | `/api/datasets/{dataset_id}/export` | GET | Stream fine-tuning/export records |
+| `/api/datasets/{dataset_id}/export-splits` | GET | Download train/validation/test split package zip |
+
+Example one-call API release package:
+
+```bash
+curl -X POST http://localhost:8000/api/datasets/release-package \
+  -H 'Content-Type: application/json' \
+  -o release-package.zip \
+  -d '{
+    "topic": "mixed acute care cohort",
+    "count": 25,
+    "recipe": "full_multimodal_acute_care",
+    "export_format": "multimodal_jsonl",
+    "seed": "casecrawler"
+  }'
+```
 
 ## Configuration
 
