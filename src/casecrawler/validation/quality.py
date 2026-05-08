@@ -687,6 +687,12 @@ def _multimodal_release_readiness(
         "messy_clinical_text": artifact_counts.get("messy_documents", 0) > 0,
         "physician_notes": _physician_note_count(note_type_counts) > 0,
         "nursing_notes": note_type_counts.get("nursing_note", 0) > 0,
+        "lab_reports": note_type_counts.get("lab_report", 0) > 0,
+        "vital_signs_flowsheets": note_type_counts.get("vital_signs_flowsheet", 0) > 0,
+        "medication_administration_records": (
+            note_type_counts.get("medication_administration_record", 0) > 0
+        ),
+        "discharge_summaries": note_type_counts.get("discharge_summary", 0) > 0,
         "radiology_reports": note_type_counts.get("radiology_report", 0) > 0,
         "time_series": (
             artifact_counts.get("time_series_channels", 0) > 0
