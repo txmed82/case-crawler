@@ -57,6 +57,18 @@ class DatasetStore:
             )
             """
         )
+        self._conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_export_manifests_dataset_created_id
+            ON export_manifests(dataset_id, created_at DESC, id DESC)
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_export_manifests_created_id
+            ON export_manifests(created_at DESC, id DESC)
+            """
+        )
         self._conn.commit()
 
     def save_record(self, record: SyntheticRecord) -> None:
@@ -254,7 +266,16 @@ class DatasetStore:
             modalities=modalities,
             export_formats=export_formats,
             created_at=first.provenance.created_at,
-            metadata={"record_ids": [record.record_id for record in records]},
+            metadata={
+                "record_ids": [record.record_id for record in records],
+                "latest_exports": [
+                    export_manifest.model_dump()
+                    for export_manifest in self.list_export_manifests(
+                        dataset_id=dataset_id,
+                        limit=5,
+                    )
+                ],
+            },
         )
 
     def save_export_manifest(
@@ -290,6 +311,24 @@ class DatasetStore:
         )
         self._conn.commit()
         return export_manifest
+
+    def list_export_manifests(
+        self,
+        dataset_id: str | None = None,
+        limit: int = 100,
+    ) -> list[ExportManifest]:
+        query = "SELECT metadata_json FROM export_manifests WHERE 1=1"
+        params: list = []
+        if dataset_id:
+            query += " AND dataset_id = ?"
+            params.append(dataset_id)
+        query += " ORDER BY created_at DESC, id DESC LIMIT ?"
+        params.append(limit)
+        rows = self._conn.execute(query, params).fetchall()
+        return [
+            ExportManifest.model_validate_json(row["metadata_json"])
+            for row in rows
+        ]
 
 
 def _manifest_export_formats(records: list[SyntheticRecord]) -> list[ExportFormat]:
