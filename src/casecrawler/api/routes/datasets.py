@@ -127,6 +127,11 @@ def list_dataset_capabilities():
                 ],
                 "cohort_constraints": recipe.cohort_constraints,
                 "validation_threshold": recipe.validation_threshold,
+                "recommended_reference_keys": recipe.recommended_reference_keys,
+                "benchmark_thresholds": {
+                    "min_overall_score": recipe.benchmark_min_overall_score,
+                    "min_metric_score": recipe.benchmark_min_metric_score,
+                },
             }
             for recipe in list_generation_recipes()
         ],

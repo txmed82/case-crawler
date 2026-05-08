@@ -388,6 +388,14 @@ export default function GeneratePage() {
                   {selectedRecipe.export_formats.join(", ")}
                 </span>
                 <span>{selectedRecipe.description}</span>
+                {selectedRecipe.recommended_reference_keys.length > 0 && (
+                  <span className="basis-full text-gray-500">
+                    Benchmark references:{" "}
+                    {selectedRecipe.recommended_reference_keys.join(", ")} | thresholds{" "}
+                    {selectedRecipe.benchmark_thresholds.min_overall_score}/
+                    {selectedRecipe.benchmark_thresholds.min_metric_score}
+                  </span>
+                )}
               </div>
             )}
           </div>

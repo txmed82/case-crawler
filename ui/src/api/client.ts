@@ -198,6 +198,11 @@ export interface DatasetCapabilitiesResponse {
     export_formats: ExportFormat[];
     cohort_constraints: Record<string, unknown>;
     validation_threshold: number;
+    recommended_reference_keys: string[];
+    benchmark_thresholds: {
+      min_overall_score: number;
+      min_metric_score: number;
+    };
   }>;
   cohort_constraints: string[];
   imaging_model_profiles: Array<{

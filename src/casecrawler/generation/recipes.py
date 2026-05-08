@@ -15,6 +15,9 @@ class GenerationRecipe:
     complexity: ComplexityProfile = ComplexityProfile.MODERATE
     cohort_constraints: dict = field(default_factory=dict)
     validation_threshold: float = 0.8
+    recommended_reference_keys: list[str] = field(default_factory=list)
+    benchmark_min_overall_score: float = 0.75
+    benchmark_min_metric_score: float = 0.5
 
 
 RECIPES: dict[str, GenerationRecipe] = {
@@ -51,6 +54,13 @@ RECIPES: dict[str, GenerationRecipe] = {
             "sexes": ["female", "male"],
         },
         validation_threshold=0.75,
+        recommended_reference_keys=[
+            "clinical_notes_to_fhir",
+            "synthchex_75k",
+            "radiology_report_consistency",
+        ],
+        benchmark_min_overall_score=0.7,
+        benchmark_min_metric_score=0.45,
     ),
     "radiology_cxr_report": GenerationRecipe(
         name="radiology_cxr_report",
@@ -73,6 +83,13 @@ RECIPES: dict[str, GenerationRecipe] = {
             ],
         },
         validation_threshold=0.7,
+        recommended_reference_keys=[
+            "synthchex_75k",
+            "rexgradient_160k",
+            "radiology_report_consistency",
+        ],
+        benchmark_min_overall_score=0.7,
+        benchmark_min_metric_score=0.45,
     ),
     "icu_timeseries_notes": GenerationRecipe(
         name="icu_timeseries_notes",
@@ -99,6 +116,13 @@ RECIPES: dict[str, GenerationRecipe] = {
             "age_max": 90,
         },
         validation_threshold=0.8,
+        recommended_reference_keys=[
+            "synthclinicalnotes",
+            "augmented_clinical_notes",
+            "clinical_notes_to_fhir",
+        ],
+        benchmark_min_overall_score=0.75,
+        benchmark_min_metric_score=0.5,
     ),
 }
 
