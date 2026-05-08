@@ -1355,6 +1355,12 @@ def _verify_jsonl_split_package_dir(package_path: Path) -> dict[str, Any]:
     _verify_time_series_package_paths(manifest, split_summaries, issues)
     _verify_package_audit_artifacts(package_path, manifest, issues)
     quality_report = _split_package_quality_report_summary(package_path)
+    _verify_release_training_row_metadata(
+        manifest,
+        split_summaries,
+        quality_report,
+        issues,
+    )
     _verify_package_task_coverage(manifest, split_summaries, quality_report, issues)
     _verify_package_image_artifacts(manifest, quality_report, issues)
     _verify_package_time_series_artifacts(manifest, quality_report, issues)
@@ -1799,6 +1805,14 @@ def _split_package_quality_report_summary(package_path: Path) -> dict[str, Any] 
         "multimodal_release_ready": payload.get("multimodal_release_ready"),
         "multimodal_release_missing": payload.get("multimodal_release_missing"),
         "core_artifact_coverage": payload.get("core_artifact_coverage"),
+        "clinical_text_model_policy_counts": payload.get(
+            "clinical_text_model_policy_counts"
+        ),
+        "imaging_model_policy_counts": payload.get("imaging_model_policy_counts"),
+        "image_validator_policy_counts": payload.get("image_validator_policy_counts"),
+        "time_series_model_policy_counts": payload.get(
+            "time_series_model_policy_counts"
+        ),
     }
 
 
@@ -2025,6 +2039,125 @@ def _verify_package_splits(
             }
         )
     return summaries
+
+
+def _verify_release_training_row_metadata(
+    manifest: dict[str, Any],
+    split_summaries: dict[str, dict[str, Any]],
+    quality_report: dict[str, Any] | None,
+    issues: list[dict[str, str]],
+) -> None:
+    if not isinstance(quality_report, dict) or quality_report.get("export_ready") is not True:
+        return
+    if manifest.get("export_format") in {
+        ExportFormat.FHIR_NDJSON.value,
+        ExportFormat.RAW_JSONL.value,
+    }:
+        return
+    required_policies = _required_training_row_policy_fields(quality_report)
+    for split_name, summary in split_summaries.items():
+        examples = summary.get("examples")
+        if not isinstance(examples, list):
+            continue
+        for line_index, example in enumerate(examples, start=1):
+            for path, payload in _training_payloads_with_metadata(
+                example,
+                f"{split_name}.jsonl.line.{line_index}",
+            ):
+                _verify_training_payload_metadata(path, payload, required_policies, issues)
+
+
+def _required_training_row_policy_fields(
+    quality_report: dict[str, Any],
+) -> tuple[str, ...]:
+    required: list[str] = []
+    policy_count_fields = {
+        "clinical_text_model_policy_counts": "clinical_text_model_policy",
+        "imaging_model_policy_counts": "imaging_model_policy",
+        "image_validator_policy_counts": "image_validator_policy",
+        "time_series_model_policy_counts": "time_series_model_policy",
+    }
+    for counts_field, metadata_field in policy_count_fields.items():
+        counts = quality_report.get(counts_field)
+        if isinstance(counts, dict) and counts:
+            required.append(metadata_field)
+    return tuple(required)
+
+
+def _training_payloads_with_metadata(
+    payload: dict[str, Any],
+    path: str,
+) -> list[tuple[str, dict[str, Any]]]:
+    payloads = [(path, payload)]
+    for index, nested in enumerate(_dict_items(payload.get("examples"))):
+        payloads.extend(
+            _training_payloads_with_metadata(nested, f"{path}.examples.{index}")
+        )
+    return payloads
+
+
+def _verify_training_payload_metadata(
+    path: str,
+    payload: dict[str, Any],
+    required_policies: tuple[str, ...],
+    issues: list[dict[str, str]],
+) -> None:
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        issues.append(
+            {
+                "field": f"{path}.metadata",
+                "message": (
+                    "Release-ready training row is missing metadata needed for "
+                    "fine-tuning auditability."
+                ),
+            }
+        )
+        return
+    provenance = metadata.get("provenance")
+    if not isinstance(provenance, dict):
+        issues.append(
+            {
+                "field": f"{path}.metadata.provenance",
+                "message": "Release-ready training row is missing provenance metadata.",
+            }
+        )
+    else:
+        for field in ("generator", "created_at"):
+            if not isinstance(provenance.get(field), str) or not provenance[field].strip():
+                issues.append(
+                    {
+                        "field": f"{path}.metadata.provenance.{field}",
+                        "message": (
+                            "Release-ready training row provenance is missing "
+                            f"{field}."
+                        ),
+                    }
+                )
+    for policy_field in required_policies:
+        policy = metadata.get(policy_field)
+        if not isinstance(policy, dict):
+            issues.append(
+                {
+                    "field": f"{path}.metadata.{policy_field}",
+                    "message": (
+                        "Release-ready training row is missing model policy "
+                        f"metadata field {policy_field}."
+                    ),
+                }
+            )
+            continue
+        for field in ("use_policy",):
+            if not isinstance(policy.get(field), str) or not policy[field].strip():
+                issues.append(
+                    {
+                        "field": f"{path}.metadata.{policy_field}.{field}",
+                        "message": (
+                            "Release-ready training row model policy metadata "
+                            f"is missing {field}."
+                        ),
+                    }
+                )
 
 
 def _verify_package_task_coverage(
@@ -2993,6 +3126,19 @@ def _verify_optional_quality_numeric_fields(
                 ),
             }
         )
+    imaging_model_policy_counts = payload.get("imaging_model_policy_counts")
+    if imaging_model_policy_counts is not None and not _string_int_map(
+        imaging_model_policy_counts
+    ):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json.imaging_model_policy_counts",
+                "message": (
+                    "Quality report artifact imaging_model_policy_counts "
+                    "must be a string-to-integer map."
+                ),
+            }
+        )
     image_validator_policy_counts = payload.get("image_validator_policy_counts")
     if image_validator_policy_counts is not None and not _string_int_map(
         image_validator_policy_counts
@@ -3324,6 +3470,19 @@ def _verify_release_summary_quality_numeric_fields(
                 "message": (
                     "Release package summary quality_report."
                     "clinical_text_model_policy_counts must be a string-to-integer map."
+                ),
+            }
+        )
+    imaging_model_policy_counts = quality.get("imaging_model_policy_counts")
+    if imaging_model_policy_counts is not None and not _string_int_map(
+        imaging_model_policy_counts
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.imaging_model_policy_counts",
+                "message": (
+                    "Release package summary quality_report."
+                    "imaging_model_policy_counts must be a string-to-integer map."
                 ),
             }
         )
