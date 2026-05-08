@@ -2407,6 +2407,7 @@ def _verify_quality_report_artifact(
                 "message": "Quality report artifact has no boolean export_ready.",
             }
         )
+    _verify_optional_quality_numeric_fields(payload, issues)
     if not isinstance(payload.get("multimodal_release_ready"), bool):
         issues.append(
             {
@@ -2472,6 +2473,60 @@ def _verify_quality_report_artifact(
                     "Quality report artifact has no string list "
                     "multimodal_release_missing."
                 ),
+            }
+        )
+
+
+def _verify_optional_quality_numeric_fields(
+    payload: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    for key in (
+        "mean_imaging_prompt_chars",
+        "mean_imaging_report_chars",
+        "mean_imaging_width",
+        "mean_imaging_height",
+        "mean_modality_alignment_score",
+    ):
+        value = payload.get(key)
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            issues.append(
+                {
+                    "field": f"audit_artifacts.quality_report.json.{key}",
+                    "message": f"Quality report artifact {key} must be numeric.",
+                }
+            )
+    _verify_optional_quality_rate(
+        payload,
+        issues,
+        key="imaging_report_label_evidence_rate",
+    )
+
+
+def _verify_optional_quality_rate(
+    payload: dict[str, Any],
+    issues: list[dict[str, str]],
+    *,
+    key: str,
+) -> None:
+    value = payload.get(key)
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        issues.append(
+            {
+                "field": f"audit_artifacts.quality_report.json.{key}",
+                "message": f"Quality report artifact {key} must be numeric.",
+            }
+        )
+        return
+    if not 0 <= float(value) <= 1:
+        issues.append(
+            {
+                "field": f"audit_artifacts.quality_report.json.{key}",
+                "message": f"Quality report artifact {key} must be between 0 and 1.",
             }
         )
 
