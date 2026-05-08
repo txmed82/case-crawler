@@ -40,7 +40,11 @@ from casecrawler.models.synthetic import (
     TimeSeriesPoint,
     VitalObservation,
 )
-from casecrawler.validation.benchmark import benchmark_profile_artifact, profile_records
+from casecrawler.validation.benchmark import (
+    DatasetBenchmark,
+    benchmark_profile_artifact,
+    profile_records,
+)
 
 
 def test_export_sft_record_contains_messages():
@@ -327,6 +331,56 @@ def test_verify_jsonl_split_package_validates_benchmark_profile_artifact(tmp_pat
     assert any(
         issue["field"]
         == "audit_artifacts.benchmark_profile.json.profile.dataset_id"
+        for issue in report["issues"]
+    )
+
+
+def test_verify_jsonl_split_package_validates_benchmark_report_artifact(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    reference_records = [
+        record.model_copy(update={"record_id": f"ref-{index}", "dataset_id": "ds-ref"})
+        for index, record in enumerate(records)
+    ]
+    benchmark_report = DatasetBenchmark(
+        min_overall_score=0.0,
+        min_metric_score=0.0,
+    ).compare(records, reference_records)
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+        audit_artifacts={
+            "benchmark_report.json": benchmark_report.model_dump(mode="json")
+        },
+    )
+    report_payload = json.loads((tmp_path / "benchmark_report.json").read_text())
+    report_payload["generated_dataset_id"] = "ds-other"
+    (tmp_path / "benchmark_report.json").write_text(json.dumps(report_payload))
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    manifest["files"]["benchmark_report.json"]["byte_size"] = (
+        tmp_path / "benchmark_report.json"
+    ).stat().st_size
+    manifest["files"]["benchmark_report.json"]["sha256"] = hashlib.sha256(
+        (tmp_path / "benchmark_report.json").read_bytes()
+    ).hexdigest()
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path)
+
+    assert report["valid"] is False
+    assert any(
+        issue["field"]
+        == "audit_artifacts.benchmark_report.json.generated_dataset_id"
         for issue in report["issues"]
     )
 
