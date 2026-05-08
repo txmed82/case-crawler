@@ -844,7 +844,7 @@ def _vital_observation_resource(record: SyntheticRecord, vital) -> dict[str, Any
 
 
 def _time_series_observation_resource(record: SyntheticRecord, channel) -> dict[str, Any]:
-    return {
+    resource = {
         "resourceType": "Observation",
         "id": f"{record.record_id}-timeseries-{_slug(channel.name)}",
         "status": "final",
@@ -853,13 +853,32 @@ def _time_series_observation_resource(record: SyntheticRecord, channel) -> dict[
         "subject": _patient_reference(record),
         "component": [
             {
-                "code": {"text": f"{point.timestamp}:{name}"},
+                "code": {"text": name},
+                "extension": [
+                    {
+                        "url": "https://casecrawler.dev/fhir/StructureDefinition/sample-timestamp",
+                        "valueDateTime": point.timestamp,
+                    }
+                ],
                 "valueQuantity": {"value": observed_value, "unit": channel.unit},
             }
             for point in channel.points
             for name, observed_value in point.values.items()
         ],
     }
+    if channel.points:
+        resource["effectivePeriod"] = {
+            "start": channel.points[0].timestamp,
+            "end": channel.points[-1].timestamp,
+        }
+    if channel.sampling_rate_hz is not None:
+        resource["extension"] = [
+            {
+                "url": "https://casecrawler.dev/fhir/StructureDefinition/sampling-rate-hz",
+                "valueDecimal": channel.sampling_rate_hz,
+            }
+        ]
+    return resource
 
 
 def _medication_statement_resource(record: SyntheticRecord, medication) -> dict[str, Any]:
