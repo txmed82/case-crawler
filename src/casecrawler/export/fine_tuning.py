@@ -893,6 +893,15 @@ def export_jsonl_split_package(
             "record_ids": [record.record_id for record in split_items],
         }
     artifact_entries = _write_audit_artifacts(output_path, audit_artifacts or {})
+    files = _package_file_metadata(
+        {
+            **{
+                f"{split_name}.jsonl": entry["file_path"]
+                for split_name, entry in split_entries.items()
+            },
+            **artifact_entries,
+        }
+    )
 
     manifest = {
         "dataset_id": dataset_id or _dataset_id(record_list),
@@ -908,12 +917,25 @@ def export_jsonl_split_package(
         "example_count": total_examples,
         "splits": split_entries,
         "audit_artifacts": artifact_entries,
+        "files": files,
         "synthetic": True,
     }
     manifest_path = output_path / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     manifest["manifest_path"] = str(manifest_path)
     return manifest
+
+
+def _package_file_metadata(file_paths: dict[str, str]) -> dict[str, dict[str, Any]]:
+    metadata: dict[str, dict[str, Any]] = {}
+    for file_name, file_path in sorted(file_paths.items()):
+        path = Path(file_path)
+        metadata[file_name] = {
+            "path": str(path),
+            "byte_size": path.stat().st_size,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+    return metadata
 
 
 def _write_audit_artifacts(

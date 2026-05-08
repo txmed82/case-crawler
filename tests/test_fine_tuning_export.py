@@ -1,4 +1,5 @@
 import json
+import hashlib
 import struct
 import zlib
 
@@ -146,11 +147,22 @@ def test_export_jsonl_split_package_writes_manifest_and_stable_splits(tmp_path):
         "dataset_card.md",
         "quality_report.json",
     }
+    assert set(manifest["files"]) == {
+        "dataset_card.md",
+        "quality_report.json",
+        "test.jsonl",
+        "train.jsonl",
+        "validation.jsonl",
+    }
     assert manifest["splits"]["train"]["example_count"] == 6
     assert manifest["splits"]["train"]["record_ids"] == repeated["splits"]["train"]["record_ids"]
     assert (tmp_path / "manifest.json").exists()
     assert json.loads((tmp_path / "quality_report.json").read_text())["export_ready"] is True
     assert (tmp_path / "dataset_card.md").read_text() == "# Dataset Card\n"
+    assert manifest["files"]["train.jsonl"]["byte_size"] == (tmp_path / "train.jsonl").stat().st_size
+    assert manifest["files"]["train.jsonl"]["sha256"] == hashlib.sha256(
+        (tmp_path / "train.jsonl").read_bytes()
+    ).hexdigest()
     assert (tmp_path / "train.jsonl").read_text().count("\n") == 6
     first_payload = json.loads((tmp_path / "train.jsonl").read_text().splitlines()[0])
     assert first_payload["task"] in {
