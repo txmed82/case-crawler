@@ -1026,6 +1026,8 @@ def test_dataset_api_lists_hf_reference_catalog(tmp_path, monkeypatch):
     assert rexgradient["gated"] is True
     assert rexgradient["use_policy"] == "non_commercial_research_only"
     assert rexgradient["image_modality"] == "XR"
+    assert rexgradient["fixture_available"] is False
+    assert technetium["fixture_available"] is True
 
 
 def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
@@ -1060,6 +1062,11 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert "discharge_summaries" in release_requirements
     assert "radiology_images" in release_requirements
     assert "benchmark reference" in release_requirements["benchmark_reference"].lower()
+    references = {dataset["key"]: dataset for dataset in body["reference_datasets"]}
+    assert references["synthchex_75k"]["source"] == "huggingface"
+    assert references["synthchex_75k"]["image_modality"] == "XR"
+    assert references["radiology_report_consistency"]["fixture_available"] is True
+    assert references["synthea_fhir"]["source"] == "synthea"
     assert "cxr_pneumonia_dreambooth" in {
         profile["name"] for profile in body["imaging_model_profiles"]
     }

@@ -38,6 +38,11 @@ def test_dataset_cli_lists_generation_capabilities(tmp_path, monkeypatch):
     assert "medication_administration_records" in release_requirements
     assert "discharge_summaries" in release_requirements
     assert "benchmark reference" in release_requirements["benchmark_reference"].lower()
+    references = {dataset["key"]: dataset for dataset in body["reference_datasets"]}
+    assert references["synthchex_75k"]["source"] == "huggingface"
+    assert references["synthchex_75k"]["image_modality"] == "XR"
+    assert references["radiology_report_consistency"]["fixture_available"] is True
+    assert references["synthea_fhir"]["source"] == "synthea"
 
 
 def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
