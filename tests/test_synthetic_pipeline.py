@@ -60,6 +60,14 @@ async def test_synthetic_pipeline_applies_generation_recipe():
         "gated": False,
         "use_policy": "openrail_review_outputs_before_release",
     }
+    assert result["records"][0].metadata["image_validator_policy"] == {
+        "profile": "lexical",
+        "backend": "lexical",
+        "model_id": None,
+        "license": "casecrawler",
+        "gated": False,
+        "use_policy": "deterministic_screening_only",
+    }
 
 
 @pytest.mark.asyncio

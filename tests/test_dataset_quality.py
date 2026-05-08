@@ -213,6 +213,17 @@ def test_quality_report_marks_multimodal_release_ready_with_core_artifacts(tmp_p
                     "license": "openrail++",
                     "gated": False,
                     "use_policy": "openrail_review_outputs_before_release",
+                },
+                "image_validator_policy": {
+                    "profile": "biomedclip",
+                    "backend": "open_clip",
+                    "model_id": (
+                        "hf-hub:microsoft/"
+                        "BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+                    ),
+                    "license": "mit",
+                    "gated": False,
+                    "use_policy": "open_model_validate_image_text_alignment",
                 }
             },
             "validation": ValidationReport(
@@ -325,6 +336,17 @@ def test_quality_report_blocks_release_when_task_reference_coverage_is_missing(
                     "license": "openrail++",
                     "gated": False,
                     "use_policy": "openrail_review_outputs_before_release",
+                },
+                "image_validator_policy": {
+                    "profile": "biomedclip",
+                    "backend": "open_clip",
+                    "model_id": (
+                        "hf-hub:microsoft/"
+                        "BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+                    ),
+                    "license": "mit",
+                    "gated": False,
+                    "use_policy": "open_model_validate_image_text_alignment",
                 }
             },
             "validation": ValidationReport(
@@ -443,7 +465,18 @@ def test_quality_report_blocks_release_without_expected_clinical_document_famili
                     "license": "openrail++",
                     "gated": False,
                     "use_policy": "openrail_review_outputs_before_release",
-                }
+                },
+                "image_validator_policy": {
+                    "profile": "biomedclip",
+                    "backend": "open_clip",
+                    "model_id": (
+                        "hf-hub:microsoft/"
+                        "BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+                    ),
+                    "license": "mit",
+                    "gated": False,
+                    "use_policy": "open_model_validate_image_text_alignment",
+                },
             },
             "validation": ValidationReport(
                 schema_score=1.0,
@@ -923,7 +956,18 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
                     "license": "openrail++",
                     "gated": False,
                     "use_policy": "openrail_review_outputs_before_release",
-                }
+                },
+                "image_validator_policy": {
+                    "profile": "biomedclip",
+                    "backend": "open_clip",
+                    "model_id": (
+                        "hf-hub:microsoft/"
+                        "BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+                    ),
+                    "license": "mit",
+                    "gated": False,
+                    "use_policy": "open_model_validate_image_text_alignment",
+                },
             },
             "validation": ValidationReport(
                 schema_score=1.0,
@@ -978,6 +1022,12 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
         (
             "profile=cxr_pneumonia_dreambooth|license=openrail++|"
             "gated=false|use_policy=openrail_review_outputs_before_release"
+        ): 1
+    }
+    assert report.image_validator_policy_counts == {
+        (
+            "profile=biomedclip|backend=open_clip|license=mit|"
+            "gated=false|use_policy=open_model_validate_image_text_alignment"
         ): 1
     }
     assert report.mean_modality_alignment_score == 0.82

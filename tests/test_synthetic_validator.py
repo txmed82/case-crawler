@@ -982,6 +982,21 @@ def test_validator_records_modality_alignment_score_for_images(tmp_path):
     assert report.modality_alignment_score == 0.9
 
 
+def test_validator_exposes_image_validator_policy():
+    policy = SyntheticValidator(
+        image_alignment_validator=FakeImageAlignmentValidator(0.9)
+    ).image_validator_policy()
+
+    assert policy == {
+        "profile": "custom",
+        "backend": "FakeImageAlignmentValidator",
+        "model_id": None,
+        "license": "unspecified",
+        "gated": False,
+        "use_policy": "review_outputs_before_release",
+    }
+
+
 def test_validator_rejects_low_image_alignment():
     record = _record(
         modalities=[Modality.IMAGING],

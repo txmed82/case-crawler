@@ -530,6 +530,14 @@ def test_verify_jsonl_split_package_requires_release_image_artifact_metadata(tmp
                     "license": "creativeml-openrail-m",
                     "gated": False,
                     "use_policy": "openrail_review_outputs_before_release",
+                },
+                "image_validator_policy": {
+                    "profile": "lexical",
+                    "backend": "lexical",
+                    "model_id": None,
+                    "license": "casecrawler",
+                    "gated": False,
+                    "use_policy": "deterministic_screening_only",
                 }
             },
             "imaging": [
@@ -567,6 +575,7 @@ def test_verify_jsonl_split_package_requires_release_image_artifact_metadata(tmp
     image_artifact.pop("generation_backend")
     image_artifact["labels"] = [{"system": "synthetic", "code": "opacity"}]
     image_artifact["imaging_model_policy"].pop("use_policy")
+    image_artifact["image_validator_policy"].pop("backend")
     manifest_path.write_text(json.dumps(manifest))
 
     report = verify_jsonl_split_package(tmp_path / "package")
@@ -579,6 +588,10 @@ def test_verify_jsonl_split_package_requires_release_image_artifact_metadata(tmp
     assert any(field.endswith(".labels") for field in issue_fields)
     assert any(
         field.endswith(".imaging_model_policy.use_policy")
+        for field in issue_fields
+    )
+    assert any(
+        field.endswith(".image_validator_policy.backend")
         for field in issue_fields
     )
 
