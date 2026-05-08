@@ -155,6 +155,36 @@ class DatasetBenchmark:
                 reference_profile.procedure_name_counts,
             ),
             _jaccard_metric(
+                "diagnosis_code_system_overlap",
+                set(generated_profile.diagnosis_code_system_counts),
+                set(reference_profile.diagnosis_code_system_counts),
+            ),
+            _distribution_metric(
+                "diagnosis_code_system_distribution",
+                generated_profile.diagnosis_code_system_counts,
+                reference_profile.diagnosis_code_system_counts,
+            ),
+            _jaccard_metric(
+                "diagnosis_code_overlap",
+                set(generated_profile.diagnosis_code_counts),
+                set(reference_profile.diagnosis_code_counts),
+            ),
+            _distribution_metric(
+                "diagnosis_code_distribution",
+                generated_profile.diagnosis_code_counts,
+                reference_profile.diagnosis_code_counts,
+            ),
+            _jaccard_metric(
+                "phi_entity_overlap",
+                set(generated_profile.phi_entity_counts),
+                set(reference_profile.phi_entity_counts),
+            ),
+            _distribution_metric(
+                "phi_entity_distribution",
+                generated_profile.phi_entity_counts,
+                reference_profile.phi_entity_counts,
+            ),
+            _jaccard_metric(
                 "medication_name_overlap",
                 set(generated_profile.medication_name_counts),
                 set(reference_profile.medication_name_counts),
@@ -302,6 +332,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     lab_flag_counts: Counter[str] = Counter()
     vital_name_counts: Counter[str] = Counter()
     procedure_name_counts: Counter[str] = Counter()
+    diagnosis_code_system_counts: Counter[str] = Counter()
+    diagnosis_code_counts: Counter[str] = Counter()
+    phi_entity_counts: Counter[str] = Counter()
     medication_name_counts: Counter[str] = Counter()
     medication_route_counts: Counter[str] = Counter()
     medication_status_counts: Counter[str] = Counter()
@@ -340,6 +373,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             for key, value in document.extracted_facts.items():
                 if _has_fact_value(value):
                     extracted_fact_key_counts[_fact_key(key)] += 1
+            _count_phi_entities(document.extracted_facts, phi_entity_counts)
         for lab in record.labs:
             lab_name_counts[lab.name] += 1
             if lab.flag:
@@ -354,6 +388,11 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
                 float(vital.value)
             )
         for encounter in record.encounters:
+            for diagnosis in encounter.diagnoses:
+                if diagnosis.system:
+                    diagnosis_code_system_counts[diagnosis.system] += 1
+                if diagnosis.code:
+                    diagnosis_code_counts[_diagnosis_code_key(diagnosis)] += 1
             for procedure in encounter.procedures:
                 procedure_name_counts[procedure.display] += 1
         for medication in record.medication_history:
@@ -414,6 +453,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         vital_name_counts=dict(sorted(vital_name_counts.items())),
         vital_numeric_summaries=_numeric_summaries(vital_numeric_values),
         procedure_name_counts=dict(sorted(procedure_name_counts.items())),
+        diagnosis_code_system_counts=dict(sorted(diagnosis_code_system_counts.items())),
+        diagnosis_code_counts=dict(sorted(diagnosis_code_counts.items())),
+        phi_entity_counts=dict(sorted(phi_entity_counts.items())),
         medication_name_counts=dict(sorted(medication_name_counts.items())),
         medication_route_counts=dict(sorted(medication_route_counts.items())),
         medication_status_counts=dict(sorted(medication_status_counts.items())),
@@ -669,6 +711,36 @@ def _has_fact_value(value: object) -> bool:
     if isinstance(value, list | tuple | set | dict):
         return bool(value)
     return True
+
+
+def _count_phi_entities(
+    extracted_facts: dict,
+    phi_entity_counts: Counter[str],
+) -> None:
+    annotations = extracted_facts.get("phi_annotations")
+    if isinstance(annotations, list):
+        for annotation in annotations:
+            if not isinstance(annotation, dict):
+                continue
+            entity_type = str(annotation.get("entity_type") or "").strip()
+            if entity_type:
+                phi_entity_counts[entity_type] += 1
+        return
+    counts = extracted_facts.get("phi_entity_counts")
+    if isinstance(counts, dict):
+        for entity_type, count in counts.items():
+            if not str(entity_type).strip():
+                continue
+            try:
+                phi_entity_counts[str(entity_type)] += int(count)
+            except (TypeError, ValueError):
+                continue
+
+
+def _diagnosis_code_key(diagnosis) -> str:
+    system = diagnosis.system or "unspecified"
+    code = diagnosis.code or "unspecified"
+    return f"{system}:{code}"
 
 
 def _warnings(
