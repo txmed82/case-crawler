@@ -184,6 +184,114 @@ def test_synthea_adapter_imports_conditions_and_diagnostic_reports(tmp_path):
     assert Modality.CLINICAL_TEXT in record.modalities
 
 
+def test_synthea_adapter_expands_component_observations(tmp_path):
+    bundle = {
+        "resourceType": "Bundle",
+        "entry": [
+            {
+                "resource": {
+                    "resourceType": "Patient",
+                    "id": "pat-components",
+                    "gender": "female",
+                    "birthDate": "1975-01-01",
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Encounter",
+                    "id": "enc-components",
+                    "period": {"start": "2026-01-01T00:00:00"},
+                    "reasonCode": [{"text": "hypertension"}],
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Observation",
+                    "id": "bp-1",
+                    "category": [{"coding": [{"code": "vital-signs"}]}],
+                    "code": {"text": "Blood pressure"},
+                    "effectiveDateTime": "2026-01-01T01:00:00",
+                    "component": [
+                        {
+                            "code": {
+                                "coding": [
+                                    {
+                                        "system": "http://loinc.org",
+                                        "code": "8480-6",
+                                        "display": "Systolic blood pressure",
+                                    }
+                                ]
+                            },
+                            "valueQuantity": {"value": 152, "unit": "mmHg"},
+                        },
+                        {
+                            "code": {
+                                "coding": [
+                                    {
+                                        "system": "http://loinc.org",
+                                        "code": "8462-4",
+                                        "display": "Diastolic blood pressure",
+                                    }
+                                ]
+                            },
+                            "valueQuantity": {"value": 94, "unit": "mmHg"},
+                        },
+                    ],
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Observation",
+                    "id": "metabolic-panel",
+                    "code": {"text": "Basic metabolic panel"},
+                    "effectiveDateTime": "2026-01-01T01:15:00",
+                    "component": [
+                        {
+                            "code": {
+                                "coding": [
+                                    {
+                                        "system": "http://loinc.org",
+                                        "code": "2951-2",
+                                        "display": "Sodium",
+                                    }
+                                ]
+                            },
+                            "valueQuantity": {"value": 132, "unit": "mmol/L"},
+                        },
+                        {
+                            "code": {
+                                "coding": [
+                                    {
+                                        "system": "http://loinc.org",
+                                        "code": "2823-3",
+                                        "display": "Potassium",
+                                    }
+                                ]
+                            },
+                            "valueQuantity": {"value": 5.4, "unit": "mmol/L"},
+                        },
+                    ],
+                }
+            },
+        ],
+    }
+    path = tmp_path / "patient-components.json"
+    path.write_text(json.dumps(bundle))
+
+    record = SyntheaAdapter().import_fhir_bundle(str(path), dataset_id="ds-1")
+
+    vital_values = {vital.name: vital for vital in record.vitals}
+    lab_values = {lab.name: lab for lab in record.labs}
+    assert vital_values["Systolic blood pressure"].value == 152
+    assert vital_values["Systolic blood pressure"].unit == "mmHg"
+    assert vital_values["Diastolic blood pressure"].value == 94
+    assert lab_values["Sodium"].value == 132
+    assert lab_values["Sodium"].loinc == "2951-2"
+    assert lab_values["Potassium"].value == 5.4
+    assert Modality.VITALS in record.modalities
+    assert Modality.LABS in record.modalities
+
+
 def test_synthea_adapter_imports_procedures(tmp_path):
     bundle = {
         "resourceType": "Bundle",
