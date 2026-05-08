@@ -394,6 +394,22 @@ def serve() -> None:
 @click.option("--age-max", default=None, type=int, help="Maximum generated patient age")
 @click.option("--sexes", default=None, help="Comma-separated sex cycle")
 @click.option("--base-time", default=None, help="ISO-8601 base timestamp")
+@click.option(
+    "--imaging-backend",
+    default=None,
+    type=click.Choice(["placeholder", "diffusers"]),
+    help="Override synthetic imaging backend for this generation request",
+)
+@click.option(
+    "--imaging-model-profile",
+    default=None,
+    help="Built-in imaging model profile, for example cxr_pneumonia_dreambooth",
+)
+@click.option(
+    "--diffusers-model-id",
+    default=None,
+    help="Override Hugging Face diffusers model id for this generation request",
+)
 def generate_dataset(
     topic: str,
     count: int,
@@ -403,6 +419,9 @@ def generate_dataset(
     age_max: int | None,
     sexes: str | None,
     base_time: str | None,
+    imaging_backend: str | None,
+    imaging_model_profile: str | None,
+    diffusers_model_id: str | None,
 ) -> None:
     """Generate synthetic healthcare records for AI training."""
     from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
@@ -436,6 +455,9 @@ def generate_dataset(
             if selected_modalities is not None
             else GenerationRequest(topic=topic).modalities,
             cohort_constraints=cohort_constraints,
+            imaging_backend=imaging_backend,
+            imaging_model_profile=imaging_model_profile,
+            diffusers_model_id=diffusers_model_id,
         )
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc

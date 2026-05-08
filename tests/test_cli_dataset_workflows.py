@@ -5,6 +5,7 @@ from click.testing import CliRunner
 
 from casecrawler.cli import cli
 from casecrawler.integrations.huggingface import import_reference_rows
+from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import (
     ComplexityProfile,
     Modality,
@@ -66,6 +67,46 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     assert fhir_exported.exit_code == 0
     assert "Exported" in fhir_exported.output
     assert "Bundle" in (tmp_path / "synthetic.fhir.ndjson").read_text()
+
+
+def test_dataset_cli_passes_imaging_model_options(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    class FakePipeline:
+        async def generate(self, req: GenerationRequest):
+            captured.append(req)
+            return {
+                "dataset_id": "ds-test",
+                "generated": 0,
+                "approved": 0,
+                "records": [],
+            }
+
+    monkeypatch.setattr("casecrawler.generation.synthetic_pipeline.SyntheticPipeline", FakePipeline)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "generate-dataset",
+            "pneumonia",
+            "--modalities",
+            "imaging",
+            "--imaging-backend",
+            "diffusers",
+            "--imaging-model-profile",
+            "cxr_pneumonia_dreambooth",
+            "--diffusers-model-id",
+            "hf/test-cxr",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured[0].modalities == [Modality.IMAGING]
+    assert captured[0].imaging_backend == "diffusers"
+    assert captured[0].imaging_model_profile == "cxr_pneumonia_dreambooth"
+    assert captured[0].diffusers_model_id == "hf/test-cxr"
 
 
 def test_dataset_cli_export_blocks_unready_dataset_without_override(tmp_path, monkeypatch):

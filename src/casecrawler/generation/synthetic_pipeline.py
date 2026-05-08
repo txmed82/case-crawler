@@ -35,6 +35,7 @@ class SyntheticPipeline:
         image_backend: str | None = None,
     ) -> None:
         config = get_config()
+        self._config = config
         self._structured_generator = structured_generator or StructuredGenerator()
         self._text_generator = text_generator or _text_generator_from_config(
             config.synthetic.clinical_text_backend,
@@ -58,6 +59,7 @@ class SyntheticPipeline:
     async def generate(self, req: GenerationRequest) -> dict:
         dataset_id = f"ds-{uuid4()}"
         plan = self._modality_planner.build(req)
+        imaging_generator = self._imaging_generator_for(req)
         records = []
         approved = 0
         for index in range(req.count):
@@ -73,7 +75,7 @@ class SyntheticPipeline:
                 )
             if Modality.IMAGING in plan.modalities:
                 images = [
-                    self._generate_image_asset(request)
+                    self._generate_image_asset(request, req, imaging_generator)
                     for request in _imaging_requests_for_record(
                         record,
                         plan.imaging_views or ["medical_image"],
@@ -100,22 +102,41 @@ class SyntheticPipeline:
             return self._validator
         return SyntheticValidator(threshold=req.validation_threshold)
 
-    def _generate_image_asset(self, request: ImagingRequest):
-        if self._image_backend == "diffusers":
-            return self._imaging_generator.generate_diffusers(
+    def _generate_image_asset(
+        self,
+        request: ImagingRequest,
+        req: GenerationRequest,
+        imaging_generator: ImagingGenerator,
+    ):
+        image_backend = req.imaging_backend or self._image_backend
+        if image_backend == "diffusers":
+            return imaging_generator.generate_diffusers(
                 output_dir=self._image_output_dir,
                 prompt=request.prompt,
                 modality=request.modality,
                 body_region=request.body_region,
             )
-        if self._image_backend == "placeholder":
-            return self._imaging_generator.generate_placeholder(
+        if image_backend == "placeholder":
+            return imaging_generator.generate_placeholder(
                 output_dir=self._image_output_dir,
                 prompt=request.prompt,
                 modality=request.modality,
                 body_region=request.body_region,
             )
-        raise ValueError(f"Unknown synthetic imaging backend: {self._image_backend}")
+        raise ValueError(f"Unknown synthetic imaging backend: {image_backend}")
+
+    def _imaging_generator_for(self, req: GenerationRequest) -> ImagingGenerator:
+        if not (req.imaging_model_profile or req.diffusers_model_id):
+            return self._imaging_generator
+        return ImagingGenerator(
+            diffusers_model_id=(
+                req.diffusers_model_id or self._config.synthetic.diffusers_model_id
+            ),
+            imaging_model_profile=(
+                req.imaging_model_profile
+                or self._config.synthetic.imaging_model_profile
+            ),
+        )
 
 
 def _time_series_generator_from_config(

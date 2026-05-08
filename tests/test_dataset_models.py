@@ -18,6 +18,22 @@ def test_generation_request_defaults():
     assert req.complexity == ComplexityProfile.MODERATE
     assert Modality.CLINICAL_TEXT in req.modalities
     assert Modality.LABS in req.modalities
+    assert req.imaging_backend is None
+    assert req.imaging_model_profile is None
+
+
+def test_generation_request_accepts_imaging_model_overrides():
+    req = GenerationRequest(
+        topic="pneumonia",
+        modalities=[Modality.IMAGING],
+        imaging_backend="diffusers",
+        imaging_model_profile="cxr_pneumonia_dreambooth",
+        diffusers_model_id="hf/test-cxr",
+    )
+
+    assert req.imaging_backend == "diffusers"
+    assert req.imaging_model_profile == "cxr_pneumonia_dreambooth"
+    assert req.diffusers_model_id == "hf/test-cxr"
 
 
 def test_generation_request_rejects_invalid_validation_threshold():
