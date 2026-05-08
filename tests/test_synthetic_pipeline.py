@@ -107,6 +107,39 @@ async def test_synthetic_pipeline_generates_weighted_topic_mix_cohorts():
 
 
 @pytest.mark.asyncio
+async def test_synthetic_pipeline_generates_chronic_care_recipe_records():
+    pipeline = SyntheticPipeline(validator=SyntheticValidator())
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="chronic care",
+            recipe="longitudinal_chronic_care",
+            count=3,
+        )
+    )
+
+    assert result["generated"] == 3
+    assert result["approved"] == 3
+    assert [record.topic for record in result["records"]] == [
+        "type 2 diabetes",
+        "type 2 diabetes",
+        "chronic kidney disease",
+    ]
+    assert all(len(record.encounters) == 4 for record in result["records"])
+    assert all(record.medication_history for record in result["records"])
+    assert any(
+        med.name == "Metformin"
+        for record in result["records"]
+        for med in record.medication_history
+    )
+    assert any(
+        lab.name == "Hemoglobin A1c"
+        for record in result["records"]
+        for lab in record.labs
+    )
+
+
+@pytest.mark.asyncio
 async def test_synthetic_pipeline_generates_topic_mix_with_weight_map():
     pipeline = SyntheticPipeline(validator=SyntheticValidator())
 

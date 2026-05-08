@@ -141,6 +141,53 @@ RECIPES: dict[str, GenerationRecipe] = {
         benchmark_min_overall_score=0.75,
         benchmark_min_metric_score=0.5,
     ),
+    "longitudinal_chronic_care": GenerationRecipe(
+        name="longitudinal_chronic_care",
+        description=(
+            "Outpatient-to-inpatient longitudinal cohort for chronic disease "
+            "management, medication reconciliation, labs, vitals, and progress notes."
+        ),
+        modalities=[
+            Modality.STRUCTURED_EHR,
+            Modality.CLINICAL_TEXT,
+            Modality.LABS,
+            Modality.VITALS,
+            Modality.TIME_SERIES,
+        ],
+        export_formats=[
+            ExportFormat.SFT_JSONL,
+            ExportFormat.NOTE_FACT_SFT_JSONL,
+            ExportFormat.CLINICAL_OBSERVATION_JSONL,
+            ExportFormat.MEDICATION_RECONCILIATION_JSONL,
+            ExportFormat.TIME_SERIES_JSONL,
+            ExportFormat.FHIR_NDJSON,
+            ExportFormat.PARQUET,
+        ],
+        cohort_constraints={
+            "topic_mix": [
+                {"topic": "type 2 diabetes", "weight": 2},
+                {"topic": "chronic kidney disease", "weight": 2},
+                {"topic": "hypertension", "weight": 1},
+                {"topic": "heart failure", "weight": 1},
+                {"topic": "copd", "weight": 1},
+            ],
+            "age_min": 40,
+            "age_max": 84,
+            "encounter_count": 4,
+            "sexes": ["female", "male"],
+        },
+        validation_threshold=0.8,
+        recommended_reference_keys=[
+            "synthea_fhir",
+            "synthclinicalnotes",
+            "augmented_clinical_notes",
+            "clinical_notes_to_fhir",
+            "medsynth_dialogue_note",
+            "technetium_i",
+        ],
+        benchmark_min_overall_score=0.75,
+        benchmark_min_metric_score=0.5,
+    ),
 }
 
 
