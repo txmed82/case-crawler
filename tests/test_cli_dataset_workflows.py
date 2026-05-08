@@ -120,6 +120,52 @@ def test_dataset_cli_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     assert (tmp_path / "benchmark-gated.jsonl").exists()
 
 
+def test_dataset_cli_export_can_auto_select_recipe_benchmark_reference(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generated = runner.invoke(
+        cli,
+        ["generate-dataset", "sepsis", "--count", "1", "--recipe", "icu_timeseries_notes"],
+    )
+    reference = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output).group(1)
+    reference_dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", reference.output).group(1)
+    store = DatasetStore()
+    for record in store.list_records(dataset_id=reference_dataset_id):
+        store.save_record(
+            record.model_copy(
+                update={
+                    "metadata": {
+                        **record.metadata,
+                        "reference_key": "synthclinicalnotes",
+                        "reference_dataset": "IntelLabs/SynthClinicalNotes",
+                    }
+                }
+            )
+        )
+
+    exported = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--auto-benchmark",
+            "--allow-blocked",
+            "--output",
+            "auto-benchmark.jsonl",
+        ],
+    )
+
+    assert exported.exit_code == 0
+    assert "Exported" in exported.output
+    manifest = store.list_export_manifests(dataset_id=dataset_id)[0]
+    assert manifest.metadata["benchmark_reference_dataset_id"] == reference_dataset_id
+    assert manifest.metadata["benchmark_reference_key"] == "synthclinicalnotes"
+    assert manifest.metadata["benchmark_auto_selected"] is True
+
+
 def test_dataset_cli_export_blocks_failed_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

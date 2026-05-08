@@ -442,6 +442,7 @@ def export_dataset(
     export_format: ExportFormat = ExportFormat.SFT_JSONL,
     allow_blocked: bool = False,
     reference_dataset_id: str | None = Query(default=None, min_length=1),
+    auto_benchmark: bool = False,
     min_overall_score: float = Query(0.75, ge=0.0, le=1.0),
     min_metric_score: float = Query(0.5, ge=0.0, le=1.0),
 ):
@@ -464,20 +465,38 @@ def export_dataset(
                     "Set allow_blocked=true to export anyway."
                 ),
             )
+    try:
+        from casecrawler.validation.benchmark_selection import resolve_benchmark_gate
+
+        benchmark_gate = resolve_benchmark_gate(
+            store,
+            dataset_id=dataset_id,
+            reference_dataset_id=reference_dataset_id,
+            auto_benchmark=auto_benchmark,
+            min_overall_score=min_overall_score,
+            min_metric_score=min_metric_score,
+        )
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail="reference dataset not found") from err
+    except LookupError as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+
     benchmark_metadata = {}
-    if reference_dataset_id:
-        if not store.dataset_exists(reference_dataset_id):
-            raise HTTPException(status_code=404, detail="reference dataset not found")
-        reference_records = list(store.iter_records(dataset_id=reference_dataset_id))
+    if benchmark_gate:
+        reference_records = list(
+            store.iter_records(dataset_id=benchmark_gate.reference_dataset_id)
+        )
         try:
             benchmark_report = DatasetBenchmark(
-                min_overall_score=min_overall_score,
-                min_metric_score=min_metric_score,
+                min_overall_score=benchmark_gate.min_overall_score,
+                min_metric_score=benchmark_gate.min_metric_score,
             ).compare(records, reference_records)
         except ValueError as err:
             raise HTTPException(status_code=422, detail=str(err)) from err
         benchmark_metadata = {
-            "benchmark_reference_dataset_id": reference_dataset_id,
+            "benchmark_reference_dataset_id": benchmark_gate.reference_dataset_id,
+            "benchmark_reference_key": benchmark_gate.reference_key,
+            "benchmark_auto_selected": benchmark_gate.auto_selected,
             "benchmark_overall_score": benchmark_report.overall_score,
             "benchmark_passed": benchmark_report.passed,
             "benchmark_failing_metrics": benchmark_report.failing_metrics,

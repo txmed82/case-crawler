@@ -68,6 +68,8 @@ export default function DatasetsPage() {
     ? exportFormat
     : (exportFormats[0] ?? "sft_jsonl");
   const benchmarkPlan = parseRecipeBenchmarkPlan(detail?.manifest.metadata);
+  const hasAutoBenchmarkPlan =
+    benchmarkPlan.recommendedReferenceKeys.length > 0 && benchmarkPlan.thresholds !== null;
   const {
     data: reviewQueue,
     isLoading: isReviewLoading,
@@ -250,6 +252,20 @@ export default function DatasetsPage() {
                       >
                         {referenceDatasetId ? "Export Gated" : "Export"}
                       </a>
+                      {hasAutoBenchmarkPlan && !referenceDatasetId && (
+                        <a
+                          href={datasetExportUrl(
+                            detail.manifest.dataset_id,
+                            effectiveExportFormat,
+                            {
+                              autoBenchmark: true,
+                            }
+                          )}
+                          className="rounded-md border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                        >
+                          Export Auto-Gated
+                        </a>
+                      )}
                     </div>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
