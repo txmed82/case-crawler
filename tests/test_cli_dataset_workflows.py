@@ -77,6 +77,17 @@ def test_dataset_cli_lists_generation_recipes():
     assert "icu_timeseries_notes" in result.output
 
 
+def test_dataset_cli_reports_unknown_generation_recipe(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(
+        cli,
+        ["generate-dataset", "sepsis", "--recipe", "missing"],
+    )
+
+    assert result.exit_code != 0
+    assert "Unknown generation recipe" in result.output
+
+
 def test_dataset_cli_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

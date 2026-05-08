@@ -553,7 +553,10 @@ def generate_dataset(
         )
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
-    result = asyncio.run(SyntheticPipeline().generate(req))
+    try:
+        result = asyncio.run(SyntheticPipeline().generate(req))
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
     store = DatasetStore()
     for record in result["records"]:
         store.save_record(record)
