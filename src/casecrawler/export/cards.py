@@ -18,6 +18,7 @@ def build_dataset_card(
     provenance_counts = Counter(record.provenance.generator for record in records)
     generation_overrides = _generation_override_counts(records)
     extracted_fact_counts = _extracted_fact_counts(records)
+    procedure_counts = _procedure_counts(records)
     review_counts = Counter(
         record.metadata.get("human_review", {}).get("status", "unreviewed")
         for record in records
@@ -48,6 +49,10 @@ def build_dataset_card(
             "## Extracted Fact Targets",
             "",
             *_counter_lines(extracted_fact_counts or Counter({"none": 1})),
+            "",
+            "## Procedures",
+            "",
+            *_counter_lines(procedure_counts or Counter({"none": 1})),
             "",
             "## Human Review",
             "",
@@ -108,6 +113,7 @@ def build_model_card(
         for record in records
         for channel in record.time_series
     )
+    procedure_counts = _procedure_counts(records)
     generation_overrides = _generation_override_counts(records)
     return "\n".join(
         [
@@ -136,6 +142,10 @@ def build_model_card(
             "## Time-Series Backends",
             "",
             *_counter_lines(time_series_backends or Counter({"none": 1})),
+            "",
+            "## Procedure Coverage",
+            "",
+            *_counter_lines(procedure_counts or Counter({"none": 1})),
             "",
             "## Request-Scoped Overrides",
             "",
@@ -211,6 +221,15 @@ def _extracted_fact_counts(records: list[SyntheticRecord]) -> Counter[str]:
             for key, value in document.extracted_facts.items():
                 if _has_fact_value(value):
                     counter[key] += 1
+    return counter
+
+
+def _procedure_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        for encounter in record.encounters:
+            for procedure in encounter.procedures:
+                counter[procedure.display] += 1
     return counter
 
 
