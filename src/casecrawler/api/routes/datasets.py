@@ -50,6 +50,7 @@ class ReferenceImportRequest(BaseModel):
     dataset_id: str = Field(min_length=1)
     fixture: bool = False
     repo_id: str | None = Field(default=None, min_length=1)
+    path: str | None = Field(default=None, min_length=1)
     split: str | None = None
     license: str | None = None
     note_field: str = "note"
@@ -575,15 +576,21 @@ def import_reference_dataset(req: ReferenceImportRequest):
     from casecrawler.integrations.huggingface import (
         REFERENCE_DATASETS,
         import_reference_rows,
+        load_local_reference_rows,
         load_huggingface_dataset,
         load_reference_dataset,
         reference_dataset_spec,
     )
 
-    if req.repo_id:
+    if req.repo_id and req.path:
+        raise HTTPException(status_code=422, detail="use repo_id or path, not both")
+
+    if req.repo_id or req.path:
         split = req.split or "train"
+        source_id = req.repo_id or req.path
+        assert source_id is not None
         spec = reference_dataset_spec(
-            repo_id=req.repo_id,
+            repo_id=source_id,
             split=split,
             license=req.license or "unspecified",
             note_field=req.note_field,
@@ -600,21 +607,29 @@ def import_reference_dataset(req: ReferenceImportRequest):
             vital_values_field=req.vital_values_field,
             medications_field=req.medications_field,
             time_series_field=req.time_series_field,
-            description="User-specified Hugging Face reference dataset.",
+            description=(
+                "User-specified local reference dataset."
+                if req.path
+                else "User-specified Hugging Face reference dataset."
+            ),
         )
         try:
-            rows = load_huggingface_dataset(req.repo_id, split=split, streaming=True)
+            rows = (
+                load_local_reference_rows(req.path)
+                if req.path
+                else load_huggingface_dataset(req.repo_id, split=split, streaming=True)
+            )
             records = import_reference_rows(
                 rows,
                 dataset_id=req.dataset_id,
-                reference_key=req.reference_key or req.repo_id,
+                reference_key=req.reference_key or source_id,
                 split=split,
                 limit=req.limit,
                 spec=spec,
             )
-        except RuntimeError as err:
+        except (RuntimeError, ValueError, OSError) as err:
             raise HTTPException(status_code=422, detail=str(err)) from err
-        reference_key = req.reference_key or req.repo_id
+        reference_key = req.reference_key or source_id
     elif req.reference_key not in REFERENCE_DATASETS:
         raise HTTPException(status_code=404, detail="reference dataset not found")
     else:

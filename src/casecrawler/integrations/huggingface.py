@@ -241,6 +241,41 @@ def load_huggingface_dataset(
     return datasets.load_dataset(repo_id, split=split, streaming=streaming)
 
 
+def load_local_reference_rows(path: str | Path) -> list[dict]:
+    path = Path(path)
+    if path.suffix.lower() in {".jsonl", ".ndjson"}:
+        rows = []
+        with path.open(encoding="utf-8") as handle:
+            for line_number, line in enumerate(handle, start=1):
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    row = json.loads(stripped)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"Invalid JSON on line {line_number} of {path}."
+                    ) from exc
+                if not isinstance(row, dict):
+                    raise ValueError(
+                        f"Expected JSON object on line {line_number} of {path}."
+                    )
+                rows.append(row)
+        return rows
+    with path.open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if isinstance(payload, dict) and isinstance(payload.get("rows"), list):
+        payload = payload["rows"]
+    if not isinstance(payload, list):
+        raise ValueError(
+            "Local reference JSON must be a list of row objects or "
+            "an object with a rows list."
+        )
+    if not all(isinstance(row, dict) for row in payload):
+        raise ValueError("Local reference JSON rows must be objects.")
+    return payload
+
+
 def reference_dataset_spec(
     *,
     repo_id: str,
