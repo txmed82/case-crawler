@@ -307,6 +307,10 @@ def test_dataset_api_generates_release_package_with_fixture_references(
         ]
         is True
     )
+    assert summary["objective_coverage"]["criteria"]["privacy_safety"]["satisfied"] is True
+    assert summary["objective_coverage"]["criteria"]["privacy_safety"]["evidence"][
+        "privacy_issue_counts"
+    ] == {}
     assert (
         summary["objective_coverage"]["criteria"]["radiology_images"]["evidence"][
             "image_artifact_count"
