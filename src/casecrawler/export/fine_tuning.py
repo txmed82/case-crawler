@@ -1806,6 +1806,12 @@ def _verify_package_audit_artifacts(
                 artifact_name=file_name,
                 title_prefix="# Model Card:",
             )
+        elif file_name == "release_package_summary.json":
+            _verify_release_package_summary_artifact(
+                package_path / file_name,
+                manifest,
+                issues,
+            )
 
 
 def _verify_benchmark_profile_artifact(
@@ -2400,6 +2406,261 @@ def _verify_card_artifact(
                 "message": (
                     f"{artifact_name} does not reference package name or "
                     "dataset_id."
+                ),
+            }
+        )
+
+
+def _verify_release_package_summary_artifact(
+    path: Path,
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        issues.append(
+            {
+                "field": "audit_artifacts.release_package_summary.json",
+                "message": f"Release package summary is invalid JSON: {exc}.",
+            }
+        )
+        return
+    if not isinstance(payload, dict):
+        issues.append(
+            {
+                "field": "audit_artifacts.release_package_summary.json",
+                "message": "Release package summary must be a JSON object.",
+            }
+        )
+        return
+    manifest_dataset_id = manifest.get("dataset_id")
+    summary_dataset_id = payload.get("dataset_id")
+    if isinstance(manifest_dataset_id, str) and summary_dataset_id != manifest_dataset_id:
+        issues.append(
+            {
+                "field": "audit_artifacts.release_package_summary.json.dataset_id",
+                "message": (
+                    "Release package summary dataset_id "
+                    f"{summary_dataset_id!r} does not match package dataset_id "
+                    f"{manifest_dataset_id!r}."
+                ),
+            }
+        )
+    quality = payload.get("quality_report")
+    if not isinstance(quality, dict):
+        issues.append(
+            {
+                "field": "audit_artifacts.release_package_summary.json.quality_report",
+                "message": "Release package summary quality_report must be an object.",
+            }
+        )
+    else:
+        _verify_release_summary_quality(quality, issues)
+    benchmark = payload.get("benchmark")
+    if not isinstance(benchmark, dict):
+        issues.append(
+            {
+                "field": "audit_artifacts.release_package_summary.json.benchmark",
+                "message": "Release package summary benchmark must be an object.",
+            }
+        )
+    else:
+        _verify_release_summary_benchmark(benchmark, issues)
+    benchmark_suite = payload.get("benchmark_suite")
+    if not isinstance(benchmark_suite, dict):
+        issues.append(
+            {
+                "field": (
+                    "audit_artifacts.release_package_summary.json.benchmark_suite"
+                ),
+                "message": (
+                    "Release package summary benchmark_suite must be an object."
+                ),
+            }
+        )
+    else:
+        _verify_release_summary_benchmark_suite(benchmark_suite, issues)
+
+
+def _verify_release_summary_quality(
+    quality: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    field_prefix = "audit_artifacts.release_package_summary.json.quality_report"
+    for key in ("export_ready", "multimodal_release_ready"):
+        if not isinstance(quality.get(key), bool):
+            issues.append(
+                {
+                    "field": f"{field_prefix}.{key}",
+                    "message": (
+                        f"Release package summary quality_report.{key} "
+                        "must be a boolean."
+                    ),
+                }
+            )
+    coverage = quality.get("core_artifact_coverage")
+    if not isinstance(coverage, dict) or not all(
+        isinstance(key, str) and isinstance(value, bool)
+        for key, value in (coverage or {}).items()
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.core_artifact_coverage",
+                "message": (
+                    "Release package summary quality_report.core_artifact_coverage "
+                    "must be a boolean map."
+                ),
+            }
+        )
+    elif quality.get("multimodal_release_ready") is True:
+        missing_keys = sorted(REQUIRED_RELEASE_COVERAGE_KEYS - set(coverage))
+        failed_keys = sorted(
+            key
+            for key in REQUIRED_RELEASE_COVERAGE_KEYS
+            if coverage.get(key) is not True
+        )
+        if missing_keys or failed_keys:
+            issues.append(
+                {
+                    "field": f"{field_prefix}.core_artifact_coverage",
+                    "message": (
+                        "Release package summary marks multimodal_release_ready "
+                        "but release coverage is incomplete."
+                    ),
+                }
+            )
+    missing = quality.get("multimodal_release_missing")
+    if not isinstance(missing, list) or not all(isinstance(item, str) for item in missing):
+        issues.append(
+            {
+                "field": f"{field_prefix}.multimodal_release_missing",
+                "message": (
+                    "Release package summary quality_report.multimodal_release_missing "
+                    "must be a string list."
+                ),
+            }
+        )
+    elif quality.get("multimodal_release_ready") is True and missing:
+        issues.append(
+            {
+                "field": f"{field_prefix}.multimodal_release_missing",
+                "message": (
+                    "Release package summary marks multimodal_release_ready "
+                    f"but lists missing requirements: {missing}."
+                ),
+            }
+        )
+
+
+def _verify_release_summary_benchmark(
+    benchmark: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    field_prefix = "audit_artifacts.release_package_summary.json.benchmark"
+    if not isinstance(benchmark.get("reference_dataset_id"), str):
+        issues.append(
+            {
+                "field": f"{field_prefix}.reference_dataset_id",
+                "message": (
+                    "Release package summary benchmark.reference_dataset_id "
+                    "must be a string."
+                ),
+            }
+        )
+    if not isinstance(benchmark.get("passed"), bool):
+        issues.append(
+            {
+                "field": f"{field_prefix}.passed",
+                "message": "Release package summary benchmark.passed must be a boolean.",
+            }
+        )
+    if not isinstance(benchmark.get("overall_score"), int | float):
+        issues.append(
+            {
+                "field": f"{field_prefix}.overall_score",
+                "message": (
+                    "Release package summary benchmark.overall_score must be numeric."
+                ),
+            }
+        )
+    failing_metrics = benchmark.get("failing_metrics")
+    if not isinstance(failing_metrics, list) or not all(
+        isinstance(item, str) for item in failing_metrics
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.failing_metrics",
+                "message": (
+                    "Release package summary benchmark.failing_metrics "
+                    "must be a string list."
+                ),
+            }
+        )
+    elif benchmark.get("passed") is True and failing_metrics:
+        issues.append(
+            {
+                "field": f"{field_prefix}.failing_metrics",
+                "message": (
+                    "Release package summary benchmark marks passed true "
+                    f"but lists failing metrics: {failing_metrics}."
+                ),
+            }
+        )
+
+
+def _verify_release_summary_benchmark_suite(
+    benchmark_suite: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    field_prefix = "audit_artifacts.release_package_summary.json.benchmark_suite"
+    if not isinstance(benchmark_suite.get("passed"), bool):
+        issues.append(
+            {
+                "field": f"{field_prefix}.passed",
+                "message": (
+                    "Release package summary benchmark_suite.passed must be a boolean."
+                ),
+            }
+        )
+    reference_count = benchmark_suite.get("reference_count")
+    if not isinstance(reference_count, int):
+        issues.append(
+            {
+                "field": f"{field_prefix}.reference_count",
+                "message": (
+                    "Release package summary benchmark_suite.reference_count "
+                    "must be an integer."
+                ),
+            }
+        )
+    elif benchmark_suite.get("passed") is True and reference_count < 1:
+        issues.append(
+            {
+                "field": f"{field_prefix}.reference_count",
+                "message": (
+                    "Release package summary benchmark_suite marks passed true "
+                    "but has no reference datasets."
+                ),
+            }
+        )
+    if not isinstance(benchmark_suite.get("mean_overall_score"), int | float):
+        issues.append(
+            {
+                "field": f"{field_prefix}.mean_overall_score",
+                "message": (
+                    "Release package summary benchmark_suite.mean_overall_score "
+                    "must be numeric."
+                ),
+            }
+        )
+    if not isinstance(benchmark_suite.get("task_export_results"), dict):
+        issues.append(
+            {
+                "field": f"{field_prefix}.task_export_results",
+                "message": (
+                    "Release package summary benchmark_suite.task_export_results "
+                    "must be an object."
                 ),
             }
         )

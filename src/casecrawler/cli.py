@@ -849,6 +849,32 @@ def generate_release_package(
             "benchmark_suite_report.json": benchmark_suite,
             "dataset_card.md": build_dataset_card(manifest_snapshot, records),
             "model_card.md": build_model_card(manifest_snapshot, records),
+            "release_package_summary.json": {
+                "dataset_id": dataset_id,
+                "generated": result["generated"],
+                "approved": result["approved"],
+                "seeded_references": seeded_references,
+                "quality_report": {
+                    "export_ready": quality_report.export_ready,
+                    "multimodal_release_ready": quality_report.multimodal_release_ready,
+                    "multimodal_release_missing": quality_report.multimodal_release_missing,
+                    "core_artifact_coverage": quality_report.core_artifact_coverage,
+                },
+                "benchmark": {
+                    "reference_dataset_id": reference_dataset_id,
+                    "reference_key": benchmark_reference_key,
+                    "passed": benchmark_report.passed,
+                    "overall_score": benchmark_report.overall_score,
+                    "failing_metrics": benchmark_report.failing_metrics,
+                    "thresholds": benchmark_report.thresholds,
+                },
+                "benchmark_suite": {
+                    "passed": benchmark_suite["passed"],
+                    "reference_count": benchmark_suite["reference_count"],
+                    "mean_overall_score": benchmark_suite["mean_overall_score"],
+                    "task_export_results": benchmark_suite["task_export_results"],
+                },
+            },
         },
     )
     store.save_export_manifest(
