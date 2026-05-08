@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import subprocess
+from typing import Protocol
 from uuid import NAMESPACE_URL, uuid5
 
 from pydantic import BaseModel, Field
@@ -8,13 +11,31 @@ from casecrawler.llm.base import BaseLLMProvider
 from casecrawler.models.synthetic import ClinicalDocument, Modality, SyntheticRecord
 
 
+EXTERNAL_CLINICAL_TEXT_TIMEOUT_SECONDS = 120.0
+
+
+class ExternalClinicalTextRunner(Protocol):
+    def __call__(self, command: list[str], payload: str) -> str: ...
+
+
 class ClinicalDocumentBatch(BaseModel):
     documents: list[ClinicalDocument] = Field(default_factory=list)
 
 
 class TextGenerator:
-    def __init__(self, provider: BaseLLMProvider | None = None) -> None:
+    def __init__(
+        self,
+        provider: BaseLLMProvider | None = None,
+        external_command: list[str] | None = None,
+        external_runner: ExternalClinicalTextRunner | None = None,
+    ) -> None:
+        if provider is not None and external_command is not None:
+            raise ValueError("TextGenerator cannot use both provider and external_command.")
+        if external_command is not None and not external_command:
+            raise ValueError("external_command must not be empty when provided.")
         self._provider = provider
+        self._external_command = external_command
+        self._external_runner = external_runner or _run_external_command
 
     def add_documents(self, record: SyntheticRecord) -> SyntheticRecord:
         if self._provider is not None:
@@ -22,9 +43,13 @@ class TextGenerator:
                 "TextGenerator with an LLM provider must be used via "
                 "add_documents_async."
             )
+        if self._external_command is not None:
+            return self._add_external_documents(record)
         return self._add_deterministic_documents(record)
 
     async def add_documents_async(self, record: SyntheticRecord) -> SyntheticRecord:
+        if self._external_command is not None:
+            return self._add_external_documents(record)
         if self._provider is None:
             return self._add_deterministic_documents(record)
 
@@ -45,6 +70,32 @@ class TextGenerator:
                 "documents": [*record.documents, *documents],
                 "provenance": provenance,
             }
+        )
+
+    def _add_external_documents(self, record: SyntheticRecord) -> SyntheticRecord:
+        assert self._external_command is not None
+        payload = json.dumps({"record": record.model_dump()}, sort_keys=True)
+        output = self._external_runner(self._external_command, payload)
+        try:
+            raw_documents = json.loads(output)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "External clinical text backend returned invalid JSON."
+            ) from exc
+        if isinstance(raw_documents, dict):
+            raw_documents = raw_documents.get("documents")
+        if not isinstance(raw_documents, list):
+            raise RuntimeError(
+                "External clinical text backend must return a JSON list or "
+                "an object with a documents list."
+            )
+        backend = f"external:{' '.join(self._external_command)}"
+        documents = [
+            _external_document(record, document, index=index, backend=backend)
+            for index, document in enumerate(raw_documents)
+        ]
+        return record.model_copy(
+            update={"documents": [*record.documents, *documents]}
         )
 
     def _add_deterministic_documents(self, record: SyntheticRecord) -> SyntheticRecord:
@@ -494,3 +545,57 @@ def _normalize_llm_documents(
             )
         )
     return normalized
+
+
+def _external_document(
+    record: SyntheticRecord,
+    document: object,
+    *,
+    index: int,
+    backend: str,
+) -> ClinicalDocument:
+    if not isinstance(document, dict):
+        document = ClinicalDocument.model_validate(document).model_dump()
+    payload = {
+        "document_id": f"doc-{uuid5(NAMESPACE_URL, f'{record.record_id}:external:{index}')}",
+        "note_type": "clinical_note",
+        "author_role": "external_generator",
+        "timestamp": record.provenance.created_at,
+        "clean_text": "",
+        "messy_text": None,
+        "extracted_facts": {},
+        **document,
+    }
+    extracted_facts = payload.get("extracted_facts") or {}
+    payload["extracted_facts"] = {
+        **extracted_facts,
+        "generation_backend": backend,
+    }
+    return ClinicalDocument.model_validate(payload)
+
+
+def _run_external_command(command: list[str], payload: str) -> str:
+    try:
+        result = subprocess.run(
+            command,
+            input=payload,
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=EXTERNAL_CLINICAL_TEXT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "External clinical text backend timed out after "
+            f"{EXTERNAL_CLINICAL_TEXT_TIMEOUT_SECONDS:.0f}s: {command!r}."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "External clinical text backend failed with exit code "
+            f"{exc.returncode}: {command!r}. stdout={exc.stdout!r} stderr={exc.stderr!r}"
+        ) from exc
+    except OSError as exc:
+        raise RuntimeError(
+            f"External clinical text backend could not be executed: {command!r}."
+        ) from exc
+    return result.stdout

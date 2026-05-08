@@ -566,7 +566,7 @@ def serve() -> None:
 @click.option(
     "--clinical-text-backend",
     default=None,
-    type=click.Choice(["deterministic", "llm"]),
+    type=click.Choice(["deterministic", "llm", "external"]),
     help="Override clinical text backend for this generation request",
 )
 @click.option("--llm-provider", default=None, help="Override LLM provider for clinical text")
@@ -575,6 +575,11 @@ def serve() -> None:
     "--ollama-base-url",
     default=None,
     help="Override Ollama base URL for clinical text generation",
+)
+@click.option(
+    "--clinical-text-command",
+    default=None,
+    help="Comma-separated external clinical text command for this request",
 )
 @click.option(
     "--imaging-backend",
@@ -634,6 +639,7 @@ def generate_dataset(
     llm_provider: str | None,
     llm_model: str | None,
     ollama_base_url: str | None,
+    clinical_text_command: str | None,
     imaging_backend: str | None,
     imaging_model_profile: str | None,
     diffusers_model_id: str | None,
@@ -667,6 +673,11 @@ def generate_dataset(
         cohort_constraints["base_time"] = base_time
     if encounter_count is not None:
         cohort_constraints["encounter_count"] = encounter_count
+    parsed_clinical_text_command = (
+        [value.strip() for value in clinical_text_command.split(",") if value.strip()]
+        if clinical_text_command
+        else None
+    )
     parsed_time_series_command = (
         [value.strip() for value in time_series_command.split(",") if value.strip()]
         if time_series_command
@@ -696,6 +707,7 @@ def generate_dataset(
             llm_provider=llm_provider,
             llm_model=llm_model,
             ollama_base_url=ollama_base_url,
+            clinical_text_command=parsed_clinical_text_command,
             imaging_backend=imaging_backend,
             imaging_model_profile=imaging_model_profile,
             diffusers_model_id=diffusers_model_id,
@@ -771,6 +783,17 @@ def generate_dataset(
     help="Comma-separated external imaging command for release package generation.",
 )
 @click.option(
+    "--clinical-text-backend",
+    default=None,
+    type=click.Choice(["deterministic", "llm", "external"]),
+    help="Override clinical text backend for release package generation.",
+)
+@click.option(
+    "--clinical-text-command",
+    default=None,
+    help="Comma-separated external clinical text command for release package generation.",
+)
+@click.option(
     "--fixture-limit",
     default=1,
     type=click.IntRange(1),
@@ -802,6 +825,8 @@ def generate_release_package(
     imaging_model_profile: str | None,
     diffusers_model_id: str | None,
     imaging_command: str | None,
+    clinical_text_backend: str | None,
+    clinical_text_command: str | None,
     fixture_limit: int,
     min_overall_score: float,
     min_metric_score: float,
@@ -840,11 +865,18 @@ def generate_release_package(
             if imaging_command
             else None
         )
+        parsed_clinical_text_command = (
+            [value.strip() for value in clinical_text_command.split(",") if value.strip()]
+            if clinical_text_command
+            else None
+        )
         req = GenerationRequest(
             topic=topic,
             count=count,
             recipe=recipe,
             export_formats=[ExportFormat(export_format)],
+            clinical_text_backend=clinical_text_backend,
+            clinical_text_command=parsed_clinical_text_command,
             imaging_backend=imaging_backend,
             imaging_model_profile=imaging_model_profile,
             diffusers_model_id=diffusers_model_id,

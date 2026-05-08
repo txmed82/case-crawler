@@ -597,6 +597,74 @@ async def test_synthetic_pipeline_allows_request_clinical_text_backend_override(
 
 
 @pytest.mark.asyncio
+async def test_synthetic_pipeline_allows_request_external_clinical_text_backend(
+    monkeypatch,
+    tmp_path,
+):
+    created = []
+
+    class RequestScopedTextGenerator(FakeTextGenerator):
+        def __init__(self, provider=None, external_command=None):
+            super().__init__(provider=provider)
+            created.append(external_command)
+
+    monkeypatch.setattr(
+        "casecrawler.generation.synthetic_pipeline.TextGenerator",
+        RequestScopedTextGenerator,
+    )
+    pipeline = SyntheticPipeline(
+        text_generator=FakeTextGenerator(),
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="sepsis",
+            count=1,
+            modalities=[Modality.CLINICAL_TEXT],
+            clinical_text_backend="external",
+            clinical_text_command=["hf-note-sample"],
+        )
+    )
+
+    assert created == [["hf-note-sample"]]
+    assert result["generated"] == 1
+    assert result["records"][0].metadata["clinical_text_model_policy"] == {
+        "backend": "external",
+        "command": ["hf-note-sample"],
+        "license": "external_command_terms",
+        "gated": False,
+        "use_policy": "wrap_external_clinical_text_generator_validate_outputs",
+    }
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_rejects_external_clinical_text_without_command(
+    tmp_path,
+):
+    pipeline = SyntheticPipeline(
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="synthetic.clinical_text_command is required",
+    ):
+        await pipeline.generate(
+            GenerationRequest(
+                topic="sepsis",
+                count=1,
+                modalities=[Modality.CLINICAL_TEXT],
+                clinical_text_backend="external",
+            )
+        )
+
+
+@pytest.mark.asyncio
 async def test_synthetic_pipeline_honors_request_validation_threshold(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "casecrawler.validation.image_alignment.ImageAlignmentValidator.score",

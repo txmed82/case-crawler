@@ -33,8 +33,9 @@ synthetic:
     - time_series
   validation_threshold: 0.8
   # GenerationRequest can override clinical_text_backend, llm_provider,
-  # llm_model, and ollama_base_url per run.
-  clinical_text_backend: "deterministic" # deterministic or llm
+  # llm_model, ollama_base_url, and clinical_text_command per run.
+  clinical_text_backend: "deterministic" # deterministic, llm, or external
+  clinical_text_command: null # e.g. ["hf-note-sample", "--model", "local-notes"]
   # Per-request cohort_constraints can include:
   # age_min, age_max, sexes, sex_cycle, and base_time.
   # GenerationRequest can override imaging_backend, imaging_model_profile,
