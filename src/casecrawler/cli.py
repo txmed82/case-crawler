@@ -835,6 +835,13 @@ def generate_dataset(
     type=click.Choice(["deterministic", "llm", "external"]),
     help="Override clinical text backend for release package generation.",
 )
+@click.option("--llm-provider", default=None, help="Override LLM provider for clinical text.")
+@click.option("--llm-model", default=None, help="Override LLM model for clinical text.")
+@click.option(
+    "--ollama-base-url",
+    default=None,
+    help="Override Ollama base URL for clinical text generation.",
+)
 @click.option(
     "--clinical-text-command",
     default=None,
@@ -894,6 +901,9 @@ def generate_release_package(
     diffusers_model_id: str | None,
     imaging_command: str | None,
     clinical_text_backend: str | None,
+    llm_provider: str | None,
+    llm_model: str | None,
+    ollama_base_url: str | None,
     clinical_text_command: str | None,
     clinical_text_model_profile: str | None,
     time_series_backend: str | None,
@@ -953,6 +963,9 @@ def generate_release_package(
             recipe=recipe,
             export_formats=[ExportFormat(export_format)],
             clinical_text_backend=clinical_text_backend,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            ollama_base_url=ollama_base_url,
             clinical_text_model_profile=clinical_text_model_profile,
             clinical_text_command=parsed_clinical_text_command,
             imaging_backend=imaging_backend,

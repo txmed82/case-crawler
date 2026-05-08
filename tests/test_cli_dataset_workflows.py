@@ -517,6 +517,37 @@ def test_dataset_cli_release_package_passes_time_series_backend_options(
     assert "time_series_backend is 'external'" in result.output
 
 
+def test_dataset_cli_release_package_passes_llm_clinical_text_options(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "generate-release-package",
+            "sepsis",
+            "--count",
+            "1",
+            "--output-dir",
+            "release-package",
+            "--clinical-text-backend",
+            "llm",
+            "--llm-provider",
+            "unknown-provider",
+            "--llm-model",
+            "medgemma-local",
+            "--ollama-base-url",
+            "http://localhost:11434",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Unknown provider: unknown-provider" in result.output
+
+
 def test_dataset_cli_requires_release_audit_artifacts_for_release_verification(
     tmp_path,
     monkeypatch,

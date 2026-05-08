@@ -94,6 +94,9 @@ class ReleasePackageRequest(BaseModel):
     clinical_text_backend: Literal["deterministic", "llm", "external"] | None = None
     clinical_text_model_profile: str | None = Field(default=None, min_length=1)
     clinical_text_command: list[str] | None = Field(default=None, min_length=1)
+    llm_provider: str | None = Field(default=None, min_length=1)
+    llm_model: str | None = Field(default=None, min_length=1)
+    ollama_base_url: str | None = Field(default=None, min_length=1)
     imaging_backend: Literal["placeholder", "diffusers", "external"] = "placeholder"
     imaging_model_profile: str | None = Field(default=None, min_length=1)
     diffusers_model_id: str | None = Field(default=None, min_length=1)
@@ -165,6 +168,9 @@ async def generate_release_package(req: ReleasePackageRequest):
             clinical_text_backend=req.clinical_text_backend,
             clinical_text_model_profile=req.clinical_text_model_profile,
             clinical_text_command=req.clinical_text_command,
+            llm_provider=req.llm_provider,
+            llm_model=req.llm_model,
+            ollama_base_url=req.ollama_base_url,
             imaging_backend=req.imaging_backend,
             imaging_model_profile=req.imaging_model_profile,
             diffusers_model_id=req.diffusers_model_id,

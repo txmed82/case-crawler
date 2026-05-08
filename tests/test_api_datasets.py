@@ -438,6 +438,29 @@ def test_dataset_api_release_package_passes_time_series_backend_options(
     assert "time_series_backend is 'external'" in response.json()["detail"]
 
 
+def test_dataset_api_release_package_passes_llm_clinical_text_options(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/release-package",
+        json={
+            "topic": "sepsis",
+            "count": 1,
+            "clinical_text_backend": "llm",
+            "llm_provider": "unknown-provider",
+            "llm_model": "medgemma-local",
+            "ollama_base_url": "http://localhost:11434",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "Unknown provider: unknown-provider" in response.json()["detail"]
+
+
 def test_dataset_api_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

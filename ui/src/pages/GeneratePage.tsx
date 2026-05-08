@@ -303,6 +303,13 @@ export default function GeneratePage() {
         export_format: "multimodal_jsonl",
         seed: "casecrawler",
         clinical_text_backend: clinicalTextBackend,
+        ...(clinicalTextBackend === "llm" ? { llm_provider: llmProvider } : {}),
+        ...(clinicalTextBackend === "llm" && llmModel.trim()
+          ? { llm_model: llmModel.trim() }
+          : {}),
+        ...(clinicalTextBackend === "llm" && ollamaBaseUrl.trim()
+          ? { ollama_base_url: ollamaBaseUrl.trim() }
+          : {}),
         ...(clinicalTextBackend === "external" && clinicalTextProfile
           ? { clinical_text_model_profile: clinicalTextProfile }
           : {}),

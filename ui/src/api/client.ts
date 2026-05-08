@@ -142,6 +142,9 @@ export interface ReleasePackageRequest {
   clinical_text_backend?: "deterministic" | "llm" | "external";
   clinical_text_model_profile?: string;
   clinical_text_command?: string[];
+  llm_provider?: string;
+  llm_model?: string;
+  ollama_base_url?: string;
   imaging_backend?: "placeholder" | "diffusers" | "external";
   imaging_model_profile?: string;
   diffusers_model_id?: string;
