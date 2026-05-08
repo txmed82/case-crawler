@@ -277,6 +277,61 @@ def test_dataset_cli_can_require_multimodal_release_for_split_export(
     assert "benchmark_reference" in blocked.output
 
 
+def test_dataset_cli_generates_release_package_with_fixture_references(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generated = runner.invoke(
+        cli,
+        [
+            "generate-release-package",
+            "sepsis",
+            "--count",
+            "1",
+            "--output-dir",
+            "release-package",
+            "--seed",
+            "unit-test",
+        ],
+    )
+
+    assert generated.exit_code == 0, generated.output
+    body = json.loads(generated.output)
+    manifest = json.loads((tmp_path / "release-package" / "manifest.json").read_text())
+    quality = json.loads((tmp_path / "release-package" / "quality_report.json").read_text())
+    benchmark = json.loads(
+        (tmp_path / "release-package" / "benchmark_report.json").read_text()
+    )
+    release_verified = runner.invoke(
+        cli,
+        ["verify-split-package", "--require-multimodal-release", "release-package"],
+    )
+    exports = DatasetStore().list_export_manifests(dataset_id=body["dataset_id"])
+
+    assert body["verification"]["valid"] is True
+    assert body["quality_report"]["multimodal_release_ready"] is True
+    assert body["benchmark"]["passed"] is True
+    assert body["seeded_references"]["imported"]
+    assert body["manifest"]["export_format"] == "multimodal_jsonl"
+    assert manifest["record_count"] == 1
+    assert set(manifest["audit_artifacts"]) == {
+        "benchmark_profile.json",
+        "benchmark_report.json",
+        "dataset_card.md",
+        "model_card.md",
+        "quality_report.json",
+    }
+    assert quality["multimodal_release_ready"] is True
+    assert benchmark["passed"] is True
+    assert release_verified.exit_code == 0, release_verified.output
+    assert exports[0].metadata["release_package"] is True
+    assert exports[0].metadata["multimodal_release_ready"] is True
+    assert exports[0].metadata["benchmark_passed"] is True
+
+
 def test_dataset_cli_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
