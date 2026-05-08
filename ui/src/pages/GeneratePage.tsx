@@ -61,6 +61,12 @@ export default function GeneratePage() {
   const [topicMix, setTopicMix] = useState("");
   const [baseTime, setBaseTime] = useState("");
   const [encounterCount, setEncounterCount] = useState("");
+  const [races, setRaces] = useState("");
+  const [ethnicities, setEthnicities] = useState("");
+  const [insurance, setInsurance] = useState("");
+  const [smokingStatuses, setSmokingStatuses] = useState("");
+  const [alcoholUse, setAlcoholUse] = useState("");
+  const [housing, setHousing] = useState("");
   const [modalities, setModalities] = useState<SyntheticModality[]>([
     "structured_ehr",
     "clinical_text",
@@ -190,14 +196,30 @@ export default function GeneratePage() {
       return { constraints: {}, error: "Minimum age cannot be greater than maximum age." };
     }
     const constraints: Record<string, unknown> = {};
+    const splitValues = (value: string) =>
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
     if (parsedAgeMin !== undefined) constraints.age_min = parsedAgeMin;
     if (parsedAgeMax !== undefined) constraints.age_max = parsedAgeMax;
     if (sexes.length > 0) constraints.sexes = sexes;
-    const parsedTopicMix = topicMix
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean);
+    const parsedTopicMix = splitValues(topicMix);
+    const parsedRaces = splitValues(races);
+    const parsedEthnicities = splitValues(ethnicities);
+    const parsedInsurance = splitValues(insurance);
+    const parsedSmokingStatuses = splitValues(smokingStatuses);
+    const parsedAlcoholUse = splitValues(alcoholUse);
+    const parsedHousing = splitValues(housing);
     if (parsedTopicMix.length > 0) constraints.topic_mix = parsedTopicMix;
+    if (parsedRaces.length > 0) constraints.races = parsedRaces;
+    if (parsedEthnicities.length > 0) constraints.ethnicities = parsedEthnicities;
+    if (parsedInsurance.length > 0) constraints.insurance = parsedInsurance;
+    if (parsedSmokingStatuses.length > 0) {
+      constraints.smoking_statuses = parsedSmokingStatuses;
+    }
+    if (parsedAlcoholUse.length > 0) constraints.alcohol_use = parsedAlcoholUse;
+    if (parsedHousing.length > 0) constraints.housing = parsedHousing;
     if (baseTime) constraints.base_time = baseTime;
     if (parsedEncounterCount !== undefined) {
       constraints.encounter_count = parsedEncounterCount;
@@ -739,6 +761,81 @@ export default function GeneratePage() {
               </button>
             );
           })}
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Race mix</span>
+            <input
+              id="dataset-races"
+              aria-label="Race mix"
+              type="text"
+              value={races}
+              onChange={(e) => setRaces(e.target.value)}
+              placeholder="synthetic_white, synthetic_black"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Ethnicity mix</span>
+            <input
+              id="dataset-ethnicities"
+              aria-label="Ethnicity mix"
+              type="text"
+              value={ethnicities}
+              onChange={(e) => setEthnicities(e.target.value)}
+              placeholder="synthetic_not_hispanic_or_latino"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Insurance mix</span>
+            <input
+              id="dataset-insurance"
+              aria-label="Insurance mix"
+              type="text"
+              value={insurance}
+              onChange={(e) => setInsurance(e.target.value)}
+              placeholder="synthetic_medicare, synthetic_private"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Smoking mix</span>
+            <input
+              id="dataset-smoking-statuses"
+              aria-label="Smoking mix"
+              type="text"
+              value={smokingStatuses}
+              onChange={(e) => setSmokingStatuses(e.target.value)}
+              placeholder="never, former, current"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Alcohol use mix</span>
+            <input
+              id="dataset-alcohol-use"
+              aria-label="Alcohol use mix"
+              type="text"
+              value={alcoholUse}
+              onChange={(e) => setAlcoholUse(e.target.value)}
+              placeholder="none, occasional"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Housing mix</span>
+            <input
+              id="dataset-housing"
+              aria-label="Housing mix"
+              type="text"
+              value={housing}
+              onChange={(e) => setHousing(e.target.value)}
+              placeholder="stable, unstable"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
