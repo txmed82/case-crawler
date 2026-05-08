@@ -251,6 +251,19 @@ def test_objective_coverage_requires_cohort_similarity_metrics():
     assert complete_metrics["criteria"]["cohort_similarity"]["satisfied"] is True
 
 
+def test_objective_coverage_requires_messy_clinical_text():
+    report = build_dataset_quality_report("ds-quality", [_record("rec-1")])
+
+    audit = build_objective_coverage_audit(
+        quality_report=report,
+        benchmark_suite={"passed": True, "reference_count": 1},
+        manifest={"task_coverage": {"sft_jsonl": 1}, "audit_artifacts": {}},
+    )
+
+    assert audit["criteria"]["messy_clinical_text"]["satisfied"] is False
+    assert "messy_clinical_text" in audit["missing"]
+
+
 def test_quality_report_counts_clinical_text_model_policy():
     record = _record("rec-1").model_copy(
         update={

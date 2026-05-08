@@ -478,6 +478,12 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
         is True
     )
     assert (
+        release_summary["objective_coverage"]["criteria"]["messy_clinical_text"][
+            "satisfied"
+        ]
+        is True
+    )
+    assert (
         release_summary["objective_coverage"]["criteria"]["fine_tuning_exports"][
             "satisfied"
         ]
