@@ -95,6 +95,22 @@ async def _search_all(
     return dict(results)
 
 
+def _split_comma_values(value: str | None) -> list[str] | None:
+    if not value:
+        return None
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _add_comma_constraint(
+    cohort_constraints: dict,
+    key: str,
+    value: str | None,
+) -> None:
+    parsed = _split_comma_values(value)
+    if parsed is not None:
+        cohort_constraints[key] = parsed
+
+
 @cli.command()
 @click.argument("query")
 @click.option("--source", default=None, help="Filter by source name")
@@ -591,6 +607,16 @@ def serve() -> None:
 @click.option("--age-min", default=None, type=int, help="Minimum generated patient age")
 @click.option("--age-max", default=None, type=int, help="Maximum generated patient age")
 @click.option("--sexes", default=None, help="Comma-separated sex cycle")
+@click.option("--races", default=None, help="Comma-separated synthetic race cycle")
+@click.option("--ethnicities", default=None, help="Comma-separated synthetic ethnicity cycle")
+@click.option("--insurance", default=None, help="Comma-separated insurance cycle")
+@click.option(
+    "--smoking-statuses",
+    default=None,
+    help="Comma-separated smoking-status cycle",
+)
+@click.option("--alcohol-use", default=None, help="Comma-separated alcohol-use cycle")
+@click.option("--housing", default=None, help="Comma-separated housing-status cycle")
 @click.option(
     "--topic-mix",
     default=None,
@@ -677,6 +703,12 @@ def generate_dataset(
     age_min: int | None,
     age_max: int | None,
     sexes: str | None,
+    races: str | None,
+    ethnicities: str | None,
+    insurance: str | None,
+    smoking_statuses: str | None,
+    alcohol_use: str | None,
+    housing: str | None,
     topic_mix: str | None,
     base_time: str | None,
     encounter_count: int | None,
@@ -706,14 +738,15 @@ def generate_dataset(
         cohort_constraints["age_min"] = age_min
     if age_max is not None:
         cohort_constraints["age_max"] = age_max
-    if sexes:
-        cohort_constraints["sexes"] = [
-            value.strip() for value in sexes.split(",") if value.strip()
-        ]
+    _add_comma_constraint(cohort_constraints, "sexes", sexes)
+    _add_comma_constraint(cohort_constraints, "races", races)
+    _add_comma_constraint(cohort_constraints, "ethnicities", ethnicities)
+    _add_comma_constraint(cohort_constraints, "insurance", insurance)
+    _add_comma_constraint(cohort_constraints, "smoking_statuses", smoking_statuses)
+    _add_comma_constraint(cohort_constraints, "alcohol_use", alcohol_use)
+    _add_comma_constraint(cohort_constraints, "housing", housing)
     if topic_mix:
-        cohort_constraints["topic_mix"] = [
-            value.strip() for value in topic_mix.split(",") if value.strip()
-        ]
+        cohort_constraints["topic_mix"] = _split_comma_values(topic_mix) or []
     if base_time:
         cohort_constraints["base_time"] = base_time
     if encounter_count is not None:
@@ -836,6 +869,16 @@ def generate_dataset(
 @click.option("--age-min", default=None, type=int, help="Minimum generated patient age.")
 @click.option("--age-max", default=None, type=int, help="Maximum generated patient age.")
 @click.option("--sexes", default=None, help="Comma-separated sex cycle.")
+@click.option("--races", default=None, help="Comma-separated synthetic race cycle.")
+@click.option("--ethnicities", default=None, help="Comma-separated synthetic ethnicity cycle.")
+@click.option("--insurance", default=None, help="Comma-separated insurance cycle.")
+@click.option(
+    "--smoking-statuses",
+    default=None,
+    help="Comma-separated smoking-status cycle.",
+)
+@click.option("--alcohol-use", default=None, help="Comma-separated alcohol-use cycle.")
+@click.option("--housing", default=None, help="Comma-separated housing-status cycle.")
 @click.option(
     "--topic-mix",
     default=None,
@@ -941,6 +984,12 @@ def generate_release_package(
     age_min: int | None,
     age_max: int | None,
     sexes: str | None,
+    races: str | None,
+    ethnicities: str | None,
+    insurance: str | None,
+    smoking_statuses: str | None,
+    alcohol_use: str | None,
+    housing: str | None,
     topic_mix: str | None,
     base_time: str | None,
     encounter_count: int | None,
@@ -996,14 +1045,15 @@ def generate_release_package(
             cohort_constraints["age_min"] = age_min
         if age_max is not None:
             cohort_constraints["age_max"] = age_max
-        if sexes:
-            cohort_constraints["sexes"] = [
-                value.strip() for value in sexes.split(",") if value.strip()
-            ]
+        _add_comma_constraint(cohort_constraints, "sexes", sexes)
+        _add_comma_constraint(cohort_constraints, "races", races)
+        _add_comma_constraint(cohort_constraints, "ethnicities", ethnicities)
+        _add_comma_constraint(cohort_constraints, "insurance", insurance)
+        _add_comma_constraint(cohort_constraints, "smoking_statuses", smoking_statuses)
+        _add_comma_constraint(cohort_constraints, "alcohol_use", alcohol_use)
+        _add_comma_constraint(cohort_constraints, "housing", housing)
         if topic_mix:
-            cohort_constraints["topic_mix"] = [
-                value.strip() for value in topic_mix.split(",") if value.strip()
-            ]
+            cohort_constraints["topic_mix"] = _split_comma_values(topic_mix) or []
         if base_time:
             cohort_constraints["base_time"] = base_time
         if encounter_count is not None:
