@@ -107,10 +107,25 @@ def build_benchmark_plan_summary(store: DatasetStore, dataset_id: str) -> dict:
     }
 
 
-def run_recommended_benchmark_suite(store: DatasetStore, dataset_id: str) -> dict:
+def run_recommended_benchmark_suite(
+    store: DatasetStore,
+    dataset_id: str,
+    *,
+    min_overall_score: float | None = None,
+    min_metric_score: float | None = None,
+) -> dict:
     manifest = store.get_manifest(dataset_id)
     reference_keys = _metadata_string_list(manifest.metadata.get("recommended_reference_keys"))
-    thresholds = _metadata_thresholds(manifest.metadata.get("benchmark_thresholds")) or (0.75, 0.5)
+    manifest_thresholds = _metadata_thresholds(manifest.metadata.get("benchmark_thresholds"))
+    thresholds = (
+        min_overall_score if min_overall_score is not None else None,
+        min_metric_score if min_metric_score is not None else None,
+    )
+    thresholds = (
+        thresholds
+        if thresholds[0] is not None and thresholds[1] is not None
+        else manifest_thresholds or (0.75, 0.5)
+    )
     generated_records = list(store.iter_records(dataset_id=dataset_id))
     results = []
     seen_reference_ids: set[str] = set()
