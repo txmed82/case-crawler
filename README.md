@@ -94,6 +94,9 @@ Optional backends are intentionally lazy:
 - `MedGemmaImageTextValidator` can use gated MedGemma multimodal models through `casecrawler[hf]` plus imaging dependencies for report/image consistency checks
 - `casecrawler[parquet]` for parquet exports
 - Time-series model profiles include TimeDiff, RawMed, and MIRA (`MIRA-Mode/MIRA`) wrappers for external generation, forecasting, or validation commands
+- `casecrawler timeseries-models` and `casecrawler datasets capabilities` expose
+  each external adapter contract: suggested command template, stdin JSON fields,
+  expected `TimeSeriesChannel[]` stdout, and validation requirements
 - Existing OpenAI, Anthropic, OpenRouter, and Ollama providers remain available for model-backed generation
 - `synthetic.clinical_text_backend: llm` routes clinical document drafting through the configured LLM provider while the default deterministic backend remains no-key
 
@@ -309,6 +312,8 @@ synthetic:
   time_series_backend: "deterministic" # or "external"
   time_series_model_profile: null # e.g. timediff or rawmed
   time_series_command: null # e.g. ["timediff-sample", "--checkpoint", "local.pt"]
+  # External commands receive stdin JSON with record, channels, and points.
+  # They must print a JSON array of TimeSeriesChannel objects to stdout.
   synthea_executable: null
   # GenerationRequest.cohort_constraints supports age_min, age_max, sexes,
   # sex_cycle, topic_mix, and base_time for deterministic cohort composition.

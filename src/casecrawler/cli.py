@@ -166,6 +166,13 @@ def timeseries_models() -> None:
             f"license={profile.license or 'unspecified'} "
             f"gated={profile.gated} use_policy={profile.use_policy}"
         )
+        if profile.command_template:
+            click.echo(f"  command={' '.join(profile.command_template)}")
+        if profile.output_contract:
+            click.echo(
+                "  stdout="
+                f"{profile.output_contract.get('stdout_json', 'unspecified')}"
+            )
         click.echo(f"  {profile.notes}")
 
 
@@ -1105,6 +1112,10 @@ def datasets_capabilities() -> None:
                 "license": profile.license,
                 "gated": profile.gated,
                 "use_policy": profile.use_policy,
+                "command_template": profile.command_template,
+                "input_contract": profile.input_contract,
+                "output_contract": profile.output_contract,
+                "validation_requirements": profile.validation_requirements,
                 "notes": profile.notes,
             }
             for profile in list_time_series_model_profiles()

@@ -1138,6 +1138,24 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
         time_series_profiles["timediff"]["use_policy"]
         == "wrap_external_sampler_validate_outputs"
     )
+    assert time_series_profiles["timediff"]["command_template"] == [
+        "timediff-sample",
+        "--checkpoint",
+        "<checkpoint>",
+    ]
+    assert time_series_profiles["timediff"]["input_contract"]["stdin_json"] == [
+        "record",
+        "channels",
+        "points",
+    ]
+    assert (
+        time_series_profiles["timediff"]["output_contract"]["stdout_json"]
+        == "TimeSeriesChannel[]"
+    )
+    assert (
+        "generation_backend"
+        in time_series_profiles["timediff"]["validation_requirements"]
+    )
     assert time_series_profiles["mira"]["model_id"] == "MIRA-Mode/MIRA"
     assert time_series_profiles["mira"]["license"] == "mit"
     assert time_series_profiles["mira"]["use_policy"] == (
