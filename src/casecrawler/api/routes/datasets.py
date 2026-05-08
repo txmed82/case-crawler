@@ -173,6 +173,8 @@ def list_dataset_capabilities():
                 "modality": profile.modality,
                 "body_region": profile.body_region,
                 "license": profile.license,
+                "gated": profile.gated,
+                "use_policy": profile.use_policy,
                 "notes": profile.notes,
             }
             for profile in list_imaging_model_profiles()

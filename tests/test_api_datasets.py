@@ -682,6 +682,18 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     )
     assert medisyn["model_id"] == "hiesingerlab/MediSyn"
     assert medisyn["license"] == "cc-by-nc-nd-4.0"
+    assert medisyn["gated"] is False
+    assert (
+        medisyn["use_policy"]
+        == "non_commercial_no_derivatives_review_before_release"
+    )
+    roentgen = next(
+        profile
+        for profile in body["imaging_model_profiles"]
+        if profile["name"] == "roentgen_v2_gated"
+    )
+    assert roentgen["gated"] is True
+    assert roentgen["use_policy"] == "credentialed_mimic_cxr_terms_required"
     assert "timediff" in {
         profile["name"] for profile in body["time_series_model_profiles"]
     }

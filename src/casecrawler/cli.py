@@ -146,7 +146,8 @@ def imaging_models() -> None:
         click.echo(
             f"{profile.name}: {profile.model_id} "
             f"modality={profile.modality} region={profile.body_region} "
-            f"license={profile.license or 'unspecified'}"
+            f"license={profile.license or 'unspecified'} "
+            f"gated={profile.gated} use_policy={profile.use_policy}"
         )
         if profile.notes:
             click.echo(f"  {profile.notes}")

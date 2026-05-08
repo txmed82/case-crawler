@@ -14,6 +14,8 @@ class ImagingModelProfile:
         "patient identifiers, text overlays, signatures, watermarks"
     )
     license: str | None = None
+    gated: bool = False
+    use_policy: str = "review_license_before_use"
     notes: str = ""
 
     def render_prompt(self, finding_prompt: str) -> str:
@@ -42,6 +44,7 @@ IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
         body_region="unspecified",
         prompt_prefix="high quality synthetic medical image:",
         license="wtfpl",
+        use_policy="open_model_review_outputs_before_release",
         notes="General medical image diffusion model fine-tuned on ROCO.",
     ),
     "medisyn": ImagingModelProfile(
@@ -51,6 +54,7 @@ IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
         body_region="multiregion",
         prompt_prefix="synthetic medical image:",
         license="cc-by-nc-nd-4.0",
+        use_policy="non_commercial_no_derivatives_review_before_release",
         notes=(
             "Generalist text-guided latent diffusion model for public-domain "
             "medical image synthesis across multiple specialties and image types."
@@ -63,6 +67,7 @@ IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
         body_region="chest",
         prompt_prefix="frontal chest x-ray, radiology image:",
         license=None,
+        use_policy="license_unspecified_review_before_use",
         notes="MIMIC-CXR fine-tune documented as better suited for x-ray editing.",
     ),
     "stable_diffusion_chest_xray": ImagingModelProfile(
@@ -72,6 +77,7 @@ IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
         body_region="chest",
         prompt_prefix="synthetic frontal chest x-ray:",
         license="creativeml-openrail-m",
+        use_policy="openrail_review_outputs_before_release",
         notes="Open chest X-ray Stable Diffusion profile from Hugging Face.",
     ),
     "cxr_normal_dreambooth": ImagingModelProfile(
@@ -81,6 +87,7 @@ IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
         body_region="chest",
         prompt_prefix="A chest xray of healthy normal lungs, clear lung fields.",
         license="openrail++",
+        use_policy="openrail_review_outputs_before_release",
         notes="DreamBooth chest x-ray profile for normal lung fields.",
     ),
     "cxr_pneumonia_dreambooth": ImagingModelProfile(
@@ -90,6 +97,7 @@ IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
         body_region="chest",
         prompt_prefix="A chest xray showing pneumonia infection, lung opacity.",
         license="openrail++",
+        use_policy="openrail_review_outputs_before_release",
         notes="DreamBooth chest x-ray profile for pneumonia-like opacity.",
     ),
     "symptom_xray_lora": ImagingModelProfile(
@@ -99,6 +107,7 @@ IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
         body_region="multiregion",
         prompt_prefix="medical x-ray scan:",
         license="openrail",
+        use_policy="openrail_review_outputs_before_release",
         notes="LoRA-based symptom-to-medical-image model.",
     ),
     "roentgen_v2_gated": ImagingModelProfile(
@@ -108,6 +117,8 @@ IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
         body_region="chest",
         prompt_prefix="frontal chest x-ray:",
         license="restricted",
+        gated=True,
+        use_policy="credentialed_mimic_cxr_terms_required",
         notes="Gated model requiring MIMIC-CXR credentialing and accepted terms.",
     ),
 }

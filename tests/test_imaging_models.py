@@ -15,12 +15,16 @@ def test_imaging_model_catalog_lists_medical_profiles():
     assert "cxr_pneumonia_dreambooth" in profiles
     assert profiles["medisyn"].model_id == "hiesingerlab/MediSyn"
     assert profiles["medisyn"].license == "cc-by-nc-nd-4.0"
+    assert profiles["medisyn"].gated is False
+    assert profiles["medisyn"].use_policy == "non_commercial_no_derivatives_review_before_release"
     assert profiles["medisyn"].is_compatible("CT", "abdomen") is True
     assert profiles["cxr_pneumonia_dreambooth"].modality == "XR"
     assert profiles["cxr_pneumonia_dreambooth"].is_compatible("XR", "chest") is True
     assert profiles["cxr_pneumonia_dreambooth"].is_compatible("CT", "abdomen") is False
     assert profiles["prompt2medimage"].is_compatible("CT", "abdomen") is True
     assert profiles["roentgen_v2_gated"].license == "restricted"
+    assert profiles["roentgen_v2_gated"].gated is True
+    assert profiles["roentgen_v2_gated"].use_policy == "credentialed_mimic_cxr_terms_required"
 
 
 def test_resolve_imaging_model_profile_rejects_unknown_profiles():
