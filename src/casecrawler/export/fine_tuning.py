@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from collections.abc import Iterable
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -904,6 +905,7 @@ def _lab_observation_resource(record: SyntheticRecord, lab) -> dict[str, Any]:
         resource["interpretation"] = [{"text": lab.flag}]
     if lab.specimen:
         resource["specimen"] = {"display": lab.specimen}
+    _attach_observation_encounter(record, resource, lab.effective_time)
     return resource
 
 
@@ -917,10 +919,38 @@ def _vital_observation_resource(record: SyntheticRecord, vital) -> dict[str, Any
         effective_time=vital.effective_time,
     )
     _attach_observation_value(resource, vital.value, vital.unit)
+    _attach_observation_encounter(record, resource, vital.effective_time)
     return resource
 
 
 def _time_series_observation_resource(record: SyntheticRecord, channel) -> dict[str, Any]:
+    components = []
+    encounter_refs: set[str] = set()
+    for point in channel.points:
+        encounter_ref = _encounter_reference_for_timestamp(record, point.timestamp)
+        if encounter_ref:
+            encounter_refs.add(encounter_ref)
+        for name, observed_value in point.values.items():
+            extensions = [
+                {
+                    "url": "https://casecrawler.dev/fhir/StructureDefinition/sample-timestamp",
+                    "valueDateTime": point.timestamp,
+                }
+            ]
+            if encounter_ref:
+                extensions.append(
+                    {
+                        "url": "https://casecrawler.dev/fhir/StructureDefinition/sample-encounter",
+                        "valueReference": {"reference": encounter_ref},
+                    }
+                )
+            components.append(
+                {
+                    "code": {"text": name},
+                    "extension": extensions,
+                    "valueQuantity": {"value": observed_value, "unit": channel.unit},
+                }
+            )
     resource = {
         "resourceType": "Observation",
         "id": f"{record.record_id}-timeseries-{_slug(channel.name)}",
@@ -928,21 +958,10 @@ def _time_series_observation_resource(record: SyntheticRecord, channel) -> dict[
         "category": [{"coding": [{"code": "survey", "display": "Time Series"}]}],
         "code": {"text": channel.name},
         "subject": _patient_reference(record),
-        "component": [
-            {
-                "code": {"text": name},
-                "extension": [
-                    {
-                        "url": "https://casecrawler.dev/fhir/StructureDefinition/sample-timestamp",
-                        "valueDateTime": point.timestamp,
-                    }
-                ],
-                "valueQuantity": {"value": observed_value, "unit": channel.unit},
-            }
-            for point in channel.points
-            for name, observed_value in point.values.items()
-        ],
+        "component": components,
     }
+    if len(encounter_refs) == 1:
+        resource["encounter"] = {"reference": next(iter(encounter_refs))}
     if channel.points:
         resource["effectivePeriod"] = {
             "start": channel.points[0].timestamp,
@@ -1089,6 +1108,56 @@ def _observation_base(
         "subject": _patient_reference(record),
         "effectiveDateTime": effective_time,
     }
+
+
+def _attach_observation_encounter(
+    record: SyntheticRecord,
+    resource: dict[str, Any],
+    effective_time: str,
+) -> None:
+    encounter_ref = _encounter_reference_for_timestamp(record, effective_time)
+    if encounter_ref:
+        resource["encounter"] = {"reference": encounter_ref}
+
+
+def _encounter_reference_for_timestamp(
+    record: SyntheticRecord,
+    timestamp: str,
+) -> str | None:
+    observed_at = _parse_datetime(timestamp)
+    if observed_at is None:
+        return None
+    starts = [_parse_datetime(encounter.start) for encounter in record.encounters]
+    intervals = []
+    for index, encounter in enumerate(record.encounters):
+        start = starts[index]
+        if start is None:
+            continue
+        end = _parse_datetime(encounter.end) if encounter.end else None
+        if end is None:
+            later_starts = [value for value in starts[index + 1 :] if value is not None]
+            end = min(later_starts) if later_starts else None
+        intervals.append((encounter.encounter_id, start, end))
+    for encounter_id, start, end in intervals:
+        if end is None:
+            if observed_at >= start:
+                return f"Encounter/{encounter_id}"
+            continue
+        if start <= observed_at <= end:
+            return f"Encounter/{encounter_id}"
+    return None
+
+
+def _parse_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _attach_observation_value(resource: dict[str, Any], value: float | str, unit: str) -> None:

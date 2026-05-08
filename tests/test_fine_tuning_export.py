@@ -307,6 +307,21 @@ def test_export_fhir_record_contains_training_bundle_resources():
     ]
     assert procedures[0]["code"]["coding"][0]["display"] == "Central venous catheter placement"
     assert procedures[0]["encounter"]["reference"] == "Encounter/enc-1"
+    lab = next(
+        resource
+        for resource in resources
+        if resource["resourceType"] == "Observation"
+        and resource["code"].get("coding")
+        and resource["code"]["coding"][0]["code"] == "2524-7"
+    )
+    vital = next(
+        resource
+        for resource in resources
+        if resource["resourceType"] == "Observation"
+        and resource["id"].startswith("rec-1-vital-heart-rate")
+    )
+    assert lab["encounter"]["reference"] == "Encounter/enc-1"
+    assert vital["encounter"]["reference"] == "Encounter/enc-1"
     time_series = next(
         resource
         for resource in resources
@@ -317,11 +332,107 @@ def test_export_fhir_record_contains_training_bundle_resources():
         "start": "2026-05-06T10:00:00",
         "end": "2026-05-06T10:00:00",
     }
+    assert time_series["encounter"]["reference"] == "Encounter/enc-1"
     assert time_series["component"][0]["code"]["text"] == "heart_rate"
     assert time_series["component"][0]["extension"][0] == {
         "url": "https://casecrawler.dev/fhir/StructureDefinition/sample-timestamp",
         "valueDateTime": "2026-05-06T10:00:00",
     }
+    assert time_series["component"][0]["extension"][1] == {
+        "url": "https://casecrawler.dev/fhir/StructureDefinition/sample-encounter",
+        "valueReference": {"reference": "Encounter/enc-1"},
+    }
+
+
+def test_export_fhir_record_links_longitudinal_observations_to_encounters():
+    base = _multimodal_record()
+    record = base.model_copy(
+        update={
+            "encounters": [
+                *base.encounters,
+                Encounter(
+                    encounter_id="enc-2",
+                    start="2026-05-07T10:00:00",
+                    end="2026-05-07T14:00:00",
+                    setting="inpatient",
+                    reason="Sepsis reassessment",
+                    diagnoses=base.encounters[0].diagnoses,
+                ),
+            ],
+            "labs": [
+                *base.labs,
+                LabObservation(
+                    name="Lactate",
+                    loinc="2524-7",
+                    value=2.1,
+                    unit="mmol/L",
+                    reference_low=0.5,
+                    reference_high=2.2,
+                    effective_time="2026-05-07T10:15:00",
+                ),
+            ],
+            "vitals": [
+                *base.vitals,
+                VitalObservation(
+                    name="Heart rate",
+                    value=94,
+                    unit="/min",
+                    effective_time="2026-05-07T10:10:00",
+                ),
+            ],
+            "time_series": [
+                TimeSeriesChannel(
+                    name="heart_rate",
+                    unit="/min",
+                    points=[
+                        TimeSeriesPoint(
+                            timestamp="2026-05-06T10:00:00",
+                            values={"heart_rate": 118},
+                        ),
+                        TimeSeriesPoint(
+                            timestamp="2026-05-07T10:00:00",
+                            values={"heart_rate": 94},
+                        ),
+                    ],
+                )
+            ],
+        }
+    )
+
+    exported = export_fhir_record(record)
+    resources = [entry["resource"] for entry in exported["entry"]]
+    labs = [
+        resource
+        for resource in resources
+        if resource["resourceType"] == "Observation"
+        and resource["id"].startswith("rec-1-lab-lactate")
+    ]
+    vitals = [
+        resource
+        for resource in resources
+        if resource["resourceType"] == "Observation"
+        and resource["id"].startswith("rec-1-vital-heart-rate")
+    ]
+    time_series = next(
+        resource
+        for resource in resources
+        if resource["resourceType"] == "Observation"
+        and resource["id"] == "rec-1-timeseries-heart-rate"
+    )
+
+    assert [lab["encounter"]["reference"] for lab in labs] == [
+        "Encounter/enc-1",
+        "Encounter/enc-2",
+    ]
+    assert [vital["encounter"]["reference"] for vital in vitals] == [
+        "Encounter/enc-1",
+        "Encounter/enc-2",
+    ]
+    assert "encounter" not in time_series
+    assert [
+        component["extension"][1]["valueReference"]["reference"]
+        for component in time_series["component"]
+    ] == ["Encounter/enc-1", "Encounter/enc-2"]
 
 
 def test_export_fhir_record_preserves_waveform_sampling_metadata():
