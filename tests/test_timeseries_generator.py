@@ -30,6 +30,7 @@ def test_timeseries_generator_adds_longitudinal_channels():
     heart_rate = next(channel for channel in updated.time_series if channel.name == "heart_rate")
     assert len(heart_rate.points) == 6
     assert heart_rate.points[0].timestamp == "2026-01-01T00:00:00"
+    assert heart_rate.generation_backend == "deterministic"
 
 
 def test_timeseries_generator_adds_numeric_lab_trajectories():
@@ -69,6 +70,8 @@ def test_timeseries_generator_adds_waveform_like_channels():
     pleth = next(channel for channel in updated.time_series if channel.name == "pleth")
     assert ecg.sampling_rate_hz == 125
     assert pleth.sampling_rate_hz == 25
+    assert ecg.generation_backend == "deterministic"
+    assert pleth.generation_backend == "deterministic"
     assert len(ecg.points) >= 125
     assert len(pleth.points) >= 100
     assert {"millivolts", "phase"} <= set(ecg.points[0].values)
@@ -116,6 +119,7 @@ def test_timeseries_generator_can_use_external_backend():
     assert payload["channels"] == ["heart_rate"]
     assert payload["points"] == 1
     assert updated.time_series[0].name == "heart_rate"
+    assert updated.time_series[0].generation_backend == "external:timediff-sample"
     assert updated.time_series[0].points[0].values["value"] == 101.0
 
 
