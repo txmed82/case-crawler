@@ -109,7 +109,9 @@ export interface DatasetGenerateRequest {
   complexity?: "simple" | "moderate" | "complex" | "rare";
   modalities?: SyntheticModality[];
   export_formats?: ExportFormat[];
-  clinical_text_backend?: "deterministic" | "llm";
+  clinical_text_backend?: "deterministic" | "llm" | "external";
+  clinical_text_model_profile?: string;
+  clinical_text_command?: string[];
   llm_provider?: string;
   llm_model?: string;
   ollama_base_url?: string;
@@ -136,6 +138,9 @@ export interface ReleasePackageRequest {
   recipe?: string;
   export_format?: ExportFormat;
   seed?: string;
+  clinical_text_backend?: "deterministic" | "llm" | "external";
+  clinical_text_model_profile?: string;
+  clinical_text_command?: string[];
   imaging_backend?: "placeholder" | "diffusers";
   imaging_model_profile?: string;
   diffusers_model_id?: string;
@@ -252,6 +257,16 @@ export interface DatasetCapabilitiesResponse {
     modality: string;
     body_region: string;
     license?: string | null;
+    notes: string;
+  }>;
+  clinical_text_model_profiles: Array<{
+    name: string;
+    adapter_type: string;
+    reference: string;
+    model_id?: string | null;
+    license?: string | null;
+    use_policy: string;
+    command_template: string[];
     notes: string;
   }>;
   time_series_model_profiles: Array<{
