@@ -122,6 +122,36 @@ def test_validator_rejects_invalid_lab_reference_ranges_and_flag_direction():
     assert sum(issue.field == "labs.flag_direction" for issue in report.issues) == 2
 
 
+def test_validator_rejects_known_lab_and_vital_unit_conflicts():
+    bad = _record(
+        labs=[
+            LabObservation(
+                name="Lactate",
+                value=4.8,
+                unit="mg/dL",
+                reference_low=0.5,
+                reference_high=2.0,
+                flag="H",
+                effective_time="2026-05-06T08:30:00",
+            )
+        ],
+        vitals=[
+            VitalObservation(
+                name="SpO2",
+                value=88,
+                unit="mmHg",
+                effective_time="2026-05-06T08:00:00",
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "labs.unit" for issue in report.issues)
+    assert any(issue.field == "vitals.unit" for issue in report.issues)
+
+
 def test_validator_rejects_implausible_respiratory_rate_and_blood_pressure():
     bad = _record(
         vitals=[
