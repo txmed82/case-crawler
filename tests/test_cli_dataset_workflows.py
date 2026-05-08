@@ -374,6 +374,9 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
         is not None
     )
     assert release_summary["quality_report"]["mean_imaging_report_chars"] > 0
+    assert release_summary["quality_report"]["time_series_channel_counts"]
+    assert release_summary["quality_report"]["mean_time_series_points"] > 0
+    assert release_summary["quality_report"]["mean_time_series_duration_hours"] >= 0
     assert release_summary["benchmark_suite"]["passed"] is True
     assert benchmark_suite["reference_count"] >= 1
     assert body["benchmark_suite"]["passed"] is True

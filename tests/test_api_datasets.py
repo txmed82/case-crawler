@@ -295,6 +295,9 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     assert summary["quality_report"]["multimodal_release_ready"] is True
     assert summary["quality_report"]["imaging_report_label_evidence_rate"] is not None
     assert summary["quality_report"]["mean_imaging_report_chars"] > 0
+    assert summary["quality_report"]["time_series_channel_counts"]
+    assert summary["quality_report"]["mean_time_series_points"] > 0
+    assert summary["quality_report"]["mean_time_series_duration_hours"] >= 0
     assert summary["benchmark"]["passed"] is True
     assert summary["benchmark_suite"]["passed"] is True
     assert summary["benchmark_suite"]["reference_count"] == benchmark_suite["reference_count"]

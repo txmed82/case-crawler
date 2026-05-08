@@ -113,10 +113,13 @@ class DatasetQualityReport(BaseModel):
     medication_dose_counts: dict[str, int] = Field(default_factory=dict)
     medication_frequency_counts: dict[str, int] = Field(default_factory=dict)
     medication_status_counts: dict[str, int] = Field(default_factory=dict)
+    time_series_channel_counts: dict[str, int] = Field(default_factory=dict)
     time_series_unit_counts: dict[str, int] = Field(default_factory=dict)
     time_series_backend_counts: dict[str, int] = Field(default_factory=dict)
     time_series_numeric_summaries: dict[str, dict[str, float | int]] = Field(default_factory=dict)
     mean_time_series_sampling_rate_hz: float | None = None
+    mean_time_series_points: float | None = None
+    mean_time_series_duration_hours: float | None = None
     imaging_backend_counts: dict[str, int] = Field(default_factory=dict)
     imaging_model_policy_counts: dict[str, int] = Field(default_factory=dict)
     mean_imaging_prompt_chars: float | None = None

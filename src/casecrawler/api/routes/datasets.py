@@ -280,6 +280,15 @@ async def generate_release_package(req: ReleasePackageRequest):
                                 quality_report.multimodal_release_missing
                             ),
                             "core_artifact_coverage": quality_report.core_artifact_coverage,
+                            "time_series_channel_counts": (
+                                quality_report.time_series_channel_counts
+                            ),
+                            "mean_time_series_points": (
+                                quality_report.mean_time_series_points
+                            ),
+                            "mean_time_series_duration_hours": (
+                                quality_report.mean_time_series_duration_hours
+                            ),
                             "mean_imaging_prompt_chars": (
                                 quality_report.mean_imaging_prompt_chars
                             ),

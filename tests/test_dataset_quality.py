@@ -874,7 +874,11 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
                         TimeSeriesPoint(
                             timestamp="2026-01-01T00:00:00",
                             values={"value": 100},
-                        )
+                        ),
+                        TimeSeriesPoint(
+                            timestamp="2026-01-01T01:00:00",
+                            values={"value": 96},
+                        ),
                     ],
                 ),
                 TimeSeriesChannel(
@@ -886,7 +890,11 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
                         TimeSeriesPoint(
                             timestamp="2026-01-01T00:00:00",
                             values={"millivolts": 0.1, "phase": 0.1},
-                        )
+                        ),
+                        TimeSeriesPoint(
+                            timestamp="2026-01-01T00:00:01",
+                            values={"millivolts": 0.2, "phase": 0.2},
+                        ),
                     ],
                 ),
             ],
@@ -947,10 +955,13 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
     assert report.medication_dose_counts == {"1 g": 1}
     assert report.medication_frequency_counts == {"daily": 1}
     assert report.medication_status_counts == {"active": 1}
-    assert report.time_series_numeric_summaries["heart_rate.value"]["mean"] == 100.0
-    assert report.time_series_numeric_summaries["ecg_lead_ii.millivolts"]["mean"] == 0.1
+    assert report.time_series_numeric_summaries["heart_rate.value"]["mean"] == 98.0
+    assert report.time_series_numeric_summaries["ecg_lead_ii.millivolts"]["mean"] == 0.15
+    assert report.time_series_channel_counts == {"ecg_lead_ii": 1, "heart_rate": 1}
     assert report.time_series_unit_counts == {"/min": 1, "mV": 1}
     assert report.mean_time_series_sampling_rate_hz == 125.0
+    assert report.mean_time_series_points == 2.0
+    assert report.mean_time_series_duration_hours == 0.5001
     assert report.time_series_backend_counts == {
         "deterministic": 1,
         "external:timediff-sample": 1,

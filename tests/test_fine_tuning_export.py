@@ -937,6 +937,9 @@ def test_verify_jsonl_split_package_validates_release_package_summary_artifact(
             "mean_imaging_prompt_chars": "long",
             "mean_imaging_report_chars": False,
             "imaging_report_label_evidence_rate": 1.5,
+            "time_series_channel_counts": [],
+            "mean_time_series_points": "many",
+            "mean_time_series_duration_hours": False,
         },
         "benchmark": {
             "reference_dataset_id": "ds-ref",
@@ -1001,6 +1004,18 @@ def test_verify_jsonl_split_package_validates_release_package_summary_artifact(
     assert (
         "audit_artifacts.release_package_summary.json.quality_report."
         "imaging_report_label_evidence_rate"
+    ) in issue_fields
+    assert (
+        "audit_artifacts.release_package_summary.json.quality_report."
+        "time_series_channel_counts"
+    ) in issue_fields
+    assert (
+        "audit_artifacts.release_package_summary.json.quality_report."
+        "mean_time_series_points"
+    ) in issue_fields
+    assert (
+        "audit_artifacts.release_package_summary.json.quality_report."
+        "mean_time_series_duration_hours"
     ) in issue_fields
     assert (
         "audit_artifacts.release_package_summary.json.benchmark.failing_metrics"
