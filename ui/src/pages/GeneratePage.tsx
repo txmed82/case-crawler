@@ -46,6 +46,7 @@ type ReferenceImportMode = "registered" | "custom";
 
 export default function GeneratePage() {
   const [topic, setTopic] = useState("");
+  const [recipe, setRecipe] = useState("");
   const [complexity, setComplexity] = useState<"simple" | "moderate" | "complex" | "rare">("moderate");
   const [count, setCount] = useState(1);
   const [ageMin, setAgeMin] = useState("");
@@ -188,6 +189,7 @@ export default function GeneratePage() {
     try {
       const resp = await startDatasetGenerate({
         topic: topic.trim(),
+        ...(recipe ? { recipe } : {}),
         complexity,
         count,
         modalities,
@@ -330,6 +332,7 @@ export default function GeneratePage() {
   };
 
   const selectedReference = referenceCatalog.find((item) => item.key === referenceKey);
+  const selectedRecipe = capabilities?.generation_recipes.find((item) => item.name === recipe);
   const includesClinicalText = modalities.includes("clinical_text");
   const includesImaging = modalities.includes("imaging");
   const includesTimeSeries = modalities.includes("time_series");
@@ -355,6 +358,40 @@ export default function GeneratePage() {
           className="w-full rounded-lg border border-gray-300 px-4 py-2"
           onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
         />
+        {capabilities && capabilities.generation_recipes.length > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Recipe</span>
+              <select
+                aria-label="Generation recipe"
+                value={recipe}
+                onChange={(event) => setRecipe(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              >
+                <option value="">Manual configuration</option>
+                {capabilities.generation_recipes.map((item) => (
+                  <option key={item.name} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {selectedRecipe && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                <span className="rounded-md bg-white px-2 py-1">
+                  {selectedRecipe.complexity}
+                </span>
+                <span className="rounded-md bg-white px-2 py-1">
+                  {selectedRecipe.modalities.length} modalities
+                </span>
+                <span className="rounded-md bg-white px-2 py-1">
+                  {selectedRecipe.export_formats.join(", ")}
+                </span>
+                <span>{selectedRecipe.description}</span>
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {modalityOptions.map((option) => {
             const selected = modalities.includes(option.value);

@@ -51,6 +51,7 @@ class ReviewQueueItem(BaseModel):
 class GenerationRequest(BaseModel):
     topic: str
     count: int = Field(default=1, ge=1)
+    recipe: str | None = Field(default=None, min_length=1)
     complexity: ComplexityProfile = ComplexityProfile.MODERATE
     modalities: list[Modality] = Field(
         default_factory=lambda: [

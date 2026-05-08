@@ -105,6 +105,7 @@ export async function searchChunks(
 export interface DatasetGenerateRequest {
   topic: string;
   count?: number;
+  recipe?: string;
   complexity?: "simple" | "moderate" | "complex" | "rare";
   modalities?: SyntheticModality[];
   export_formats?: ExportFormat[];
@@ -189,6 +190,15 @@ export interface DatasetCapabilitiesResponse {
   modalities: SyntheticModality[];
   complexity_profiles: Array<"simple" | "moderate" | "complex" | "rare">;
   export_formats: ExportFormat[];
+  generation_recipes: Array<{
+    name: string;
+    description: string;
+    complexity: "simple" | "moderate" | "complex" | "rare";
+    modalities: SyntheticModality[];
+    export_formats: ExportFormat[];
+    cohort_constraints: Record<string, unknown>;
+    validation_threshold: number;
+  }>;
   cohort_constraints: string[];
   imaging_model_profiles: Array<{
     name: string;

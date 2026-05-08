@@ -20,6 +20,33 @@ async def test_synthetic_pipeline_generates_valid_records():
 
 
 @pytest.mark.asyncio
+async def test_synthetic_pipeline_applies_generation_recipe():
+    pipeline = SyntheticPipeline(validator=SyntheticValidator())
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="acute care",
+            recipe="radiology_cxr_report",
+            count=2,
+            imaging_backend="placeholder",
+        )
+    )
+
+    assert result["plan"].modalities == [
+        Modality.STRUCTURED_EHR,
+        Modality.CLINICAL_TEXT,
+        Modality.IMAGING,
+    ]
+    assert {record.topic for record in result["records"]}.issubset(
+        {"pneumonia", "heart failure", "status asthmaticus", "pulmonary embolism"}
+    )
+    assert result["records"][0].metadata["generation_overrides"]["recipe"] == (
+        "radiology_cxr_report"
+    )
+    assert result["records"][0].imaging
+
+
+@pytest.mark.asyncio
 async def test_synthetic_pipeline_generates_topic_mix_cohorts():
     pipeline = SyntheticPipeline(validator=SyntheticValidator())
 

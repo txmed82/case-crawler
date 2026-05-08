@@ -178,6 +178,21 @@ def reference_datasets() -> None:
             click.echo(f"  {spec.description}")
 
 
+@cli.command("generation-recipes")
+def generation_recipes() -> None:
+    """List built-in synthetic dataset generation recipes."""
+    from casecrawler.generation.recipes import list_generation_recipes
+
+    for recipe in list_generation_recipes():
+        modalities = ",".join(modality.value for modality in recipe.modalities)
+        formats = ",".join(export_format.value for export_format in recipe.export_formats)
+        click.echo(
+            f"{recipe.name}: complexity={recipe.complexity.value} "
+            f"modalities={modalities} exports={formats}"
+        )
+        click.echo(f"  {recipe.description}")
+
+
 @cli.command("import-reference-dataset")
 @click.argument("reference_key", required=False)
 @click.option("--dataset-id", required=True, help="Dataset id for imported reference records")
@@ -389,6 +404,11 @@ def serve() -> None:
 @click.argument("topic")
 @click.option("--count", default=1, type=int, help="Number of synthetic records to generate")
 @click.option(
+    "--recipe",
+    default=None,
+    help="Built-in generation recipe, for example full_multimodal_acute_care",
+)
+@click.option(
     "--modalities",
     default=None,
     help=(
@@ -459,6 +479,7 @@ def serve() -> None:
 def generate_dataset(
     topic: str,
     count: int,
+    recipe: str | None,
     modalities: str | None,
     complexity: str,
     age_min: int | None,
@@ -513,6 +534,7 @@ def generate_dataset(
         req = GenerationRequest(
             topic=topic,
             count=count,
+            recipe=recipe,
             complexity=complexity_profile,
             modalities=selected_modalities
             if selected_modalities is not None
