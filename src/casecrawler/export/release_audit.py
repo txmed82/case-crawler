@@ -19,6 +19,7 @@ OBJECTIVE_COVERAGE_KEYS = frozenset(
         "labs",
         "vitals",
         "medication_history",
+        "messy_clinical_text",
         "physician_notes",
         "nursing_notes",
         "time_series",
@@ -89,6 +90,12 @@ def build_objective_coverage_audit(
                 "medication_routes": quality_report.medication_route_counts,
                 "medication_doses": quality_report.medication_dose_counts,
             },
+        ),
+        "messy_clinical_text": _criterion(
+            "Clinical documents include messy/noisy text variants for robust training.",
+            coverage.get("messy_clinical_text") is True,
+            ["quality_report.json"],
+            {"core_artifact_coverage": coverage.get("messy_clinical_text")},
         ),
         "physician_notes": _criterion(
             "Physician-authored notes are present.",
