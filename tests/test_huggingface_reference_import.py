@@ -284,6 +284,111 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
     assert record.metadata["reference_dataset"] == "ai-galileo/clinical-notes-to-fhir"
 
 
+def test_fhir_reference_row_expands_component_observations():
+    fhir_bundle = {
+        "resourceType": "Bundle",
+        "type": "collection",
+        "entry": [
+            {
+                "resource": {
+                    "resourceType": "Observation",
+                    "id": "bp-1",
+                    "category": [{"coding": [{"code": "vital-signs"}]}],
+                    "code": {"text": "Blood pressure"},
+                    "effectiveDateTime": "2026-01-01T00:05:00",
+                    "component": [
+                        {
+                            "code": {
+                                "coding": [
+                                    {
+                                        "system": "http://loinc.org",
+                                        "code": "8480-6",
+                                        "display": "Systolic blood pressure",
+                                    }
+                                ]
+                            },
+                            "valueQuantity": {"value": 152, "unit": "mmHg"},
+                        },
+                        {
+                            "code": {
+                                "coding": [
+                                    {
+                                        "system": "http://loinc.org",
+                                        "code": "8462-4",
+                                        "display": "Diastolic blood pressure",
+                                    }
+                                ]
+                            },
+                            "valueQuantity": {"value": 94, "unit": "mmHg"},
+                        },
+                    ],
+                }
+            },
+            {
+                "resource": {
+                    "resourceType": "Observation",
+                    "id": "bmp-1",
+                    "code": {"text": "Basic metabolic panel"},
+                    "effectiveDateTime": "2026-01-01T00:10:00",
+                    "component": [
+                        {
+                            "code": {
+                                "coding": [
+                                    {
+                                        "system": "http://loinc.org",
+                                        "code": "2951-2",
+                                        "display": "Sodium",
+                                    }
+                                ]
+                            },
+                            "valueQuantity": {"value": 132, "unit": "mmol/L"},
+                            "referenceRange": [
+                                {
+                                    "low": {"value": 135, "unit": "mmol/L"},
+                                    "high": {"value": 145, "unit": "mmol/L"},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            },
+        ],
+    }
+    row = {
+        "exampleId": "bp-components",
+        "difficulty": "medium",
+        "scenario": "Blood pressure extraction.",
+        "note": "Vitals note: 50-year-old male with hypertension and hyponatremia.",
+        "fhir_bundle": json.dumps(fhir_bundle),
+    }
+
+    record = reference_row_to_record(
+        row,
+        dataset_id="ds-fhir-components",
+        spec=REFERENCE_DATASETS["clinical_notes_to_fhir"],
+    )
+
+    vital_values = {vital.name: vital for vital in record.vitals}
+    lab_values = {lab.name: lab for lab in record.labs}
+    assert vital_values["Systolic blood pressure"].value == 152
+    assert vital_values["Systolic blood pressure"].unit == "mmHg"
+    assert vital_values["Diastolic blood pressure"].value == 94
+    assert lab_values["Sodium"].value == 132
+    assert lab_values["Sodium"].loinc == "2951-2"
+    assert lab_values["Sodium"].reference_low == 135.0
+    assert lab_values["Sodium"].flag == "L"
+    assert record.documents[0].extracted_facts["vital_values"][0]["name"] == (
+        "Systolic blood pressure"
+    )
+    assert record.documents[0].extracted_facts["lab_values"][0]["name"] == "Sodium"
+    assert record.modalities == [
+        Modality.STRUCTURED_EHR,
+        Modality.CLINICAL_TEXT,
+        Modality.LABS,
+        Modality.VITALS,
+    ]
+
+
 def test_structured_reference_fields_map_labs_vitals_meds_and_time_series():
     spec = reference_dataset_spec(
         repo_id="example/structured-icu-reference",

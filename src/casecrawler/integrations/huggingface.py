@@ -892,15 +892,37 @@ def _fhir_artifacts(
     diagnostic_documents: list[ClinicalDocument] = []
     for resource in resources:
         resource_type = resource.get("resourceType")
-        if resource_type == "Observation" and isinstance(resource.get("valueQuantity"), dict):
-            if _is_fhir_vital_observation(resource):
-                vital = _fhir_observation_to_vital(resource)
-                if vital is not None:
-                    vitals.append(vital)
-            else:
-                lab = _fhir_observation_to_lab(resource)
-                if lab is not None:
-                    labs.append(lab)
+        if resource_type == "Observation":
+            components = _fhir_observation_components(resource)
+            if components:
+                if _is_fhir_vital_observation(resource):
+                    vitals.extend(
+                        vital
+                        for vital in (
+                            _fhir_component_to_vital(resource, component)
+                            for component in components
+                        )
+                        if vital is not None
+                    )
+                else:
+                    labs.extend(
+                        lab
+                        for lab in (
+                            _fhir_component_to_lab(resource, component)
+                            for component in components
+                        )
+                        if lab is not None
+                    )
+                continue
+            if isinstance(resource.get("valueQuantity"), dict):
+                if _is_fhir_vital_observation(resource):
+                    vital = _fhir_observation_to_vital(resource)
+                    if vital is not None:
+                        vitals.append(vital)
+                else:
+                    lab = _fhir_observation_to_lab(resource)
+                    if lab is not None:
+                        labs.append(lab)
         elif resource_type == "MedicationStatement":
             medication = _fhir_medication_statement(resource)
             if medication is not None:
@@ -968,6 +990,52 @@ def _fhir_observation_to_vital(resource: dict) -> VitalObservation | None:
         value=float(quantity["value"]),
         unit=_coerce_text(quantity.get("unit")),
         effective_time=_coerce_text(resource.get("effectiveDateTime")) or "2026-01-01T00:00:00",
+    )
+
+
+def _fhir_observation_components(resource: dict) -> list[dict]:
+    return [
+        component
+        for component in resource.get("component", [])
+        if isinstance(component, dict)
+        and isinstance(component.get("valueQuantity"), dict)
+    ]
+
+
+def _fhir_component_to_lab(
+    resource: dict,
+    component: dict,
+) -> LabObservation | None:
+    quantity = component.get("valueQuantity")
+    if not isinstance(quantity, dict) or "value" not in quantity:
+        return None
+    low, high = _fhir_reference_range(component, quantity.get("unit", ""))
+    return LabObservation(
+        name=_fhir_code_text(component) or component.get("id") or "Observation component",
+        loinc=_fhir_loinc(component),
+        value=quantity["value"],
+        unit=_coerce_text(quantity.get("unit")),
+        reference_low=low,
+        reference_high=high,
+        flag=_lab_flag(quantity["value"], low, high),
+        effective_time=_coerce_text(resource.get("effectiveDateTime"))
+        or "2026-01-01T00:00:00",
+    )
+
+
+def _fhir_component_to_vital(
+    resource: dict,
+    component: dict,
+) -> VitalObservation | None:
+    quantity = component.get("valueQuantity")
+    if not isinstance(quantity, dict) or not isinstance(quantity.get("value"), (int, float)):
+        return None
+    return VitalObservation(
+        name=_fhir_code_text(component) or component.get("id") or "Vital sign component",
+        value=float(quantity["value"]),
+        unit=_coerce_text(quantity.get("unit")),
+        effective_time=_coerce_text(resource.get("effectiveDateTime"))
+        or "2026-01-01T00:00:00",
     )
 
 
