@@ -58,6 +58,11 @@ def test_reference_dataset_catalog_includes_clinical_note_fhir_and_radiology_ben
         "0": "normal",
         "1": "pneumonia",
     }
+    assert catalog["medsynth_dialogue_note"].repo_id == "Ahmad0067/MedSynth"
+    assert catalog["medsynth_dialogue_note"].note_field == "Note"
+    assert catalog["medsynth_dialogue_note"].question_field == "Dialogue"
+    assert catalog["medsynth_dialogue_note"].task_field == "ICD10_desc"
+    assert catalog["medsynth_dialogue_note"].license == "unspecified"
 
 
 def test_asclepius_row_maps_to_synthetic_record():
@@ -84,6 +89,36 @@ def test_asclepius_row_maps_to_synthetic_record():
     assert record.metadata["reference_license"] == "cc-by-nc-sa-4.0"
     assert record.metadata["reference_split"] == "validation"
     assert record.provenance.source_refs[0]["split"] == "validation"
+    assert record.modalities == [Modality.CLINICAL_TEXT]
+
+
+def test_medsynth_dialogue_note_row_maps_dialogue_and_icd_metadata():
+    row = {
+        "Note": "SOAP Note: 52-year-old male with left knee pain.",
+        "Dialogue": "[doctor] How can I help? [patient] My left knee hurts.",
+        "ICD10": "M25562",
+        "ICD10_desc": "PAIN IN LEFT KNEE",
+    }
+
+    record = reference_row_to_record(
+        row,
+        dataset_id="ds-medsynth",
+        spec=REFERENCE_DATASETS["medsynth_dialogue_note"],
+        reference_key="medsynth_dialogue_note",
+    )
+
+    assert record.dataset_id == "ds-medsynth"
+    assert record.patient.age == 52
+    assert record.patient.sex == "male"
+    assert record.topic == "PAIN IN LEFT KNEE"
+    assert record.documents[0].clean_text == row["Note"]
+    assert record.documents[0].extracted_facts["instruction"] == row["Dialogue"]
+    assert record.documents[0].extracted_facts["source_fields"] == {
+        "ICD10": "M25562",
+        "ICD10_desc": "PAIN IN LEFT KNEE",
+    }
+    assert record.metadata["reference_dataset"] == "Ahmad0067/MedSynth"
+    assert record.metadata["reference_key"] == "medsynth_dialogue_note"
     assert record.modalities == [Modality.CLINICAL_TEXT]
 
 
