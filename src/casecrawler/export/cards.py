@@ -76,6 +76,10 @@ def build_dataset_card(
             "",
             *_list_lines([export_format.value for export_format in manifest.export_formats]),
             "",
+            "## Export Audit Trail",
+            "",
+            *_export_manifest_lines(manifest),
+            "",
         ]
     )
 
@@ -187,6 +191,29 @@ def _generation_override_counts(records: list[SyntheticRecord]) -> Counter[str]:
 
 def _list_lines(values: list[str]) -> list[str]:
     return [f"- {value}" for value in values] or ["- None"]
+
+
+def _export_manifest_lines(manifest: DatasetManifest) -> list[str]:
+    exports = manifest.metadata.get("latest_exports", [])
+    if not isinstance(exports, list) or not exports:
+        return ["- No exports recorded"]
+    lines = []
+    for export in exports:
+        if not isinstance(export, dict):
+            continue
+        metadata = export.get("metadata", {})
+        gate = ""
+        if isinstance(metadata, dict) and "benchmark_passed" in metadata:
+            gate = (
+                f", benchmark_passed={metadata.get('benchmark_passed')}, "
+                f"reference={metadata.get('benchmark_reference_dataset_id')}"
+            )
+        lines.append(
+            "- "
+            f"{export.get('export_format')} to {export.get('file_path')} "
+            f"records={export.get('record_count')}{gate}"
+        )
+    return lines or ["- No exports recorded"]
 
 
 def _fraction(numerator: int, denominator: int) -> str:

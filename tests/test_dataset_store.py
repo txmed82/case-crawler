@@ -56,7 +56,13 @@ def test_dataset_store_builds_manifest_and_export_manifest(tmp_path):
         export_format="sft_jsonl",
         file_path=str(tmp_path / "export.jsonl"),
         record_count=1,
+        metadata={
+            "benchmark_reference_dataset_id": "ds-ref",
+            "benchmark_passed": True,
+        },
     )
+    updated_manifest = store.get_manifest("ds-1")
+    export_manifests = store.list_export_manifests(dataset_id="ds-1")
 
     assert manifest.dataset_id == "ds-1"
     assert manifest.generated_count == 1
@@ -64,6 +70,8 @@ def test_dataset_store_builds_manifest_and_export_manifest(tmp_path):
     assert manifest.export_formats == list(ExportFormat)
     assert export_manifest.dataset_id == "ds-1"
     assert export_manifest.record_count == 1
+    assert export_manifests[0].metadata["benchmark_reference_dataset_id"] == "ds-ref"
+    assert updated_manifest.metadata["latest_exports"][0]["metadata"]["benchmark_passed"] is True
 
 
 def test_dataset_store_manifest_prefers_requested_export_formats(tmp_path):
