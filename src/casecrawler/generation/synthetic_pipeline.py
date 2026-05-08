@@ -222,6 +222,7 @@ def _imaging_requests_for_record(
         for encounter in record.encounters
         for diagnosis in encounter.diagnoses
     )
+    patient_context = f"{record.patient.age} year old {record.patient.sex}"
     requests = []
     for view in views:
         normalized_view = view.replace("_", " ")
@@ -230,6 +231,7 @@ def _imaging_requests_for_record(
                 prompt=" ".join(
                     part
                     for part in [
+                        patient_context,
                         normalized_view,
                         topic_prompt,
                         diagnosis_terms,
