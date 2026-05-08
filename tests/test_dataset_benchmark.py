@@ -144,6 +144,7 @@ def _record(
             clinical_consistency_score=1.0,
             privacy_score=1.0,
             utility_score=1.0,
+            modality_alignment_score=0.9,
             approved=True,
         ),
     )
@@ -237,6 +238,7 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.imaging_label_counts == {"effusion": 2, "opacity": 2}
     assert profile.imaging_label_pair_counts == {"effusion|opacity": 2}
     assert profile.approved_rate == 1.0
+    assert profile.mean_modality_alignment_score == 0.9
 
 
 def test_dataset_benchmark_compares_generated_to_reference_records():
@@ -374,6 +376,47 @@ def test_dataset_benchmark_compares_imaging_finding_labels():
     assert label_metric.details["reference_only"] == ["pleural effusion"]
     assert distribution_metric.score == 0.0
     assert any("imaging_label_overlap" in warning for warning in report.warnings)
+
+
+def test_dataset_benchmark_compares_modality_alignment_scores():
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "validation": ValidationReport(
+                    schema_score=1.0,
+                    clinical_consistency_score=1.0,
+                    privacy_score=1.0,
+                    utility_score=1.0,
+                    modality_alignment_score=0.25,
+                    approved=False,
+                )
+            }
+        )
+    ]
+    reference = [
+        _record("ref-1", "ds-ref").model_copy(
+            update={
+                "validation": ValidationReport(
+                    schema_score=1.0,
+                    clinical_consistency_score=1.0,
+                    privacy_score=1.0,
+                    utility_score=1.0,
+                    modality_alignment_score=0.9,
+                    approved=True,
+                )
+            }
+        )
+    ]
+
+    report = DatasetBenchmark(min_metric_score=0.5).compare(generated, reference)
+    metric = next(
+        item for item in report.metrics if item.name == "mean_modality_alignment_score"
+    )
+
+    assert metric.score == 0.0
+    assert metric.generated_value == 0.25
+    assert metric.reference_value == 0.9
+    assert "mean_modality_alignment_score" in report.failing_metrics
 
 
 def test_dataset_benchmark_compares_time_series_value_summaries():

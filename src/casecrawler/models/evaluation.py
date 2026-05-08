@@ -44,6 +44,7 @@ class CohortProfile(BaseModel):
     imaging_label_counts: dict[str, int] = Field(default_factory=dict)
     imaging_label_pair_counts: dict[str, int] = Field(default_factory=dict)
     approved_rate: float | None = None
+    mean_modality_alignment_score: float | None = None
 
 
 class BenchmarkMetric(BaseModel):
