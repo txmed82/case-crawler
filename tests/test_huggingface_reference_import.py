@@ -166,6 +166,12 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
         "valid": True,
         "validation_errors": None,
     }
+    assert record.documents[0].extracted_facts["lab_values"][0]["name"] == "HbA1c"
+    assert record.documents[0].extracted_facts["lab_values"][0]["value"] == 7.4
+    assert record.documents[0].extracted_facts["vital_values"][0]["name"] == "Heart rate"
+    assert record.documents[0].extracted_facts["vital_values"][0]["value"] == 88.0
+    assert record.documents[0].extracted_facts["medications"] == ["Metformin"]
+    assert record.documents[0].extracted_facts["medication_details"][0]["route"] == "PO"
     assert record.modalities == [
         Modality.STRUCTURED_EHR,
         Modality.CLINICAL_TEXT,
@@ -218,6 +224,15 @@ def test_radiology_consistency_reference_row_maps_image_evidence_to_instruction(
         "study": "chest radiograph",
     }
     assert record.documents[0].note_type == "radiology_report"
+    assert record.imaging[0].image_id in (
+        record.documents[0].extracted_facts["imaging_asset_ids"]
+    )
+    assert record.documents[0].extracted_facts["imaging_modalities"] == ["XR"]
+    assert record.documents[0].extracted_facts["imaging_body_regions"] == ["chest"]
+    assert record.documents[0].extracted_facts["imaging_labels"] == [
+        "Pleural effusion",
+        "Pneumothorax",
+    ]
     assert record.modalities == [Modality.CLINICAL_TEXT, Modality.IMAGING]
     assert record.imaging[0].image_id.startswith("img-")
     assert record.imaging[0].modality == "XR"
@@ -256,6 +271,7 @@ def test_image_reference_row_persists_image_asset(tmp_path):
     assert record.imaging[0].modality == "XR"
     assert record.imaging[0].body_region == "chest"
     assert {label.display for label in record.imaging[0].labels} == {"Pneumonia"}
+    assert record.documents[0].extracted_facts["imaging_labels"] == ["Pneumonia"]
     assert Path(record.imaging[0].file_path).read_bytes() == b"fake-image"
 
 

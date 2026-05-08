@@ -333,12 +333,17 @@ def reference_row_to_record(
         timestamp="2026-01-01T00:00:00",
         clean_text=note,
         messy_text=None,
-        extracted_facts={
-            "source_task": task,
-            "instruction": question,
-            "answer": answer,
-            "source_fields": _source_fields(row, spec),
-        },
+        extracted_facts=_reference_extracted_facts(
+            row,
+            spec,
+            source_task=task,
+            instruction=question,
+            answer=answer,
+            labs=labs,
+            vitals=vitals,
+            medications=medications,
+            imaging=imaging,
+        ),
     )
     return SyntheticRecord(
         record_id=record_id,
@@ -455,6 +460,75 @@ def _source_fields(row: dict, spec: HuggingFaceReferenceDataset) -> dict:
 
 def _is_source_field_value(value) -> bool:
     return value is None or isinstance(value, (str, int, float, bool, list, dict))
+
+
+def _reference_extracted_facts(
+    row: dict,
+    spec: HuggingFaceReferenceDataset,
+    *,
+    source_task: str,
+    instruction: str,
+    answer: str,
+    labs: list[LabObservation],
+    vitals: list[VitalObservation],
+    medications: list[MedicationStatement],
+    imaging: list[ImagingAsset],
+) -> dict:
+    facts = {
+        "source_task": source_task,
+        "instruction": instruction,
+        "answer": answer,
+        "source_fields": _source_fields(row, spec),
+    }
+    if labs:
+        facts["lab_values"] = [
+            {
+                "name": lab.name,
+                "value": lab.value,
+                "unit": lab.unit,
+                "reference_low": lab.reference_low,
+                "reference_high": lab.reference_high,
+                "flag": lab.flag,
+                "effective_time": lab.effective_time,
+            }
+            for lab in labs
+        ]
+    if vitals:
+        facts["vital_values"] = [
+            {
+                "name": vital.name,
+                "value": vital.value,
+                "unit": vital.unit,
+                "effective_time": vital.effective_time,
+            }
+            for vital in vitals
+        ]
+    if medications:
+        facts["medications"] = [medication.name for medication in medications]
+        facts["medication_details"] = [
+            {
+                "name": medication.name,
+                "rxnorm": medication.rxnorm,
+                "dose": medication.dose,
+                "route": medication.route,
+                "frequency": medication.frequency,
+                "status": medication.status,
+                "start": medication.start,
+                "end": medication.end,
+            }
+            for medication in medications
+        ]
+    if imaging:
+        facts["imaging_asset_ids"] = [asset.image_id for asset in imaging]
+        facts["imaging_modalities"] = [asset.modality for asset in imaging]
+        facts["imaging_body_regions"] = [asset.body_region for asset in imaging]
+        facts["imaging_labels"] = [
+            label.display
+            for asset in imaging
+            for label in asset.labels
+            if label.display
+        ]
+    return facts
 
 
 def _fhir_artifacts(
