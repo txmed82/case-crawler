@@ -18,6 +18,15 @@ def test_imaging_model_catalog_lists_medical_profiles():
     assert profiles["medisyn"].license == "cc-by-nc-nd-4.0"
     assert profiles["medisyn"].gated is False
     assert profiles["medisyn"].use_policy == "non_commercial_no_derivatives_review_before_release"
+    assert profiles["medisyn"].adapter_type == "diffusers"
+    assert profiles["medisyn"].input_contract["inputs"] == [
+        "prompt",
+        "negative_prompt",
+        "modality",
+        "body_region",
+    ]
+    assert profiles["medisyn"].output_contract["artifact"] == "ImagingAsset"
+    assert "image_file_signature" in profiles["medisyn"].validation_requirements
     assert profiles["medisyn"].is_compatible("CT", "abdomen") is True
     assert profiles["cxr_pneumonia_dreambooth"].modality == "XR"
     assert profiles["cxr_pneumonia_dreambooth"].is_compatible("XR", "chest") is True
@@ -29,6 +38,20 @@ def test_imaging_model_catalog_lists_medical_profiles():
     assert profiles["chexgenbench_sana_e20"].license is None
     assert profiles["chexgenbench_sana_e20"].use_policy == (
         "model_card_missing_review_terms_and_validate_privacy_utility"
+    )
+    assert profiles["chexgenbench_sana_e20"].adapter_type == "diffusers"
+    assert profiles["chexgenbench_sana_e20"].command_template == [
+        "casecrawler",
+        "generate-dataset",
+        "<topic>",
+        "--imaging-backend",
+        "diffusers",
+        "--imaging-model-profile",
+        "chexgenbench_sana_e20",
+    ]
+    assert (
+        "radiology_label_evidence"
+        in profiles["chexgenbench_sana_e20"].validation_requirements
     )
     assert profiles["chexgenbench_sana_e20"].is_compatible("XR", "chest") is True
     assert profiles["prompt2medimage"].is_compatible("CT", "abdomen") is True

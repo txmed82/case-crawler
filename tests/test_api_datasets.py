@@ -1109,6 +1109,24 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert chexgenbench["use_policy"] == (
         "model_card_missing_review_terms_and_validate_privacy_utility"
     )
+    assert chexgenbench["adapter_type"] == "diffusers"
+    assert chexgenbench["command_template"] == [
+        "casecrawler",
+        "generate-dataset",
+        "<topic>",
+        "--imaging-backend",
+        "diffusers",
+        "--imaging-model-profile",
+        "chexgenbench_sana_e20",
+    ]
+    assert chexgenbench["input_contract"]["inputs"] == [
+        "prompt",
+        "negative_prompt",
+        "modality",
+        "body_region",
+    ]
+    assert chexgenbench["output_contract"]["artifact"] == "ImagingAsset"
+    assert "image_file_signature" in chexgenbench["validation_requirements"]
     medisyn = next(
         profile
         for profile in body["imaging_model_profiles"]

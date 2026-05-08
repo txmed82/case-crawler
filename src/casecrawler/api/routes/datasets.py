@@ -451,11 +451,16 @@ def list_dataset_capabilities():
             {
                 "name": profile.name,
                 "model_id": profile.model_id,
+                "adapter_type": profile.adapter_type,
                 "modality": profile.modality,
                 "body_region": profile.body_region,
                 "license": profile.license,
                 "gated": profile.gated,
                 "use_policy": profile.use_policy,
+                "command_template": profile.command_template,
+                "input_contract": profile.input_contract,
+                "output_contract": profile.output_contract,
+                "validation_requirements": profile.validation_requirements,
                 "notes": profile.notes,
             }
             for profile in list_imaging_model_profiles()

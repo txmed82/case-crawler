@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -9,6 +9,7 @@ class ImagingModelProfile:
     model_id: str
     modality: str
     body_region: str
+    adapter_type: str = "diffusers"
     prompt_prefix: str = ""
     default_negative_prompt: str | None = (
         "patient identifiers, text overlays, signatures, watermarks"
@@ -16,7 +17,75 @@ class ImagingModelProfile:
     license: str | None = None
     gated: bool = False
     use_policy: str = "review_license_before_use"
+    command_template: list[str] = field(default_factory=list)
+    input_contract: dict[str, object] = field(default_factory=dict)
+    output_contract: dict[str, object] = field(default_factory=dict)
+    validation_requirements: list[str] = field(default_factory=list)
     notes: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.command_template:
+            object.__setattr__(
+                self,
+                "command_template",
+                [
+                    "casecrawler",
+                    "generate-dataset",
+                    "<topic>",
+                    "--imaging-backend",
+                    self.adapter_type,
+                    "--imaging-model-profile",
+                    self.name,
+                ],
+            )
+        if not self.input_contract:
+            object.__setattr__(
+                self,
+                "input_contract",
+                {
+                    "backend": self.adapter_type,
+                    "inputs": [
+                        "prompt",
+                        "negative_prompt",
+                        "modality",
+                        "body_region",
+                    ],
+                    "prompt_policy": "profile.render_prompt(prompt)",
+                    "negative_prompt_default": self.default_negative_prompt,
+                    "output_dir": "synthetic.image_output_dir",
+                },
+            )
+        if not self.output_contract:
+            object.__setattr__(
+                self,
+                "output_contract",
+                {
+                    "artifact": "ImagingAsset",
+                    "file_format": "png",
+                    "fields": [
+                        "image_id",
+                        "modality",
+                        "body_region",
+                        "prompt",
+                        "file_path",
+                        "report_text",
+                        "labels",
+                        "generation_backend",
+                    ],
+                },
+            )
+        if not self.validation_requirements:
+            object.__setattr__(
+                self,
+                "validation_requirements",
+                [
+                    "image_file_signature",
+                    "image_dimensions_min_32x32",
+                    "radiology_label_evidence",
+                    "privacy_screen",
+                    "image_text_alignment_if_configured",
+                ],
+            )
 
     def render_prompt(self, finding_prompt: str) -> str:
         finding_prompt = finding_prompt.strip()
