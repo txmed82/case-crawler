@@ -218,6 +218,36 @@ def test_image_reference_row_persists_image_asset(tmp_path):
     assert Path(record.imaging[0].file_path).read_bytes() == b"fake-image"
 
 
+def test_image_reference_row_preserves_meaningful_note_text(tmp_path):
+    class FakeImage:
+        def save(self, path):
+            path.write_bytes(b"fake-image")
+
+    spec = reference_dataset_spec(
+        repo_id="org/image-caption-reference",
+        split="train",
+        license="cc-by-4.0",
+        note_field="caption",
+        image_field="image",
+        image_label_field="label",
+    )
+    row = {
+        "image": FakeImage(),
+        "label": "pneumonia",
+        "caption": "Portable chest radiograph shows right lower lobe pneumonia.",
+    }
+
+    record = reference_row_to_record(
+        row,
+        dataset_id="ds-image",
+        spec=spec,
+        image_output_dir=tmp_path,
+    )
+
+    assert record.documents[0].clean_text == row["caption"]
+    assert record.imaging[0].report_text == row["caption"]
+
+
 def test_import_reference_rows_honors_limit_and_stable_ids():
     rows = [
         {
