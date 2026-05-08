@@ -89,6 +89,18 @@ REFERENCE_DATASETS: dict[str, HuggingFaceReferenceDataset] = {
             "triplets for clinical note generation and extraction benchmarking."
         ),
     ),
+    "medsynth_dialogue_note": HuggingFaceReferenceDataset(
+        repo_id="Ahmad0067/MedSynth",
+        split="train",
+        license="unspecified",
+        note_field="Note",
+        question_field="Dialogue",
+        task_field="ICD10_desc",
+        description=(
+            "Synthetic medical dialogue-note pairs for dialogue-to-note and "
+            "note-to-dialogue clinical documentation benchmarking."
+        ),
+    ),
     "clinical_notes_to_fhir": HuggingFaceReferenceDataset(
         repo_id="ai-galileo/clinical-notes-to-fhir",
         split="train",

@@ -119,6 +119,7 @@ RECIPES: dict[str, GenerationRecipe] = {
         recommended_reference_keys=[
             "synthclinicalnotes",
             "augmented_clinical_notes",
+            "medsynth_dialogue_note",
             "clinical_notes_to_fhir",
         ],
         benchmark_min_overall_score=0.75,

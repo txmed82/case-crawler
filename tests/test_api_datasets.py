@@ -178,6 +178,7 @@ def test_dataset_api_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
     assert body["recommended_reference_keys"] == [
         "synthclinicalnotes",
         "augmented_clinical_notes",
+        "medsynth_dialogue_note",
         "clinical_notes_to_fhir",
     ]
     assert body["resolved_reference_dataset_id"] == reference_dataset_id
