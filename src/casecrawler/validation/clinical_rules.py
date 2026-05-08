@@ -713,6 +713,18 @@ def validate_document_extracted_fact_alignment(
         _normalize_name(vital.name): float(vital.value) for vital in record.vitals
     }
     medication_names = {_normalize_name(medication.name) for medication in record.medication_history}
+    procedure_names = {
+        _normalize_name(procedure.display)
+        for encounter in record.encounters
+        for procedure in encounter.procedures
+        if procedure.display
+    }
+    procedure_codes = {
+        _normalize_name(procedure.code)
+        for encounter in record.encounters
+        for procedure in encounter.procedures
+        if procedure.code
+    }
     imaging_asset_ids = {asset.image_id for asset in record.imaging}
     imaging_labels = {
         _normalize_name(term)
@@ -774,6 +786,46 @@ def validate_document_extracted_fact_alignment(
                         f"Document {document.document_id} extracted medication names "
                         f"not present in structured medication history: "
                         f"{', '.join(sorted(unsupported_medications))}."
+                    ),
+                )
+            )
+        extracted_procedures = {
+            _normalize_name(str(item))
+            for item in facts.get("procedures", [])
+            if isinstance(item, str)
+        }
+        unsupported_procedures = extracted_procedures - procedure_names
+        if unsupported_procedures and procedure_names:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.CLINICAL_TEXT,
+                    field="documents.extracted_facts.procedures",
+                    message=(
+                        f"Document {document.document_id} extracted procedure names "
+                        f"not present in structured encounters: "
+                        f"{', '.join(sorted(unsupported_procedures))}."
+                    ),
+                )
+            )
+        unsupported_procedure_details = []
+        for item in _fact_list(facts.get("procedure_details")):
+            display = _normalize_name(str(item.get("display", "")))
+            code = _normalize_name(str(item.get("code", "")))
+            if display and display not in procedure_names:
+                unsupported_procedure_details.append(display)
+            if code and code not in procedure_codes:
+                unsupported_procedure_details.append(code)
+        if unsupported_procedure_details and (procedure_names or procedure_codes):
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.CLINICAL_TEXT,
+                    field="documents.extracted_facts.procedure_details",
+                    message=(
+                        f"Document {document.document_id} extracted procedure details "
+                        f"not present in structured encounters: "
+                        f"{', '.join(sorted(set(unsupported_procedure_details)))}."
                     ),
                 )
             )

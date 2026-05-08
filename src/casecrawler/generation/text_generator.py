@@ -266,6 +266,16 @@ def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:
         }
         for med in record.medication_history
     ]
+    procedure_details = [
+        {
+            "encounter_id": encounter.encounter_id,
+            "system": procedure.system,
+            "code": procedure.code,
+            "display": procedure.display,
+        }
+        for encounter in record.encounters
+        for procedure in encounter.procedures
+    ]
     facts = {
         "topic": record.topic,
         "note_type": note_type,
@@ -276,6 +286,8 @@ def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:
             for encounter in record.encounters
             for diagnosis in encounter.diagnoses
         ],
+        "procedures": [procedure["display"] for procedure in procedure_details],
+        "procedure_details": procedure_details,
         "lab_names": [lab.name for lab in record.labs],
         "lab_values": lab_values,
         "abnormal_labs": abnormal_labs,

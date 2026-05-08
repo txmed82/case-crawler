@@ -4,7 +4,13 @@ from casecrawler.llm.base import StructuredGenerationResult
 from casecrawler.generation.structured_generator import StructuredGenerator
 from casecrawler.generation.text_generator import TextGenerator
 from casecrawler.models.dataset import GenerationRequest
-from casecrawler.models.synthetic import ClinicalDocument, Code, ImagingAsset, Modality
+from casecrawler.models.synthetic import (
+    ClinicalDocument,
+    Code,
+    ComplexityProfile,
+    ImagingAsset,
+    Modality,
+)
 
 
 def test_text_generator_adds_multiple_clinical_note_types():
@@ -32,6 +38,7 @@ def test_text_generator_adds_multiple_clinical_note_types():
 def test_text_generator_adds_messy_variants_and_extracted_facts():
     req = GenerationRequest(
         topic="pneumonia",
+        complexity=ComplexityProfile.COMPLEX,
         modalities=[
             Modality.STRUCTURED_EHR,
             Modality.CLINICAL_TEXT,
@@ -51,6 +58,15 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     assert documents_by_type["ed_note"].extracted_facts["topic"] == "pneumonia"
     assert "WBC" in documents_by_type["ed_note"].extracted_facts["lab_names"]
     assert "Ceftriaxone" in documents_by_type["ed_note"].extracted_facts["medications"]
+    assert "specialty consultation" in documents_by_type["ed_note"].extracted_facts[
+        "procedures"
+    ]
+    assert documents_by_type["ed_note"].extracted_facts["procedure_details"][0] == {
+        "encounter_id": record.encounters[0].encounter_id,
+        "system": "synthetic",
+        "code": "specialty_consultation",
+        "display": "specialty consultation",
+    }
     assert documents_by_type["ed_note"].extracted_facts["lab_values"][0]["name"] == "WBC"
     assert documents_by_type["ed_note"].extracted_facts["vital_values"][0]["name"] == "HR"
     assert any(
