@@ -619,6 +619,8 @@ def validate_medication_history(record: SyntheticRecord) -> list[ValidationIssue
         "sublingual",
         "topical",
     }
+    active_medication_names: dict[str, int] = {}
+    inactive_statuses = {"completed", "entered-in-error", "stopped"}
     for medication in record.medication_history:
         if not medication.name.strip():
             issues.append(
@@ -630,6 +632,7 @@ def validate_medication_history(record: SyntheticRecord) -> list[ValidationIssue
                 )
             )
         normalized_status = medication.status.lower()
+        normalized_name = _normalize_name(medication.name)
         if normalized_status not in valid_statuses:
             issues.append(
                 ValidationIssue(
@@ -648,6 +651,25 @@ def validate_medication_history(record: SyntheticRecord) -> list[ValidationIssue
                     message=f"Medication {medication.name or '<empty>'} has an unsupported route.",
                 )
             )
+        if normalized_name and normalized_status not in inactive_statuses:
+            active_medication_names[normalized_name] = (
+                active_medication_names.get(normalized_name, 0) + 1
+            )
+    duplicates = [
+        name for name, count in active_medication_names.items() if count > 1
+    ]
+    if duplicates:
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                modality=Modality.STRUCTURED_EHR,
+                field="medication_history.duplicate_active",
+                message=(
+                    "Duplicate active medication statements present for: "
+                    f"{', '.join(sorted(duplicates))}."
+                ),
+            )
+        )
     return issues
 
 
