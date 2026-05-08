@@ -384,8 +384,10 @@ def export_rl_record(record: SyntheticRecord) -> dict[str, Any]:
 def export_fhir_record(record: SyntheticRecord) -> dict[str, Any]:
     """Export one synthetic record as a FHIR collection Bundle."""
     entries: list[dict[str, Any]] = [_entry(_patient_resource(record))]
+    condition_refs = _condition_references(record)
+    entries.extend(_entry(condition["resource"]) for condition in condition_refs.values())
     entries.extend(
-        _entry(_encounter_resource(record, encounter))
+        _entry(_encounter_resource(record, encounter, condition_refs))
         for encounter in record.encounters
     )
     entries.extend(_entry(_lab_observation_resource(record, lab)) for lab in record.labs)
@@ -639,7 +641,64 @@ def _patient_resource(record: SyntheticRecord) -> dict[str, Any]:
     }
 
 
-def _encounter_resource(record: SyntheticRecord, encounter) -> dict[str, Any]:
+def _condition_references(record: SyntheticRecord) -> dict[str, dict[str, Any]]:
+    condition_refs: dict[str, dict[str, Any]] = {}
+    for encounter in record.encounters:
+        for diagnosis in encounter.diagnoses:
+            key = _condition_key(diagnosis)
+            if key in condition_refs:
+                continue
+            condition_id = f"{record.record_id}-condition-{_slug(key)}"
+            condition_refs[key] = {
+                "id": condition_id,
+                "resource": _condition_resource(record, diagnosis, condition_id),
+            }
+    return condition_refs
+
+
+def _condition_key(diagnosis) -> str:
+    return f"{diagnosis.system}:{diagnosis.code}:{diagnosis.display}"
+
+
+def _condition_resource(
+    record: SyntheticRecord,
+    diagnosis,
+    condition_id: str,
+) -> dict[str, Any]:
+    return {
+        "resourceType": "Condition",
+        "id": condition_id,
+        "clinicalStatus": {
+            "coding": [
+                {
+                    "system": (
+                        "http://terminology.hl7.org/CodeSystem/"
+                        "condition-clinical"
+                    ),
+                    "code": "active",
+                    "display": "Active",
+                }
+            ]
+        },
+        "code": {
+            "coding": [
+                {
+                    "system": diagnosis.system,
+                    "code": diagnosis.code,
+                    "display": diagnosis.display,
+                }
+            ],
+            "text": diagnosis.display,
+        },
+        "subject": _patient_reference(record),
+    }
+
+
+def _encounter_resource(
+    record: SyntheticRecord,
+    encounter,
+    condition_refs: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
     resource: dict[str, Any] = {
         "resourceType": "Encounter",
         "id": encounter.encounter_id,
@@ -657,7 +716,14 @@ def _encounter_resource(record: SyntheticRecord, encounter) -> dict[str, Any]:
         resource["period"]["end"] = encounter.end
     if encounter.diagnoses:
         resource["diagnosis"] = [
-            {"condition": {"display": diagnosis.display}}
+            {
+                "condition": {
+                    "reference": (
+                        f"Condition/{condition_refs[_condition_key(diagnosis)]['id']}"
+                    ),
+                    "display": diagnosis.display,
+                }
+            }
             for diagnosis in encounter.diagnoses
         ]
     return resource
