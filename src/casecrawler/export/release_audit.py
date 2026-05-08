@@ -8,7 +8,8 @@ from casecrawler.models.evaluation import DatasetQualityReport
 OBJECTIVE_SUMMARY = (
     "Generate multimodal synthetic healthcare training data with labs, vitals, "
     "medication history, nursing notes, physician notes, radiology reports, "
-    "radiology images, validation references, and fine-tuning-ready exports."
+    "radiology images, allergy/intolerance safety facts, validation references, "
+    "and fine-tuning-ready exports."
 )
 
 OBJECTIVE_COVERAGE_KEYS = frozenset(
@@ -19,6 +20,7 @@ OBJECTIVE_COVERAGE_KEYS = frozenset(
         "labs",
         "vitals",
         "medication_history",
+        "allergy_intolerances",
         "messy_clinical_text",
         "physician_notes",
         "nursing_notes",
@@ -90,6 +92,12 @@ def build_objective_coverage_audit(
                 "medication_routes": quality_report.medication_route_counts,
                 "medication_doses": quality_report.medication_dose_counts,
             },
+        ),
+        "allergy_intolerances": _criterion(
+            "Allergy/intolerance safety facts are present.",
+            coverage.get("allergy_intolerances") is True,
+            ["quality_report.json"],
+            {"allergy_count": quality_report.artifact_counts.get("allergies", 0)},
         ),
         "messy_clinical_text": _criterion(
             "Clinical documents include messy/noisy text variants for robust training.",

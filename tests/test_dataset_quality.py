@@ -3,6 +3,7 @@ import zlib
 
 from casecrawler.export.release_audit import build_objective_coverage_audit
 from casecrawler.models.synthetic import (
+    AllergyIntolerance,
     ClinicalDocument,
     Code,
     ComplexityProfile,
@@ -113,6 +114,16 @@ def _record(record_id: str, *, approved: bool = True, issues=None) -> SyntheticR
         ],
         medication_history=[
             MedicationStatement(name="Ceftriaxone", route="IV", status="active")
+        ],
+        allergies=[
+            AllergyIntolerance(
+                substance="Penicillin",
+                code="7980",
+                system="RxNorm",
+                reaction="hives",
+                severity="moderate",
+                recorded_at="2026-01-01",
+            )
         ],
         provenance=Provenance(generator="unit-test", created_at="2026-01-01T00:00:00"),
         validation=ValidationReport(
@@ -434,7 +445,17 @@ def test_quality_report_marks_multimodal_release_ready_with_core_artifacts(tmp_p
     assert report.core_artifact_coverage["lab_reports"] is True
     assert report.core_artifact_coverage["vital_signs_flowsheets"] is True
     assert report.core_artifact_coverage["medication_administration_records"] is True
+    assert report.core_artifact_coverage["allergy_intolerances"] is True
     assert report.core_artifact_coverage["discharge_summaries"] is True
+
+
+def test_quality_report_tracks_missing_allergy_intolerance_release_coverage():
+    record = _record("rec-1").model_copy(update={"allergies": []})
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.core_artifact_coverage["allergy_intolerances"] is False
+    assert "allergy_intolerances" in report.multimodal_release_missing
 
 
 def test_quality_report_blocks_release_when_task_reference_coverage_is_missing(

@@ -37,7 +37,7 @@ docker compose up
 
 The synthetic dataset path produces `SyntheticRecord` objects with:
 
-- Structured patient demographics, encounters, diagnoses, and medication history
+- Structured patient demographics, encounters, diagnoses, medication history, and allergy/intolerance safety facts
 - Diagnoses and procedure/code slots
 - Labs with units, reference ranges, flags, and timestamps
 - Vitals with timestamps

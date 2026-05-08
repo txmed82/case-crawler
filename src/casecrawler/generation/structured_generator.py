@@ -719,7 +719,6 @@ def _med(
 
 
 _DEFAULT_ALLERGY_CYCLE = [
-    {"substance": "No known drug allergies", "status": "inactive"},
     {
         "substance": "Sulfonamide antibiotics",
         "code": "91939003",
@@ -734,6 +733,7 @@ _DEFAULT_ALLERGY_CYCLE = [
         "reaction": "nausea",
         "severity": "mild",
     },
+    {"substance": "No known drug allergies", "status": "inactive"},
 ]
 
 

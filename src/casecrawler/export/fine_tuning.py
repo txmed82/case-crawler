@@ -29,6 +29,7 @@ REQUIRED_RELEASE_COVERAGE_KEYS = frozenset(
         "labs",
         "medication_administration_records",
         "medication_history",
+        "allergy_intolerances",
         "messy_clinical_text",
         "modality_alignment_scores",
         "no_blocking_quality_issues",
