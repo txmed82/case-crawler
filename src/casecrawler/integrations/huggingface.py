@@ -13,6 +13,7 @@ from casecrawler.models.synthetic import (
     ClinicalDocument,
     Code,
     ComplexityProfile,
+    Encounter,
     ImagingAsset,
     LabObservation,
     MedicationStatement,
@@ -309,7 +310,10 @@ def reference_row_to_record(
     patient_sex = _extract_sex(note)
     record_id = f"hf-{uuid5(NAMESPACE_URL, stable_seed)}"
     patient_id = f"pat-{uuid5(NAMESPACE_URL, stable_seed + ':patient')}"
-    labs, vitals, medications = _fhir_artifacts(answer)
+    labs, vitals, medications, diagnoses, procedures, diagnostic_documents = _fhir_artifacts(
+        answer,
+        stable_seed=stable_seed,
+    )
     imaging = [
         *_radiology_artifacts(row, spec, stable_seed, report_text=note),
         *_image_reference_artifacts(
@@ -324,6 +328,8 @@ def reference_row_to_record(
         labs=labs,
         vitals=vitals,
         medications=medications,
+        diagnoses=diagnoses,
+        procedures=procedures,
         imaging=imaging,
     )
     document = ClinicalDocument(
@@ -342,9 +348,23 @@ def reference_row_to_record(
             labs=labs,
             vitals=vitals,
             medications=medications,
+            diagnoses=diagnoses,
+            procedures=procedures,
             imaging=imaging,
         ),
     )
+    encounters = []
+    if diagnoses or procedures:
+        encounters = [
+            Encounter(
+                encounter_id=f"enc-{uuid5(NAMESPACE_URL, stable_seed + ':encounter')}",
+                start="2026-01-01T00:00:00",
+                setting="reference",
+                reason=task or "synthetic clinical note",
+                diagnoses=diagnoses,
+                procedures=procedures,
+            )
+        ]
     return SyntheticRecord(
         record_id=record_id,
         dataset_id=dataset_id,
@@ -357,11 +377,11 @@ def reference_row_to_record(
             sex=patient_sex,
             demographics={"source_patient_id": patient_source_id},
         ),
-        encounters=[],
+        encounters=encounters,
         labs=labs,
         vitals=vitals,
         medication_history=medications,
-        documents=[document],
+        documents=[document, *diagnostic_documents],
         imaging=imaging,
         provenance=Provenance(
             generator="huggingface-reference-import",
@@ -420,10 +440,12 @@ def _reference_modalities(
     labs: list[LabObservation],
     vitals: list[VitalObservation],
     medications: list[MedicationStatement],
+    diagnoses: list[Code],
+    procedures: list[Code],
     imaging: list[ImagingAsset],
 ) -> list[Modality]:
     modalities = [Modality.CLINICAL_TEXT]
-    if labs or vitals or medications:
+    if labs or vitals or medications or diagnoses or procedures:
         modalities.insert(0, Modality.STRUCTURED_EHR)
     if labs:
         modalities.append(Modality.LABS)
@@ -472,6 +494,8 @@ def _reference_extracted_facts(
     labs: list[LabObservation],
     vitals: list[VitalObservation],
     medications: list[MedicationStatement],
+    diagnoses: list[Code],
+    procedures: list[Code],
     imaging: list[ImagingAsset],
 ) -> dict:
     facts = {
@@ -518,6 +542,25 @@ def _reference_extracted_facts(
             }
             for medication in medications
         ]
+    if diagnoses:
+        facts["diagnoses"] = [
+            {
+                "system": diagnosis.system,
+                "code": diagnosis.code,
+                "display": diagnosis.display,
+            }
+            for diagnosis in diagnoses
+        ]
+    if procedures:
+        facts["procedures"] = [procedure.display for procedure in procedures]
+        facts["procedure_details"] = [
+            {
+                "system": procedure.system,
+                "code": procedure.code,
+                "display": procedure.display,
+            }
+            for procedure in procedures
+        ]
     if imaging:
         facts["imaging_asset_ids"] = [asset.image_id for asset in imaging]
         facts["imaging_modalities"] = [asset.modality for asset in imaging]
@@ -533,17 +576,29 @@ def _reference_extracted_facts(
 
 def _fhir_artifacts(
     fhir_text: str,
-) -> tuple[list[LabObservation], list[VitalObservation], list[MedicationStatement]]:
+    *,
+    stable_seed: str,
+) -> tuple[
+    list[LabObservation],
+    list[VitalObservation],
+    list[MedicationStatement],
+    list[Code],
+    list[Code],
+    list[ClinicalDocument],
+]:
     if not fhir_text:
-        return [], [], []
+        return [], [], [], [], [], []
     try:
         parsed = json.loads(fhir_text)
     except json.JSONDecodeError:
-        return [], [], []
+        return [], [], [], [], [], []
     resources = _fhir_resources(parsed)
     labs: list[LabObservation] = []
     vitals: list[VitalObservation] = []
     medications: list[MedicationStatement] = []
+    diagnoses: list[Code] = []
+    procedures: list[Code] = []
+    diagnostic_documents: list[ClinicalDocument] = []
     for resource in resources:
         resource_type = resource.get("resourceType")
         if resource_type == "Observation" and isinstance(resource.get("valueQuantity"), dict):
@@ -559,7 +614,19 @@ def _fhir_artifacts(
             medication = _fhir_medication_statement(resource)
             if medication is not None:
                 medications.append(medication)
-    return labs, vitals, medications
+        elif resource_type == "Condition":
+            diagnosis = _fhir_codeable_concept_to_code(resource.get("code"), fallback="Condition")
+            if diagnosis is not None:
+                diagnoses.append(diagnosis)
+        elif resource_type == "Procedure":
+            procedure = _fhir_codeable_concept_to_code(resource.get("code"), fallback="Procedure")
+            if procedure is not None:
+                procedures.append(procedure)
+        elif resource_type == "DiagnosticReport":
+            document = _fhir_diagnostic_report_document(resource, stable_seed=stable_seed)
+            if document is not None:
+                diagnostic_documents.append(document)
+    return labs, vitals, medications, diagnoses, procedures, diagnostic_documents
 
 
 def _fhir_resources(parsed) -> list[dict]:
@@ -633,6 +700,75 @@ def _fhir_medication_statement(resource: dict) -> MedicationStatement | None:
         dose=_coerce_text(dosage.get("text")) or None,
         route=route or None,
         status=_coerce_text(resource.get("status")) or "unknown",
+    )
+
+
+def _fhir_diagnostic_report_document(
+    resource: dict,
+    *,
+    stable_seed: str,
+) -> ClinicalDocument | None:
+    text = _coerce_text(resource.get("conclusion"))
+    if not text:
+        presented_forms = resource.get("presentedForm")
+        first_presented_form = (
+            presented_forms[0]
+            if (
+                isinstance(presented_forms, list)
+                and presented_forms
+                and isinstance(presented_forms[0], dict)
+            )
+            else {}
+        )
+        text = _coerce_text(first_presented_form.get("data"))
+    code = _fhir_codeable_concept_to_code(resource.get("code"), fallback="Diagnostic report")
+    if not text and code is None:
+        return None
+    report_id = _coerce_text(resource.get("id")) or _stable_note_hash(json.dumps(resource, sort_keys=True))
+    timestamp = _coerce_text(resource.get("effectiveDateTime")) or "2026-01-01T00:00:00"
+    clean_text = text or f"Diagnostic report: {code.display}"
+    extracted_facts = {
+        "source_fhir_resource_type": "DiagnosticReport",
+        "source_fhir_resource_id": report_id,
+    }
+    if code is not None:
+        extracted_facts["diagnostic_report_code"] = {
+            "system": code.system,
+            "code": code.code,
+            "display": code.display,
+        }
+    return ClinicalDocument(
+        document_id=f"doc-{uuid5(NAMESPACE_URL, stable_seed + ':diagnostic-report:' + report_id)}",
+        note_type="diagnostic_report",
+        author_role="synthetic_reference",
+        timestamp=timestamp,
+        clean_text=clean_text,
+        messy_text=None,
+        extracted_facts=extracted_facts,
+    )
+
+
+def _fhir_codeable_concept_to_code(value, *, fallback: str) -> Code | None:
+    if not isinstance(value, dict):
+        return None
+    coding = next(
+        (item for item in value.get("coding", []) if isinstance(item, dict)),
+        {},
+    )
+    system = _coerce_text(coding.get("system")) or "fhir"
+    code = _coerce_text(coding.get("code"))
+    display = (
+        _coerce_text(value.get("text"))
+        or _coerce_text(coding.get("display"))
+        or code
+        or fallback
+    )
+    if not display:
+        return None
+    return Code(
+        system=system,
+        code=code or re.sub(r"\W+", "_", display.lower()).strip("_"),
+        display=display,
     )
 
 
