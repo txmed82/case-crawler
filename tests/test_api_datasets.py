@@ -375,6 +375,7 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert "clinical_text" in body["modalities"]
     assert "sft_jsonl" in body["export_formats"]
     assert "topic_mix" in body["cohort_constraints"]
+    assert "topic_mix_weights" in body["cohort_constraints"]
     assert "cxr_pneumonia_dreambooth" in {
         profile["name"] for profile in body["imaging_model_profiles"]
     }

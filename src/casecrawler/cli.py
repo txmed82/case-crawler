@@ -405,7 +405,11 @@ def serve() -> None:
 @click.option("--age-min", default=None, type=int, help="Minimum generated patient age")
 @click.option("--age-max", default=None, type=int, help="Maximum generated patient age")
 @click.option("--sexes", default=None, help="Comma-separated sex cycle")
-@click.option("--topic-mix", default=None, help="Comma-separated topic cycle for mixed cohorts")
+@click.option(
+    "--topic-mix",
+    default=None,
+    help="Comma-separated topic cycle for mixed cohorts; use topic:weight for weighted mixes",
+)
 @click.option("--base-time", default=None, help="ISO-8601 base timestamp")
 @click.option(
     "--clinical-text-backend",

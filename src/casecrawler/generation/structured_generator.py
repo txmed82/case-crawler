@@ -207,6 +207,7 @@ def _metadata_cohort_constraints(cohort_constraints: dict) -> dict:
         "sex_cycle",
         "base_time",
         "topic_mix",
+        "topic_mix_weights",
     ]
     metadata = {
         key: cohort_constraints[key]
