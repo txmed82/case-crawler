@@ -294,6 +294,10 @@ export default function GeneratePage() {
 
   const handleGenerateReleasePackage = async () => {
     if (!topic.trim() || isGeneratingRelease) return;
+    if (modalities.length === 0) {
+      setReleaseError("Select at least one modality.");
+      return;
+    }
     if (!Number.isInteger(count) || count < 1) {
       setReleaseError("Record count must be a positive integer.");
       return;
@@ -334,6 +338,8 @@ export default function GeneratePage() {
         topic: topic.trim(),
         count,
         recipe: recipe || "full_multimodal_acute_care",
+        complexity,
+        modalities,
         export_format: "multimodal_jsonl",
         seed: "casecrawler",
         fixture_limit: parsedFixtureLimit,
@@ -999,6 +1005,7 @@ export default function GeneratePage() {
               onClick={handleGenerateReleasePackage}
               disabled={
                 !topic.trim() ||
+                modalities.length === 0 ||
                 !Number.isInteger(count) ||
                 count < 1 ||
                 isGeneratingRelease

@@ -86,6 +86,8 @@ class ReleasePackageRequest(BaseModel):
     topic: str = Field(min_length=1)
     count: int = Field(default=1, ge=1)
     recipe: str = "full_multimodal_acute_care"
+    complexity: ComplexityProfile | None = None
+    modalities: list[Modality] | None = None
     export_format: ExportFormat = ExportFormat.MULTIMODAL_JSONL
     train_ratio: float = Field(default=0.8, ge=0.0)
     validation_ratio: float = Field(default=0.1, ge=0.0)
@@ -165,6 +167,8 @@ async def generate_release_package(req: ReleasePackageRequest):
             topic=req.topic,
             count=req.count,
             recipe=req.recipe,
+            complexity=req.complexity or GenerationRequest(topic=req.topic).complexity,
+            modalities=req.modalities or GenerationRequest(topic=req.topic).modalities,
             cohort_constraints=req.cohort_constraints,
             export_formats=[req.export_format],
             clinical_text_backend=req.clinical_text_backend,
