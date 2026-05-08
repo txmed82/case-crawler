@@ -89,10 +89,11 @@ Optional backends are intentionally lazy:
 
 - `casecrawler[hf]` for Hugging Face helpers
 - `casecrawler[imaging]` for diffusers/image validation backends
-- Imaging model profiles include chest X-ray focused adapters and `medisyn` (`hiesingerlab/MediSyn`) for broader text-guided medical image synthesis experiments
+- Imaging model profiles include chest X-ray focused adapters, CheXGenBench Sana (`raman07/CheXGenBench-Models-Sana-e20`) for chest-radiograph experiments, and `medisyn` (`hiesingerlab/MediSyn`) for broader text-guided medical image synthesis
 - `BiomedCLIPImageValidator` scores generated image/report alignment when `casecrawler[imaging]` dependencies are installed
 - `MedGemmaImageTextValidator` can use gated MedGemma multimodal models through `casecrawler[hf]` plus imaging dependencies for report/image consistency checks
 - `casecrawler[parquet]` for parquet exports
+- Time-series model profiles include TimeDiff, RawMed, and MIRA (`MIRA-Mode/MIRA`) wrappers for external generation, forecasting, or validation commands
 - Existing OpenAI, Anthropic, OpenRouter, and Ollama providers remain available for model-backed generation
 - `synthetic.clinical_text_backend: llm` routes clinical document drafting through the configured LLM provider while the default deterministic backend remains no-key
 

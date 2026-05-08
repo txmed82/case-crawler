@@ -11,12 +11,19 @@ def test_time_series_model_catalog_lists_external_references():
 
     assert "timediff" in profiles
     assert "rawmed" in profiles
+    assert "mira" in profiles
     assert profiles["timediff"].adapter_type == "external_command"
     assert profiles["timediff"].model_id == "MuhangTian/TimeDiff"
     assert profiles["timediff"].license == "mit"
     assert profiles["timediff"].gated is False
     assert profiles["timediff"].use_policy == "wrap_external_sampler_validate_outputs"
     assert profiles["rawmed"].use_policy == "research_reference_validate_outputs"
+    assert profiles["mira"].adapter_type == "external_command"
+    assert profiles["mira"].model_id == "MIRA-Mode/MIRA"
+    assert profiles["mira"].license == "mit"
+    assert profiles["mira"].use_policy == (
+        "forecasting_backbone_validate_synthetic_rollouts"
+    )
 
 
 def test_resolve_time_series_model_profile_rejects_unknown_profiles():

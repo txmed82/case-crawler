@@ -1086,6 +1086,16 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert "cxr_pneumonia_dreambooth" in {
         profile["name"] for profile in body["imaging_model_profiles"]
     }
+    chexgenbench = next(
+        profile
+        for profile in body["imaging_model_profiles"]
+        if profile["name"] == "chexgenbench_sana_e20"
+    )
+    assert chexgenbench["model_id"] == "raman07/CheXGenBench-Models-Sana-e20"
+    assert chexgenbench["license"] is None
+    assert chexgenbench["use_policy"] == (
+        "model_card_missing_review_terms_and_validate_privacy_utility"
+    )
     medisyn = next(
         profile
         for profile in body["imaging_model_profiles"]
@@ -1114,6 +1124,11 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert (
         time_series_profiles["timediff"]["use_policy"]
         == "wrap_external_sampler_validate_outputs"
+    )
+    assert time_series_profiles["mira"]["model_id"] == "MIRA-Mode/MIRA"
+    assert time_series_profiles["mira"]["license"] == "mit"
+    assert time_series_profiles["mira"]["use_policy"] == (
+        "forecasting_backbone_validate_synthetic_rollouts"
     )
     assert "sepsis" in {profile["key"] for profile in body["clinical_profiles"]}
     sepsis = next(profile for profile in body["clinical_profiles"] if profile["key"] == "sepsis")

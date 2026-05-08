@@ -11,6 +11,7 @@ def test_imaging_model_catalog_lists_medical_profiles():
 
     assert "prompt2medimage" in profiles
     assert "medisyn" in profiles
+    assert "chexgenbench_sana_e20" in profiles
     assert "stable_diffusion_chest_xray" in profiles
     assert "cxr_pneumonia_dreambooth" in profiles
     assert profiles["medisyn"].model_id == "hiesingerlab/MediSyn"
@@ -21,6 +22,15 @@ def test_imaging_model_catalog_lists_medical_profiles():
     assert profiles["cxr_pneumonia_dreambooth"].modality == "XR"
     assert profiles["cxr_pneumonia_dreambooth"].is_compatible("XR", "chest") is True
     assert profiles["cxr_pneumonia_dreambooth"].is_compatible("CT", "abdomen") is False
+    assert (
+        profiles["chexgenbench_sana_e20"].model_id
+        == "raman07/CheXGenBench-Models-Sana-e20"
+    )
+    assert profiles["chexgenbench_sana_e20"].license is None
+    assert profiles["chexgenbench_sana_e20"].use_policy == (
+        "model_card_missing_review_terms_and_validate_privacy_utility"
+    )
+    assert profiles["chexgenbench_sana_e20"].is_compatible("XR", "chest") is True
     assert profiles["prompt2medimage"].is_compatible("CT", "abdomen") is True
     assert profiles["roentgen_v2_gated"].license == "restricted"
     assert profiles["roentgen_v2_gated"].gated is True
