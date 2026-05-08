@@ -126,9 +126,19 @@ def test_dataset_cli_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert manifest["splits"]["train"]["record_count"] == 1
     assert manifest["splits"]["validation"]["record_count"] == 1
     assert manifest["splits"]["test"]["record_count"] == 1
+    assert set(manifest["audit_artifacts"]) == {
+        "dataset_card.md",
+        "model_card.md",
+        "quality_report.json",
+    }
     assert (tmp_path / "split-package" / "train.jsonl").exists()
+    assert (tmp_path / "split-package" / "dataset_card.md").exists()
+    assert json.loads((tmp_path / "split-package" / "quality_report.json").read_text())[
+        "export_ready"
+    ] is True
     assert exports[0].metadata["split_package"] is True
     assert exports[0].metadata["seed"] == "unit-test"
+    assert "quality_report.json" in exports[0].metadata["audit_artifacts"]
 
 
 def test_dataset_cli_blocks_export_until_required_human_review(tmp_path, monkeypatch):

@@ -1005,6 +1005,7 @@ def export_dataset_splits(
     allow_blocked: bool,
 ) -> None:
     """Export deterministic train/validation/test JSONL files and a manifest."""
+    from casecrawler.export.cards import build_dataset_card, build_model_card
     from casecrawler.export.fine_tuning import export_jsonl_split_package
     from casecrawler.storage.dataset_store import DatasetStore
     from casecrawler.validation.quality import build_dataset_quality_report
@@ -1013,18 +1014,19 @@ def export_dataset_splits(
     if not store.dataset_exists(dataset_id):
         raise click.ClickException(f"Dataset {dataset_id} not found.")
     records = list(store.iter_records(dataset_id=dataset_id))
+    report = build_dataset_quality_report(
+        dataset_id,
+        records,
+        effective_approved=store.effective_approved,
+    )
     if not allow_blocked:
-        report = build_dataset_quality_report(
-            dataset_id,
-            records,
-            effective_approved=store.effective_approved,
-        )
         if not report.export_ready:
             raise click.ClickException(
                 "Dataset is not ready for split fine-tuning export. "
                 f"Blockers: {report.issue_counts_by_field}. "
                 "Use --allow-blocked to export anyway."
             )
+    manifest_snapshot = store.get_manifest(dataset_id)
     try:
         manifest = export_jsonl_split_package(
             records,
@@ -1035,6 +1037,11 @@ def export_dataset_splits(
             validation_ratio=validation_ratio,
             test_ratio=test_ratio,
             seed=seed,
+            audit_artifacts={
+                "quality_report.json": report.model_dump(mode="json"),
+                "dataset_card.md": build_dataset_card(manifest_snapshot, records),
+                "model_card.md": build_model_card(manifest_snapshot, records),
+            },
         )
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
@@ -1047,6 +1054,7 @@ def export_dataset_splits(
             "split_package": True,
             "seed": manifest["seed"],
             "ratios": manifest["ratios"],
+            "audit_artifacts": manifest["audit_artifacts"],
             "splits": {
                 name: {
                     "file_path": data["file_path"],
