@@ -75,6 +75,28 @@ def test_export_sft_record_includes_structured_context_without_documents():
     assert "img-1" in user_message
 
 
+def test_export_sft_extract_record_targets_full_structured_context():
+    record = _multimodal_record()
+
+    exported = export_sft_record(record, task="extract")
+    assistant_payload = json.loads(exported["messages"][2]["content"])
+
+    assert assistant_payload["record_id"] == "rec-1"
+    assert assistant_payload["patient"]["age"] == 64
+    assert assistant_payload["diagnoses"][0]["display"] == "Sepsis"
+    assert assistant_payload["procedures"][0]["display"] == (
+        "Central venous catheter placement"
+    )
+    assert assistant_payload["labs"][0]["name"] == "Lactate"
+    assert assistant_payload["vitals"][0]["name"] == "Heart rate"
+    assert assistant_payload["medication_history"][0]["name"] == "Ceftriaxone"
+    assert assistant_payload["time_series"][0]["name"] == "heart_rate"
+    assert assistant_payload["documents"][0]["document_id"] == "doc-1"
+    assert assistant_payload["imaging"][0]["image_id"] == "img-1"
+    assert assistant_payload["provenance"]["generator"] == "unit-test"
+    assert assistant_payload["synthetic"] is True
+
+
 def test_export_note_fact_sft_records_creates_document_level_examples():
     record = _multimodal_record()
 

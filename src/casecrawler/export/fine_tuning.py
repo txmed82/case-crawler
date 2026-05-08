@@ -21,13 +21,15 @@ def export_sft_record(record: SyntheticRecord, task: str = "summarize") -> dict[
         )
     elif task == "extract":
         user = (
-            "Extract diagnoses, abnormal labs, and vital sign abnormalities from "
-            f"this synthetic record:\n\n{record_text}"
+            "Extract the complete structured synthetic clinical record, including "
+            "patient, encounters, diagnoses, procedures, abnormal labs, vital sign "
+            "abnormalities, medications, time series, documents, imaging, and "
+            f"provenance:\n\n{record_text}"
         )
         assistant = {
-            "topic": record.topic,
-            "labs": [lab.model_dump() for lab in record.labs],
-            "vitals": [vital.model_dump() for vital in record.vitals],
+            **_clinical_context(record),
+            "provenance": record.provenance.model_dump(),
+            "synthetic": True,
         }
     else:
         raise ValueError(f"Unknown SFT task: {task}")
