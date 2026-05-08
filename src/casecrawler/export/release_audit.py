@@ -11,6 +11,24 @@ OBJECTIVE_SUMMARY = (
     "radiology images, validation references, and fine-tuning-ready exports."
 )
 
+OBJECTIVE_COVERAGE_KEYS = frozenset(
+    {
+        "records",
+        "structured_ehr",
+        "labs",
+        "vitals",
+        "medication_history",
+        "physician_notes",
+        "nursing_notes",
+        "time_series",
+        "radiology_reports",
+        "radiology_images",
+        "validation_references",
+        "fine_tuning_exports",
+        "release_audit_artifacts",
+    }
+)
+
 
 def build_objective_coverage_audit(
     *,
