@@ -701,6 +701,89 @@ def test_dataset_benchmark_flags_missing_note_fact_targets():
     assert any("extracted_fact_key_overlap" in warning for warning in report.warnings)
 
 
+def test_dataset_benchmark_compares_phi_and_diagnosis_code_reference_signals():
+    generated = [_record("rec-1", "ds-gen")]
+    reference = [
+        _record("ref-1", "ds-ref").model_copy(
+            update={
+                "encounters": [
+                    Encounter(
+                        encounter_id="enc-ref",
+                        start="2026-01-01T00:00:00",
+                        setting="reference",
+                        reason="clinical_deidentification_icd_coding",
+                        diagnoses=[
+                            Code(
+                                system="ICD-9-CM",
+                                code="428.0",
+                                display="ICD-9-CM 428.0",
+                            ),
+                            Code(
+                                system="ICD-9-CM",
+                                code="401.9",
+                                display="ICD-9-CM 401.9",
+                            ),
+                        ],
+                    )
+                ],
+                "documents": [
+                    ClinicalDocument(
+                        document_id="doc-ref",
+                        note_type="discharge_summary",
+                        author_role="synthetic_reference",
+                        timestamp="2026-01-01T00:00:00",
+                        clean_text="Synthetic Technetium-I reference note.",
+                        extracted_facts={
+                            "phi_annotations": [
+                                {
+                                    "entity_type": "NAME",
+                                    "text": "Smith",
+                                    "start": 1,
+                                    "end": 6,
+                                },
+                                {
+                                    "entity_type": "AGE",
+                                    "text": "72-year-old",
+                                    "start": 30,
+                                    "end": 41,
+                                },
+                            ],
+                            "diagnoses": [
+                                {
+                                    "system": "ICD-9-CM",
+                                    "code": "428.0",
+                                    "display": "ICD-9-CM 428.0",
+                                }
+                            ],
+                        },
+                    )
+                ],
+            }
+        )
+    ]
+
+    report = DatasetBenchmark(min_metric_score=0.5).compare(generated, reference)
+    phi_overlap = next(
+        metric for metric in report.metrics if metric.name == "phi_entity_overlap"
+    )
+    phi_distribution = next(
+        metric for metric in report.metrics if metric.name == "phi_entity_distribution"
+    )
+    diagnosis_system_overlap = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "diagnosis_code_system_overlap"
+    )
+
+    assert report.reference_profile.phi_entity_counts == {"AGE": 1, "NAME": 1}
+    assert report.reference_profile.diagnosis_code_system_counts == {"ICD-9-CM": 2}
+    assert phi_overlap.score == 0.0
+    assert phi_distribution.reference_value == 2
+    assert diagnosis_system_overlap.details["reference_only"] == ["ICD-9-CM"]
+    assert "phi_entity_overlap" in report.failing_metrics
+    assert "diagnosis_code_system_overlap" in report.failing_metrics
+
+
 def test_profile_records_rejects_mixed_dataset_records():
     records = [_record("rec-1", "ds-one"), _record("rec-2", "ds-two")]
 
