@@ -224,6 +224,43 @@ def test_validator_rejects_implausible_respiratory_rate_and_blood_pressure():
     assert any(issue.field == "vitals.DBP" for issue in report.issues)
 
 
+def test_validator_rejects_incoherent_blood_pressure_pairs():
+    bad = _record(
+        vitals=[
+            VitalObservation(
+                name="SBP",
+                value=118,
+                unit="mmHg",
+                effective_time="2026-05-06T08:00:00",
+            ),
+            VitalObservation(
+                name="DBP",
+                value=122,
+                unit="mmHg",
+                effective_time="2026-05-06T08:00:00",
+            ),
+            VitalObservation(
+                name="Systolic blood pressure",
+                value=230,
+                unit="mmHg",
+                effective_time="2026-05-06T09:00:00",
+            ),
+            VitalObservation(
+                name="Diastolic blood pressure",
+                value=50,
+                unit="mmHg",
+                effective_time="2026-05-06T09:00:00",
+            ),
+        ]
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "vitals.blood_pressure_pair" for issue in report.issues)
+    assert any(issue.field == "vitals.pulse_pressure" for issue in report.issues)
+
+
 def test_validator_rejects_invalid_medication_history_entries():
     bad = _record(
         medication_history=[

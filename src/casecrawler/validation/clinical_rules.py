@@ -529,6 +529,8 @@ def validate_observation_units(record: SyntheticRecord) -> list[ValidationIssue]
 
 def validate_vitals(record: SyntheticRecord) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
+    systolic_by_time: dict[str, float] = {}
+    diastolic_by_time: dict[str, float] = {}
     for vital in record.vitals:
         normalized_name = _normalize_name(vital.name)
         if normalized_name in {"spo2", "oxygen-saturation"} and not 0 <= vital.value <= 100:
@@ -571,26 +573,63 @@ def validate_vitals(record: SyntheticRecord) -> list[ValidationIssue]:
             "sbp",
             "systolic-bp",
             "systolic-blood-pressure",
-        } and not 40 <= vital.value <= 300:
-            issues.append(
-                ValidationIssue(
-                    severity="error",
-                    modality=Modality.VITALS,
-                    field="vitals.SBP",
-                    message="Systolic blood pressure is outside a plausible clinical range.",
+        }:
+            systolic_by_time[vital.effective_time] = float(vital.value)
+            if not 40 <= vital.value <= 300:
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.VITALS,
+                        field="vitals.SBP",
+                        message=(
+                            "Systolic blood pressure is outside a plausible clinical range."
+                        ),
+                    )
                 )
-            )
         if normalized_name in {
             "dbp",
             "diastolic-bp",
             "diastolic-blood-pressure",
-        } and not 20 <= vital.value <= 180:
+        }:
+            diastolic_by_time[vital.effective_time] = float(vital.value)
+            if not 20 <= vital.value <= 180:
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.VITALS,
+                        field="vitals.DBP",
+                        message=(
+                            "Diastolic blood pressure is outside a plausible clinical range."
+                        ),
+                    )
+                )
+    for effective_time, systolic in systolic_by_time.items():
+        diastolic = diastolic_by_time.get(effective_time)
+        if diastolic is None:
+            continue
+        pulse_pressure = systolic - diastolic
+        if pulse_pressure <= 0:
             issues.append(
                 ValidationIssue(
                     severity="error",
                     modality=Modality.VITALS,
-                    field="vitals.DBP",
-                    message="Diastolic blood pressure is outside a plausible clinical range.",
+                    field="vitals.blood_pressure_pair",
+                    message=(
+                        "Diastolic blood pressure must be lower than systolic "
+                        f"blood pressure at {effective_time}."
+                    ),
+                )
+            )
+        elif pulse_pressure < 10 or pulse_pressure > 160:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.VITALS,
+                    field="vitals.pulse_pressure",
+                    message=(
+                        f"Pulse pressure {pulse_pressure:g} mmHg is outside a "
+                        f"plausible range at {effective_time}."
+                    ),
                 )
             )
     return issues
