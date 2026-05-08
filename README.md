@@ -89,6 +89,7 @@ Optional backends are intentionally lazy:
 
 - `casecrawler[hf]` for Hugging Face helpers
 - `casecrawler[imaging]` for diffusers/image validation backends
+- Imaging model profiles include chest X-ray focused adapters and `medisyn` (`hiesingerlab/MediSyn`) for broader text-guided medical image synthesis experiments
 - `BiomedCLIPImageValidator` scores generated image/report alignment when `casecrawler[imaging]` dependencies are installed
 - `MedGemmaImageTextValidator` can use gated MedGemma multimodal models through `casecrawler[hf]` plus imaging dependencies for report/image consistency checks
 - `casecrawler[parquet]` for parquet exports
