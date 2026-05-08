@@ -1258,6 +1258,7 @@ def _verify_jsonl_split_package_dir(package_path: Path) -> dict[str, Any]:
     split_summaries = _verify_package_splits(package_path, manifest, issues)
     _verify_package_audit_artifacts(package_path, manifest, issues)
     quality_report = _split_package_quality_report_summary(package_path)
+    _verify_package_image_artifacts(manifest, quality_report, issues)
     return {
         "package_dir": str(package_path),
         "dataset_id": manifest.get("dataset_id"),
@@ -1268,6 +1269,85 @@ def _verify_jsonl_split_package_dir(package_path: Path) -> dict[str, Any]:
         "splits": split_summaries,
         "quality_report": quality_report,
     }
+
+
+def _verify_package_image_artifacts(
+    manifest: dict[str, Any],
+    quality_report: dict[str, Any] | None,
+    issues: list[dict[str, str]],
+) -> None:
+    image_artifacts = manifest.get("image_artifacts")
+    files = manifest.get("files")
+    release_ready = (
+        isinstance(quality_report, dict)
+        and quality_report.get("multimodal_release_ready") is True
+    )
+    coverage = (
+        quality_report.get("core_artifact_coverage")
+        if isinstance(quality_report, dict)
+        else None
+    )
+    release_requires_images = (
+        release_ready
+        and isinstance(coverage, dict)
+        and coverage.get("radiology_images") is True
+    )
+    if image_artifacts is None:
+        if release_requires_images:
+            issues.append(
+                {
+                    "field": "image_artifacts",
+                    "message": "Release-ready multimodal package has no image artifacts.",
+                }
+            )
+        return
+    if not isinstance(image_artifacts, dict):
+        issues.append(
+            {
+                "field": "image_artifacts",
+                "message": "Split package image_artifacts must be an object.",
+            }
+        )
+        return
+    if release_requires_images and not image_artifacts:
+        issues.append(
+            {
+                "field": "image_artifacts",
+                "message": "Release-ready multimodal package has no image artifacts.",
+            }
+        )
+    for key, artifact in sorted(image_artifacts.items()):
+        if not isinstance(key, str) or not isinstance(artifact, dict):
+            issues.append(
+                {
+                    "field": "image_artifacts",
+                    "message": "Each image artifact entry must be an object keyed by string.",
+                }
+            )
+            continue
+        package_path = artifact.get("package_path")
+        if not isinstance(package_path, str) or not _is_safe_package_path(package_path):
+            issues.append(
+                {
+                    "field": f"image_artifacts.{key}.package_path",
+                    "message": "Image artifact package_path must be a safe relative path.",
+                }
+            )
+            continue
+        if not package_path.startswith("images/"):
+            issues.append(
+                {
+                    "field": f"image_artifacts.{key}.package_path",
+                    "message": "Image artifact package_path must be under images/.",
+                }
+            )
+        if not isinstance(files, dict) or package_path not in files:
+            issues.append(
+                {
+                    "field": f"image_artifacts.{key}.package_path",
+                    "message": "Image artifact package_path is missing from manifest files.",
+                }
+            )
 
 
 def _split_package_quality_report_summary(package_path: Path) -> dict[str, Any] | None:
