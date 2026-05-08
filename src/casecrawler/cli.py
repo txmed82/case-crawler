@@ -866,7 +866,7 @@ def export_dataset(
     from casecrawler.storage.dataset_store import DatasetStore
     from casecrawler.validation.benchmark import DatasetBenchmark
     from casecrawler.validation.benchmark_selection import resolve_benchmark_gate
-    from casecrawler.validation.quality import build_dataset_quality_report
+    from casecrawler.validation.quality import build_dataset_quality_report, export_profile_blocker
 
     store = DatasetStore()
     if dataset_id and not store.dataset_exists(dataset_id):
@@ -885,6 +885,11 @@ def export_dataset(
                 "Dataset is not ready for fine-tuning export. "
                 f"Blockers: {report.issue_counts_by_field}. "
                 "Use --allow-blocked to export anyway."
+            )
+        profile_blocker = export_profile_blocker(report, export_format)
+        if profile_blocker:
+            raise click.ClickException(
+                f"{profile_blocker} Use --allow-blocked to export anyway."
             )
     try:
         benchmark_gate = (
@@ -1038,7 +1043,7 @@ def export_dataset_splits(
     from casecrawler.storage.dataset_store import DatasetStore
     from casecrawler.validation.benchmark import DatasetBenchmark
     from casecrawler.validation.benchmark_selection import resolve_benchmark_gate
-    from casecrawler.validation.quality import build_dataset_quality_report
+    from casecrawler.validation.quality import build_dataset_quality_report, export_profile_blocker
 
     store = DatasetStore()
     if not store.dataset_exists(dataset_id):
@@ -1055,6 +1060,11 @@ def export_dataset_splits(
                 "Dataset is not ready for split fine-tuning export. "
                 f"Blockers: {report.issue_counts_by_field}. "
                 "Use --allow-blocked to export anyway."
+            )
+        profile_blocker = export_profile_blocker(report, export_format)
+        if profile_blocker:
+            raise click.ClickException(
+                f"{profile_blocker} Use --allow-blocked to export anyway."
             )
     try:
         benchmark_gate = resolve_benchmark_gate(

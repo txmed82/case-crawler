@@ -161,6 +161,26 @@ def build_dataset_quality_report(
     )
 
 
+def export_profile_blocker(report: DatasetQualityReport, export_format: str) -> str | None:
+    readiness = report.export_profile_readiness.get(export_format)
+    if readiness is None:
+        return None
+    if readiness.get("ready") is True:
+        return None
+    missing = readiness.get("missing")
+    missing_items = (
+        ", ".join(str(item) for item in missing)
+        if isinstance(missing, list) and missing
+        else "profile requirements"
+    )
+    reason = readiness.get("reason")
+    reason_text = str(reason) if isinstance(reason, str) and reason else ""
+    return (
+        f"Export profile {export_format} is not ready. "
+        f"Missing: {missing_items}. {reason_text}"
+    ).strip()
+
+
 def _validation_approved(record: SyntheticRecord) -> bool | None:
     return None if record.validation is None else record.validation.approved
 
