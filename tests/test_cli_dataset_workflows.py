@@ -516,6 +516,44 @@ def test_dataset_cli_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
     ] == ["synthclinicalnotes"]
 
 
+def test_dataset_cli_seeds_recipe_reference_fixtures(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generated = runner.invoke(
+        cli,
+        ["generate-dataset", "sepsis", "--count", "1", "--recipe", "icu_timeseries_notes"],
+    )
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output).group(1)
+
+    seeded = runner.invoke(
+        cli,
+        [
+            "datasets",
+            "seed-reference-fixtures",
+            dataset_id,
+            "--dataset-id-prefix",
+            "fixture-ref",
+        ],
+    )
+    plan = runner.invoke(cli, ["datasets", "benchmark-plan", dataset_id])
+
+    assert seeded.exit_code == 0
+    body = json.loads(seeded.output)
+    assert body["unavailable"] == []
+    assert {item["reference_key"] for item in body["imported"]} == {
+        "synthea_fhir",
+        "synthclinicalnotes",
+        "augmented_clinical_notes",
+        "medsynth_dialogue_note",
+        "clinical_notes_to_fhir",
+        "technetium_i",
+    }
+    plan_body = json.loads(plan.output)
+    assert plan_body["ready"] is True
+    assert plan_body["missing_reference_keys"] == []
+
+
 def test_dataset_cli_runs_recipe_benchmark_suite(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

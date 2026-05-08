@@ -722,6 +722,35 @@ def datasets_benchmark_plan(dataset_id: str) -> None:
     click.echo(json.dumps(build_benchmark_plan_summary(store, dataset_id), indent=2))
 
 
+@datasets_group.command("seed-reference-fixtures")
+@click.argument("dataset_id")
+@click.option("--dataset-id-prefix", default=None, help="Prefix for created fixture dataset ids")
+@click.option("--limit", default=None, type=int, help="Maximum records per fixture")
+def datasets_seed_reference_fixtures(
+    dataset_id: str,
+    dataset_id_prefix: str | None,
+    limit: int | None,
+) -> None:
+    """Import bundled fixtures for a dataset's recommended benchmark keys."""
+    from casecrawler.integrations.reference_fixtures import (
+        seed_recommended_reference_fixtures,
+    )
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    if limit is not None and limit < 1:
+        raise click.ClickException("limit must be at least 1.")
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise click.ClickException(f"Dataset {dataset_id} not found.")
+    result = seed_recommended_reference_fixtures(
+        store,
+        dataset_id=dataset_id,
+        dataset_id_prefix=dataset_id_prefix,
+        limit=limit,
+    )
+    click.echo(json.dumps(result, indent=2))
+
+
 @datasets_group.command("benchmark-suite")
 @click.argument("dataset_id")
 def datasets_benchmark_suite(dataset_id: str) -> None:
