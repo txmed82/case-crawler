@@ -250,6 +250,56 @@ def test_validator_rejects_invalid_medication_history_entries():
     assert any(issue.field == "medication_history.status" for issue in report.issues)
 
 
+def test_validator_rejects_duplicate_active_medication_statements():
+    bad = _record(
+        medication_history=[
+            MedicationStatement(
+                name="Ceftriaxone",
+                dose="1 g",
+                route="IV",
+                status="active",
+                start="2026-05-06",
+            ),
+            MedicationStatement(
+                name="ceftriaxone",
+                dose="2 g",
+                route="IV",
+                status="on-hold",
+                start="2026-05-06",
+            ),
+            MedicationStatement(
+                name="Metformin",
+                dose="500 mg",
+                route="oral",
+                status="stopped",
+                start="2026-04-01",
+                end="2026-05-01",
+            ),
+            MedicationStatement(
+                name="Metformin",
+                dose="500 mg",
+                route="oral",
+                status="active",
+                start="2026-05-02",
+            ),
+        ]
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(
+        issue.field == "medication_history.duplicate_active"
+        and "ceftriaxone" in issue.message
+        for issue in report.issues
+    )
+    assert not any(
+        issue.field == "medication_history.duplicate_active"
+        and "metformin" in issue.message
+        for issue in report.issues
+    )
+
+
 def test_validator_rejects_medication_lab_safety_conflicts():
     bad = _record(
         labs=[
