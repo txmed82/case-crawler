@@ -1546,6 +1546,12 @@ def _verify_package_audit_artifacts(
                 manifest,
                 issues,
             )
+        elif file_name == "benchmark_suite_report.json":
+            _verify_benchmark_suite_report_artifact(
+                package_path / file_name,
+                manifest,
+                issues,
+            )
         elif file_name == "quality_report.json":
             _verify_quality_report_artifact(package_path / file_name, manifest, issues)
         elif file_name == "dataset_card.md":
@@ -1663,6 +1669,177 @@ def _verify_benchmark_report_artifact(
                     "Benchmark report generated_profile.dataset_id "
                     f"{report.generated_profile.dataset_id!r} does not match "
                     f"package dataset_id {manifest_dataset_id!r}."
+                ),
+            }
+        )
+
+
+def _verify_benchmark_suite_report_artifact(
+    path: Path,
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_suite_report.json",
+                "message": f"Benchmark suite artifact is invalid JSON: {exc}.",
+            }
+        )
+        return
+    if not isinstance(payload, dict):
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_suite_report.json",
+                "message": "Benchmark suite artifact must be a JSON object.",
+            }
+        )
+        return
+    manifest_dataset_id = manifest.get("dataset_id")
+    suite_dataset_id = payload.get("dataset_id")
+    if isinstance(manifest_dataset_id, str) and suite_dataset_id != manifest_dataset_id:
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_suite_report.json.dataset_id",
+                "message": (
+                    "Benchmark suite dataset_id "
+                    f"{suite_dataset_id!r} does not match package dataset_id "
+                    f"{manifest_dataset_id!r}."
+                ),
+            }
+        )
+    if not isinstance(payload.get("passed"), bool):
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_suite_report.json.passed",
+                "message": "Benchmark suite passed must be a boolean.",
+            }
+        )
+    if not isinstance(payload.get("reference_count"), int):
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_suite_report.json.reference_count",
+                "message": "Benchmark suite reference_count must be an integer.",
+            }
+        )
+    results = payload.get("results")
+    if not isinstance(results, list):
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_suite_report.json.results",
+                "message": "Benchmark suite results must be a list.",
+            }
+        )
+        return
+    reference_count = payload.get("reference_count")
+    if isinstance(reference_count, int) and reference_count != len(results):
+        issues.append(
+            {
+                "field": (
+                    "audit_artifacts.benchmark_suite_report.json.reference_count"
+                ),
+                "message": (
+                    "Benchmark suite reference_count does not match results length."
+                ),
+            }
+        )
+    for index, item in enumerate(results):
+        if not isinstance(item, dict):
+            issues.append(
+                {
+                    "field": f"audit_artifacts.benchmark_suite_report.json.results.{index}",
+                    "message": "Benchmark suite result must be an object.",
+                }
+            )
+            continue
+        if not isinstance(item.get("reference_key"), str):
+            issues.append(
+                {
+                    "field": (
+                        "audit_artifacts.benchmark_suite_report.json."
+                        f"results.{index}.reference_key"
+                    ),
+                    "message": "Benchmark suite result reference_key must be a string.",
+                }
+            )
+        if not isinstance(item.get("reference_dataset_id"), str):
+            issues.append(
+                {
+                    "field": (
+                        "audit_artifacts.benchmark_suite_report.json."
+                        f"results.{index}.reference_dataset_id"
+                    ),
+                    "message": (
+                        "Benchmark suite result reference_dataset_id must be a string."
+                    ),
+                }
+            )
+        if not isinstance(item.get("passed"), bool):
+            issues.append(
+                {
+                    "field": (
+                        "audit_artifacts.benchmark_suite_report.json."
+                        f"results.{index}.passed"
+                    ),
+                    "message": "Benchmark suite result passed must be a boolean.",
+                }
+            )
+        report_payload = item.get("report")
+        if not isinstance(report_payload, dict):
+            issues.append(
+                {
+                    "field": (
+                        "audit_artifacts.benchmark_suite_report.json."
+                        f"results.{index}.report"
+                    ),
+                    "message": "Benchmark suite result report must be an object.",
+                }
+            )
+            continue
+        _verify_benchmark_report_payload(
+            report_payload,
+            manifest=manifest,
+            field_prefix=(
+                "audit_artifacts.benchmark_suite_report.json."
+                f"results.{index}.report"
+            ),
+            issues=issues,
+        )
+
+
+def _verify_benchmark_report_payload(
+    payload: dict[str, Any],
+    *,
+    manifest: dict[str, Any],
+    field_prefix: str,
+    issues: list[dict[str, str]],
+) -> None:
+    from casecrawler.models.evaluation import BenchmarkReport
+
+    try:
+        report = BenchmarkReport.model_validate(payload)
+    except ValueError as exc:
+        issues.append(
+            {
+                "field": field_prefix,
+                "message": f"Benchmark report artifact is invalid: {exc}.",
+            }
+        )
+        return
+    manifest_dataset_id = manifest.get("dataset_id")
+    if (
+        isinstance(manifest_dataset_id, str)
+        and report.generated_dataset_id != manifest_dataset_id
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.generated_dataset_id",
+                "message": (
+                    "Benchmark report generated_dataset_id "
+                    f"{report.generated_dataset_id!r} does not match package "
+                    f"dataset_id {manifest_dataset_id!r}."
                 ),
             }
         )
