@@ -341,6 +341,45 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     assert exports[0].metadata["benchmark_suite_passed"] is True
 
 
+def test_dataset_cli_requires_release_audit_artifacts_for_release_verification(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generated = runner.invoke(
+        cli,
+        [
+            "generate-release-package",
+            "sepsis",
+            "--count",
+            "1",
+            "--output-dir",
+            "release-package",
+            "--seed",
+            "unit-test",
+        ],
+    )
+    assert generated.exit_code == 0, generated.output
+    suite_path = tmp_path / "release-package" / "benchmark_suite_report.json"
+    suite_path.unlink()
+    manifest_path = tmp_path / "release-package" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["audit_artifacts"].pop("benchmark_suite_report.json")
+    manifest["files"].pop("benchmark_suite_report.json")
+    manifest_path.write_text(json.dumps(manifest))
+
+    release_verified = runner.invoke(
+        cli,
+        ["verify-split-package", "--require-multimodal-release", "release-package"],
+    )
+
+    assert release_verified.exit_code != 0
+    assert "missing release audit artifact" in release_verified.output
+    assert "benchmark_suite_report.json" in release_verified.output
+
+
 def test_dataset_cli_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
