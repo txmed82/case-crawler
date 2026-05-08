@@ -50,6 +50,7 @@ class CohortProfile(BaseModel):
     imaging_body_region_counts: dict[str, int] = Field(default_factory=dict)
     imaging_backend_counts: dict[str, int] = Field(default_factory=dict)
     imaging_model_policy_counts: dict[str, int] = Field(default_factory=dict)
+    image_validator_policy_counts: dict[str, int] = Field(default_factory=dict)
     imaging_label_counts: dict[str, int] = Field(default_factory=dict)
     imaging_label_pair_counts: dict[str, int] = Field(default_factory=dict)
     mean_imaging_prompt_chars: float | None = None
@@ -122,6 +123,7 @@ class DatasetQualityReport(BaseModel):
     mean_time_series_duration_hours: float | None = None
     imaging_backend_counts: dict[str, int] = Field(default_factory=dict)
     imaging_model_policy_counts: dict[str, int] = Field(default_factory=dict)
+    image_validator_policy_counts: dict[str, int] = Field(default_factory=dict)
     mean_imaging_prompt_chars: float | None = None
     mean_imaging_report_chars: float | None = None
     imaging_report_label_evidence_rate: float | None = None

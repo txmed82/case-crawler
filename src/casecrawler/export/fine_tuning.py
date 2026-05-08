@@ -1709,6 +1709,32 @@ def _verify_release_image_artifact_metadata(
                         ),
                     }
                 )
+    validator_policy = artifact.get("image_validator_policy")
+    if not isinstance(validator_policy, dict):
+        issues.append(
+            {
+                "field": f"image_artifacts.{key}.image_validator_policy",
+                "message": (
+                    "Release-ready image artifact is missing image validator "
+                    "policy metadata."
+                ),
+            }
+        )
+    else:
+        for field in ("profile", "backend", "license", "use_policy"):
+            if (
+                not isinstance(validator_policy.get(field), str)
+                or not validator_policy[field].strip()
+            ):
+                issues.append(
+                    {
+                        "field": f"image_artifacts.{key}.image_validator_policy.{field}",
+                        "message": (
+                            "Release-ready image artifact image validator "
+                            f"policy is missing {field}."
+                        ),
+                    }
+                )
 
 
 def _image_artifact_key_parts(key: str) -> tuple[str | None, str | None]:
@@ -2910,6 +2936,19 @@ def _verify_optional_quality_numeric_fields(
                 ),
             }
         )
+    image_validator_policy_counts = payload.get("image_validator_policy_counts")
+    if image_validator_policy_counts is not None and not _string_int_map(
+        image_validator_policy_counts
+    ):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json.image_validator_policy_counts",
+                "message": (
+                    "Quality report artifact image_validator_policy_counts must "
+                    "be a string-to-integer map."
+                ),
+            }
+        )
 
 
 def _verify_optional_quality_rate(
@@ -3205,6 +3244,19 @@ def _verify_release_summary_quality_numeric_fields(
                 ),
             }
         )
+    image_validator_policy_counts = quality.get("image_validator_policy_counts")
+    if image_validator_policy_counts is not None and not _string_int_map(
+        image_validator_policy_counts
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.image_validator_policy_counts",
+                "message": (
+                    "Release package summary quality_report."
+                    "image_validator_policy_counts must be a string-to-integer map."
+                ),
+            }
+        )
     value = quality.get("imaging_report_label_evidence_rate")
     if value is None:
         return
@@ -3395,6 +3447,9 @@ def _copy_image_artifacts(
                 "labels": [label.model_dump(mode="json") for label in asset.labels],
                 "imaging_model_policy": _json_object_or_none(
                     record.metadata.get("imaging_model_policy")
+                ),
+                "image_validator_policy": _json_object_or_none(
+                    record.metadata.get("image_validator_policy")
                 ),
             }
     return entries, artifacts

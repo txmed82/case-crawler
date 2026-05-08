@@ -100,7 +100,17 @@ class SyntheticPipeline:
                 )
             if Modality.CLINICAL_TEXT in plan.modalities:
                 record = await text_generator.add_documents_async(record)
-            validation = self._validator_for(record_req).validate(record)
+            validator = self._validator_for(record_req)
+            validation = validator.validate(record)
+            if validation.modality_alignment_score is not None:
+                record = record.model_copy(
+                    update={
+                        "metadata": {
+                            **record.metadata,
+                            "image_validator_policy": validator.image_validator_policy(),
+                        }
+                    }
+                )
             record = record.model_copy(update={"validation": validation})
             records.append(record)
             if validation.approved:

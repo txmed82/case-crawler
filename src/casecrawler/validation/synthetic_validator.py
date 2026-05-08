@@ -20,6 +20,7 @@ from casecrawler.validation.clinical_rules import (
     validate_vitals,
 )
 from casecrawler.validation.image_alignment import (
+    IMAGE_VALIDATOR_PROFILES,
     ImageAlignmentValidator,
     validate_image_file_asset,
     validate_radiology_label_consistency,
@@ -35,6 +36,27 @@ class SyntheticValidator:
     ) -> None:
         self._threshold = threshold
         self._image_alignment_validator = image_alignment_validator or ImageAlignmentValidator()
+
+    def image_validator_policy(self) -> dict[str, object]:
+        profile_key = getattr(self._image_alignment_validator, "profile_key", None)
+        if isinstance(profile_key, str) and profile_key in IMAGE_VALIDATOR_PROFILES:
+            profile = IMAGE_VALIDATOR_PROFILES[profile_key]
+            return {
+                "profile": profile.key,
+                "backend": profile.backend,
+                "model_id": profile.model_id,
+                "license": profile.license,
+                "gated": profile.gated,
+                "use_policy": profile.use_policy,
+            }
+        return {
+            "profile": "custom",
+            "backend": self._image_alignment_validator.__class__.__name__,
+            "model_id": None,
+            "license": "unspecified",
+            "gated": False,
+            "use_policy": "review_outputs_before_release",
+        }
 
     def validate(self, record: SyntheticRecord) -> ValidationReport:
         issues = [

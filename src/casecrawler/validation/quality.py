@@ -35,6 +35,7 @@ def build_dataset_quality_report(
     time_series_backend_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
     imaging_model_policy_counts: Counter[str] = Counter()
+    image_validator_policy_counts: Counter[str] = Counter()
     lab_unit_counts: Counter[str] = Counter()
     vital_unit_counts: Counter[str] = Counter()
     lab_numeric_values: dict[str, list[float]] = {}
@@ -87,6 +88,7 @@ def build_dataset_quality_report(
             time_series_backend_counts,
             imaging_backend_counts,
             imaging_model_policy_counts,
+            image_validator_policy_counts,
             lab_unit_counts,
             vital_unit_counts,
             lab_numeric_values,
@@ -213,6 +215,9 @@ def build_dataset_quality_report(
         mean_time_series_duration_hours=_mean_float(time_series_durations),
         imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
         imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
+        image_validator_policy_counts=dict(
+            sorted(image_validator_policy_counts.items())
+        ),
         mean_imaging_prompt_chars=_mean_float(imaging_prompt_lengths),
         mean_imaging_report_chars=_mean_float(imaging_report_lengths),
         imaging_report_label_evidence_rate=_mean_float(
@@ -292,6 +297,7 @@ def _count_artifacts(
     time_series_backend_counts: Counter[str],
     imaging_backend_counts: Counter[str],
     imaging_model_policy_counts: Counter[str],
+    image_validator_policy_counts: Counter[str],
     lab_unit_counts: Counter[str],
     vital_unit_counts: Counter[str],
     lab_numeric_values: dict[str, list[float]],
@@ -388,6 +394,9 @@ def _count_artifacts(
     policy_key = _imaging_model_policy_key(record)
     if policy_key:
         imaging_model_policy_counts[policy_key] += len(record.imaging)
+    validator_policy_key = _image_validator_policy_key(record)
+    if validator_policy_key and record.validation is not None:
+        image_validator_policy_counts[validator_policy_key] += len(record.imaging)
     artifact_counts["imaging_labels"] += sum(len(asset.labels) for asset in record.imaging)
     for doc in record.documents:
         note_type_counts[doc.note_type] += 1
@@ -652,6 +661,21 @@ def _imaging_model_policy_key(record: SyntheticRecord) -> str | None:
     gated = str(bool(policy.get("gated"))).lower()
     return (
         f"profile={profile}|license={license_name}|"
+        f"gated={gated}|use_policy={use_policy}"
+    )
+
+
+def _image_validator_policy_key(record: SyntheticRecord) -> str | None:
+    policy = record.metadata.get("image_validator_policy")
+    if not isinstance(policy, dict):
+        return None
+    profile = _policy_value(policy.get("profile"), "unspecified")
+    backend = _policy_value(policy.get("backend"), "unspecified")
+    license_name = _policy_value(policy.get("license"), "unspecified")
+    use_policy = _policy_value(policy.get("use_policy"), "review_license_before_use")
+    gated = str(bool(policy.get("gated"))).lower()
+    return (
+        f"profile={profile}|backend={backend}|license={license_name}|"
         f"gated={gated}|use_policy={use_policy}"
     )
 

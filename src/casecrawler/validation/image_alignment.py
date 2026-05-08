@@ -71,6 +71,8 @@ def list_image_validator_profiles() -> list[ImageValidatorProfile]:
 
 
 class ImageAlignmentValidator:
+    profile_key = "lexical"
+
     def score(self, asset: ImagingAsset) -> float:
         prompt_tokens = self._tokens(asset.prompt)
         report_tokens = self._tokens(asset.report_text)
@@ -262,6 +264,8 @@ _RADIOLOGY_SYNONYMS: dict[str, set[str]] = {
 }
 
 class BiomedCLIPImageValidator:
+    profile_key = "biomedclip"
+
     def __init__(
         self,
         scorer: Callable[[str, str], float] | None = None,
@@ -300,6 +304,8 @@ class BiomedCLIPImageValidator:
 
 
 class MedGemmaImageTextValidator:
+    profile_key = "medgemma"
+
     def __init__(
         self,
         analyzer: Callable[[str, str], str | float | dict[str, Any]] | None = None,
