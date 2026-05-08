@@ -1040,6 +1040,16 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert radiology_recipe["benchmark_thresholds"]["min_overall_score"] == 0.7
     assert "topic_mix" in body["cohort_constraints"]
     assert "topic_mix_weights" in body["cohort_constraints"]
+    release_requirements = {
+        requirement["key"]: requirement["description"]
+        for requirement in body["release_coverage_requirements"]
+    }
+    assert "lab_reports" in release_requirements
+    assert "vital_signs_flowsheets" in release_requirements
+    assert "medication_administration_records" in release_requirements
+    assert "discharge_summaries" in release_requirements
+    assert "radiology_images" in release_requirements
+    assert "benchmark reference" in release_requirements["benchmark_reference"].lower()
     assert "cxr_pneumonia_dreambooth" in {
         profile["name"] for profile in body["imaging_model_profiles"]
     }

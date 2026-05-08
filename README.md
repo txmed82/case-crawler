@@ -224,7 +224,7 @@ Start the server with `casecrawler serve` or `docker compose up`.
 | `/api/ingest/{job_id}` | GET | Poll ingestion status |
 | `/api/search?q=...` | GET | Search the knowledge base |
 | `/api/sources` | GET | List available sources |
-| `/api/datasets/capabilities` | GET | List modalities, export formats, validators, and model/profile adapters |
+| `/api/datasets/capabilities` | GET | List modalities, export formats, strict release coverage requirements, validators, and model/profile adapters |
 | `/api/datasets/generate` | POST | Generate synthetic healthcare records |
 | `/api/datasets/release-package` | POST | Generate, benchmark, export, and return a multimodal release package zip |
 | `/api/datasets/reference-catalog` | GET | List registered Hugging Face reference datasets |
