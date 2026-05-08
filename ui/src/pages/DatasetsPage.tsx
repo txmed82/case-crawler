@@ -5,6 +5,7 @@ import {
   fetchDataset,
   fetchDatasetBenchmark,
   fetchDatasetBenchmarkPlan,
+  fetchDatasetBenchmarkSuite,
   fetchDatasetCard,
   fetchDatasetExports,
   fetchDatasetQuality,
@@ -19,6 +20,7 @@ import type {
   ExportManifest,
   BenchmarkPlanReadiness,
   BenchmarkReport,
+  BenchmarkSuiteReport,
   DatasetQualityReport,
   HumanReviewStatus,
   ReviewQueueItem,
@@ -137,6 +139,15 @@ export default function DatasetsPage() {
     queryKey: ["dataset-benchmark-plan", activeDatasetId],
     queryFn: () => fetchDatasetBenchmarkPlan(activeDatasetId as string),
     enabled: Boolean(activeDatasetId),
+  });
+  const {
+    data: benchmarkSuite,
+    isLoading: isBenchmarkSuiteLoading,
+    error: benchmarkSuiteError,
+  } = useQuery({
+    queryKey: ["dataset-benchmark-suite", activeDatasetId, benchmarkPlanReadiness?.ready],
+    queryFn: () => fetchDatasetBenchmarkSuite(activeDatasetId as string),
+    enabled: Boolean(activeDatasetId && benchmarkPlanReadiness?.ready),
   });
   const reviewMutation = useMutation({
     mutationFn: ({
@@ -342,6 +353,9 @@ export default function DatasetsPage() {
                   benchmarkPlanReadiness={benchmarkPlanReadiness ?? null}
                   isBenchmarkPlanLoading={isBenchmarkPlanLoading}
                   benchmarkPlanError={benchmarkPlanError}
+                  benchmarkSuite={benchmarkSuite ?? null}
+                  isBenchmarkSuiteLoading={isBenchmarkSuiteLoading}
+                  benchmarkSuiteError={benchmarkSuiteError}
                   benchmark={benchmark ?? null}
                   isLoading={isBenchmarkLoading}
                   error={benchmarkError}
@@ -385,6 +399,9 @@ function BenchmarkPanel({
   benchmarkPlanReadiness,
   isBenchmarkPlanLoading,
   benchmarkPlanError,
+  benchmarkSuite,
+  isBenchmarkSuiteLoading,
+  benchmarkSuiteError,
   benchmark,
   isLoading,
   error,
@@ -401,6 +418,9 @@ function BenchmarkPanel({
   benchmarkPlanReadiness: BenchmarkPlanReadiness | null;
   isBenchmarkPlanLoading: boolean;
   benchmarkPlanError: unknown;
+  benchmarkSuite: BenchmarkSuiteReport | null;
+  isBenchmarkSuiteLoading: boolean;
+  benchmarkSuiteError: unknown;
   benchmark: BenchmarkReport | null;
   isLoading: boolean;
   error: unknown;
@@ -575,6 +595,97 @@ function BenchmarkPanel({
         <p className="mt-3 rounded-md bg-gray-50 p-3 text-sm text-gray-500">
           Import or generate another dataset to use as a benchmark reference.
         </p>
+      )}
+      {(isBenchmarkSuiteLoading || benchmarkSuiteError || benchmarkSuite) && (
+        <div className="mt-4 rounded-md border border-gray-200 bg-gray-50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase text-gray-500">
+                Recipe benchmark suite
+              </p>
+              <p className="mt-1 text-sm text-gray-700">
+                {isBenchmarkSuiteLoading
+                  ? "Running recommended reference comparisons..."
+                  : benchmarkSuite
+                    ? `${benchmarkSuite.reference_count} imported reference comparison(s)`
+                    : "Suite unavailable"}
+              </p>
+            </div>
+            {benchmarkSuite && (
+              <span
+                className={`rounded-md px-2 py-1 text-xs font-medium ${
+                  benchmarkSuite.passed
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                }`}
+              >
+                {benchmarkSuite.passed ? "passed" : "failed"}
+              </span>
+            )}
+          </div>
+          {Boolean(benchmarkSuiteError) && (
+            <p className="mt-2 text-sm text-red-700">
+              {benchmarkSuiteError instanceof Error
+                ? benchmarkSuiteError.message
+                : "Failed to run benchmark suite."}
+            </p>
+          )}
+          {benchmarkSuite && (
+            <div className="mt-3 space-y-3">
+              <div className="flex flex-wrap gap-3">
+                <Metric
+                  label="Mean score"
+                  value={benchmarkSuite.mean_overall_score.toFixed(3)}
+                />
+                <Metric label="References" value={benchmarkSuite.reference_count} />
+                <Metric
+                  label="Suite gate"
+                  value={benchmarkSuite.passed ? "passed" : "failed"}
+                />
+              </div>
+              <p className="text-xs text-gray-500">
+                Requires overall &gt;= {formatMetricValue(benchmarkSuite.thresholds.min_overall_score)} and each metric &gt;={" "}
+                {formatMetricValue(benchmarkSuite.thresholds.min_metric_score)}.
+              </p>
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {benchmarkSuite.results.map((result) => (
+                  <div
+                    key={`${result.reference_key}-${result.reference_dataset_id}`}
+                    className="rounded-md border border-gray-200 bg-white p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-900">
+                          {result.reference_key}
+                        </p>
+                        <p className="mt-1 break-words text-xs text-gray-500">
+                          {result.reference_dataset_id}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-md px-2 py-1 text-xs font-medium ${
+                          result.passed
+                            ? "bg-green-50 text-green-700"
+                            : "bg-red-50 text-red-700"
+                        }`}
+                      >
+                        {result.passed ? "passed" : "failed"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-lg font-semibold text-gray-900">
+                      {result.overall_score.toFixed(3)}
+                    </p>
+                    {result.failing_metrics.length > 0 && (
+                      <p className="mt-1 line-clamp-2 text-xs text-red-700">
+                        {result.failing_metrics.slice(0, 4).join(", ")}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
       {isLoading && <p className="mt-3 text-sm text-gray-500">Running benchmark...</p>}
       {Boolean(error) && (

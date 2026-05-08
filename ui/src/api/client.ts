@@ -405,6 +405,29 @@ export interface BenchmarkPlanReadiness {
   };
 }
 
+export interface BenchmarkSuiteResult {
+  reference_key: string;
+  reference_dataset_id: string;
+  passed: boolean;
+  overall_score: number;
+  failing_metrics: string[];
+  report: BenchmarkReport;
+}
+
+export interface BenchmarkSuiteReport {
+  dataset_id: string;
+  primary_recipe?: string | null;
+  recommended_reference_keys: string[];
+  reference_count: number;
+  passed: boolean;
+  mean_overall_score: number;
+  thresholds: {
+    min_overall_score: number;
+    min_metric_score: number;
+  };
+  results: BenchmarkSuiteResult[];
+}
+
 export interface DatasetQualityReport {
   dataset_id: string;
   record_count: number;
@@ -565,6 +588,16 @@ export async function fetchDatasetBenchmarkPlan(
   const resp = await fetch(`${BASE}/datasets/${datasetId}/benchmark-plan`);
   if (!resp.ok) {
     throw new Error(`Failed to fetch benchmark plan: ${await readApiError(resp)}`);
+  }
+  return resp.json();
+}
+
+export async function fetchDatasetBenchmarkSuite(
+  datasetId: string
+): Promise<BenchmarkSuiteReport> {
+  const resp = await fetch(`${BASE}/datasets/${datasetId}/benchmark-suite`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch benchmark suite: ${await readApiError(resp)}`);
   }
   return resp.json();
 }
