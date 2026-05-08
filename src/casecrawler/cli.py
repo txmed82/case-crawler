@@ -1213,11 +1213,16 @@ def export_dataset_splits(
 
 
 @cli.command("verify-split-package")
+@click.option(
+    "--require-multimodal-release",
+    is_flag=True,
+    help="Fail unless quality_report.json marks the package multimodal-release-ready.",
+)
 @click.argument(
     "package_dir",
     type=click.Path(exists=True, file_okay=True, dir_okay=True),
 )
-def verify_split_package(package_dir: str) -> None:
+def verify_split_package(require_multimodal_release: bool, package_dir: str) -> None:
     """Verify a split fine-tuning package directory or zip archive."""
     from casecrawler.export.fine_tuning import verify_jsonl_split_package
 
@@ -1225,6 +1230,23 @@ def verify_split_package(package_dir: str) -> None:
     click.echo(json.dumps(report, indent=2))
     if not report["valid"]:
         raise click.ClickException("Split package verification failed.")
+    quality_report = report.get("quality_report")
+    if (
+        require_multimodal_release
+        and not (
+            isinstance(quality_report, dict)
+            and quality_report.get("multimodal_release_ready") is True
+        )
+    ):
+        missing = (
+            quality_report.get("multimodal_release_missing")
+            if isinstance(quality_report, dict)
+            else None
+        )
+        raise click.ClickException(
+            "Split package is not multimodal-release-ready. "
+            f"Missing: {missing or ['quality_report']}."
+        )
 
 
 @cli.command("benchmark-dataset")

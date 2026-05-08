@@ -152,10 +152,17 @@ def test_dataset_cli_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert exports[0].metadata["core_artifact_coverage"]["records"] is True
     assert "benchmark_profile.json" in exports[0].metadata["audit_artifacts"]
     verified = runner.invoke(cli, ["verify-split-package", "split-package"])
+    release_verified = runner.invoke(
+        cli,
+        ["verify-split-package", "--require-multimodal-release", "split-package"],
+    )
     assert verified.exit_code == 0
     verify_report = json.loads(verified.output)
     assert verify_report["valid"] is True
+    assert verify_report["quality_report"]["multimodal_release_ready"] is False
     assert verify_report["splits"]["train"]["example_count"] == 1
+    assert release_verified.exit_code != 0
+    assert "not multimodal-release-ready" in release_verified.output
 
 
 def test_dataset_cli_blocks_profile_specific_export_when_artifacts_missing(tmp_path, monkeypatch):
