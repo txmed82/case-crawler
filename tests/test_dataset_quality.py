@@ -461,6 +461,14 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
                     "use_policy": "openrail_review_outputs_before_release",
                 }
             },
+            "validation": ValidationReport(
+                schema_score=1.0,
+                clinical_consistency_score=1.0,
+                privacy_score=1.0,
+                utility_score=1.0,
+                modality_alignment_score=0.82,
+                approved=True,
+            ),
         }
     )
 
@@ -487,6 +495,7 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
             "gated=false|use_policy=openrail_review_outputs_before_release"
         ): 1
     }
+    assert report.mean_modality_alignment_score == 0.82
     assert report.export_ready is False
     assert "vitals.missing_artifacts" in report.issue_counts_by_field
 

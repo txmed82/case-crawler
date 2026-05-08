@@ -219,10 +219,12 @@ def _validation_score_summary(records: list[SyntheticRecord]) -> dict[str, float
         "clinical_consistency_score",
         "privacy_score",
         "utility_score",
+        "modality_alignment_score",
     ]
     return {
         field: mean(getattr(report, field) for report in scored)
         for field in fields
+        if all(getattr(report, field) is not None for report in scored)
     }
 
 

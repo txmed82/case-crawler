@@ -29,6 +29,7 @@ def build_dataset_quality_report(
     approved_count = 0
     blocking_issue_count = 0
     warning_issue_count = 0
+    modality_alignment_scores: list[float] = []
 
     for record in records:
         if approval_fn(record) is True:
@@ -75,6 +76,8 @@ def build_dataset_quality_report(
             issue_counts_by_field["validation.missing"] += 1
             blocking_issue_count += 1
             continue
+        if record.validation.modality_alignment_score is not None:
+            modality_alignment_scores.append(record.validation.modality_alignment_score)
         for issue in record.validation.issues:
             issue_counts_by_field[issue.field] += 1
             if issue.severity == "error":
@@ -116,6 +119,7 @@ def build_dataset_quality_report(
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
         imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
         imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
+        mean_modality_alignment_score=_mean_float(modality_alignment_scores),
         blocking_issue_count=blocking_issue_count,
         warning_issue_count=warning_issue_count,
         issue_counts_by_field=dict(sorted(issue_counts_by_field.items())),
@@ -125,6 +129,12 @@ def build_dataset_quality_report(
 
 def _validation_approved(record: SyntheticRecord) -> bool | None:
     return None if record.validation is None else record.validation.approved
+
+
+def _mean_float(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return round(sum(values) / len(values), 4)
 
 
 def _count_artifacts(
