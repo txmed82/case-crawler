@@ -3,6 +3,7 @@ from __future__ import annotations
 from casecrawler.models.synthetic import Modality, SyntheticRecord, ValidationIssue, ValidationReport
 from casecrawler.validation.clinical_rules import (
     validate_artifact_generation_backends,
+    validate_allergies,
     validate_derived_lab_consistency,
     validate_imaging_asset_clinical_shape,
     validate_document_extracted_fact_alignment,
@@ -67,6 +68,7 @@ class SyntheticValidator:
             *validate_observation_units(record),
             *validate_vitals(record),
             *validate_medication_history(record),
+            *validate_allergies(record),
             *validate_medication_safety(record),
             *validate_artifact_generation_backends(record),
             *validate_time_series_waveforms(record),

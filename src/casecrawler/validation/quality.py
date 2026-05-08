@@ -401,6 +401,7 @@ def _count_artifacts(
         if medication.frequency:
             medication_frequency_counts[medication.frequency] += 1
         medication_status_counts[medication.status or "unknown"] += 1
+    artifact_counts["allergies"] += len(record.allergies)
     artifact_counts["time_series_channels"] += len(record.time_series)
     for channel in record.time_series:
         time_series_channel_counts[channel.name] += 1

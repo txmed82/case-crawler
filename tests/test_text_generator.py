@@ -5,6 +5,7 @@ from casecrawler.generation.structured_generator import StructuredGenerator
 from casecrawler.generation.text_generator import TextGenerator
 from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import (
+    AllergyIntolerance,
     ClinicalDocument,
     Code,
     ComplexityProfile,
@@ -59,6 +60,7 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     assert "pneumonia" in documents_by_type["ed_note"].clean_text
     assert "Procedures performed or planned:" in documents_by_type["ed_note"].clean_text
     assert "specialty consultation" in documents_by_type["ed_note"].clean_text
+    assert "Allergies:" in documents_by_type["ed_note"].clean_text
     assert "Relevant diagnoses:" in documents_by_type[
         "medication_administration_record"
     ].clean_text
@@ -86,7 +88,37 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     assert documents_by_type["ed_note"].extracted_facts["medication_details"][0][
         "route"
     ] == "IV"
+    assert documents_by_type["ed_note"].extracted_facts["allergies"] == []
     assert documents_by_type["ed_note"].extracted_facts["messy_text_profile"] == "standard"
+
+
+def test_text_generator_includes_allergy_details_in_notes_and_facts():
+    req = GenerationRequest(
+        topic="sepsis",
+        modalities=[Modality.STRUCTURED_EHR, Modality.CLINICAL_TEXT],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0).model_copy(
+        update={
+            "allergies": [
+                AllergyIntolerance(
+                    substance="Penicillin",
+                    code="7980",
+                    system="RxNorm",
+                    reaction="hives",
+                    severity="moderate",
+                    recorded_at="2026-01-01",
+                )
+            ]
+        }
+    )
+
+    updated = TextGenerator().add_documents(record)
+    ed_note = next(document for document in updated.documents if document.note_type == "ed_note")
+
+    assert "Allergies: Penicillin (hives)." in ed_note.clean_text
+    assert ed_note.extracted_facts["allergies"] == ["Penicillin"]
+    assert ed_note.extracted_facts["allergy_details"][0]["severity"] == "moderate"
 
 
 def test_text_generator_supports_message_ocr_and_heavy_noise_profiles():

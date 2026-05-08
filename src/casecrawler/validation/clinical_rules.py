@@ -771,6 +771,69 @@ def validate_medication_history(record: SyntheticRecord) -> list[ValidationIssue
     return issues
 
 
+def validate_allergies(record: SyntheticRecord) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    valid_statuses = {
+        "active",
+        "confirmed",
+        "inactive",
+        "refuted",
+        "resolved",
+        "unconfirmed",
+        "unknown",
+    }
+    valid_severities = {"mild", "moderate", "severe"}
+    inactive_statuses = {"completed", "entered-in-error", "stopped"}
+    active_medications = {
+        _normalize_name(medication.name)
+        for medication in record.medication_history
+        if medication.status.lower() not in inactive_statuses
+    }
+    for allergy in record.allergies:
+        substance = allergy.substance.strip()
+        normalized_substance = _normalize_name(substance)
+        if not substance:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="allergies.substance",
+                    message="AllergyIntolerance has an empty substance.",
+                )
+            )
+        if allergy.status.lower() not in valid_statuses:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="allergies.status",
+                    message=f"Allergy {substance or '<empty>'} has an invalid status.",
+                )
+            )
+        if allergy.severity and allergy.severity.lower() not in valid_severities:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="allergies.severity",
+                    message=f"Allergy {substance or '<empty>'} has an invalid severity.",
+                )
+            )
+        if normalized_substance and _matches_active_medication(
+            normalized_substance,
+            active_medications,
+        ):
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.STRUCTURED_EHR,
+                    field="allergies.medication_conflict",
+                    message=f"Active medication conflicts with allergy to {substance}.",
+                )
+            )
+    return issues
+
+
 def validate_medication_safety(record: SyntheticRecord) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     egfr = _first_numeric_lab(record, {"egfr", "estimated-gfr"})
@@ -1343,6 +1406,18 @@ def _has_active_medication(record: SyntheticRecord, names: set[str]) -> bool:
             continue
         normalized = _normalize_name(medication.name)
         if any(normalized == name or normalized.startswith(f"{name}-") for name in names):
+            return True
+    return False
+
+
+def _matches_active_medication(
+    normalized_substance: str,
+    active_medications: set[str],
+) -> bool:
+    for medication in active_medications:
+        if normalized_substance == medication:
+            return True
+        if normalized_substance in medication or medication in normalized_substance:
             return True
     return False
 

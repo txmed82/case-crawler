@@ -87,6 +87,16 @@ class MedicationStatement(StrictModel):
     end: str | None = None
 
 
+class AllergyIntolerance(StrictModel):
+    substance: str
+    code: str | None = None
+    system: str | None = None
+    reaction: str | None = None
+    severity: str | None = None
+    status: str = "active"
+    recorded_at: str | None = None
+
+
 class TimeSeriesPoint(StrictModel):
     timestamp: str
     values: dict[str, float]
@@ -149,6 +159,7 @@ class SyntheticRecord(StrictModel):
     labs: list[LabObservation] = Field(default_factory=list)
     vitals: list[VitalObservation] = Field(default_factory=list)
     medication_history: list[MedicationStatement] = Field(default_factory=list)
+    allergies: list[AllergyIntolerance] = Field(default_factory=list)
     time_series: list[TimeSeriesChannel] = Field(default_factory=list)
     documents: list[ClinicalDocument] = Field(default_factory=list)
     imaging: list[ImagingAsset] = Field(default_factory=list)

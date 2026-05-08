@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Protocol
 
 from casecrawler.models.synthetic import (
+    AllergyIntolerance,
     ClinicalDocument,
     Code,
     ComplexityProfile,
@@ -242,6 +243,7 @@ class SyntheaAdapter:
         diagnostic_report_resources = _resources(resources, "DiagnosticReport")
         observation_resources = _resources(resources, "Observation")
         medication_resources = _resources(resources, "MedicationStatement")
+        allergy_resources = _resources(resources, "AllergyIntolerance")
 
         patient_id = patient_resource.get("id", "synthea-patient")
         topic = _topic(encounter_resources) or "synthea import"
@@ -311,6 +313,11 @@ class SyntheaAdapter:
             )
             if medication is not None
         ]
+        allergies = [
+            allergy
+            for allergy in (_allergy_intolerance(resource) for resource in allergy_resources)
+            if allergy is not None
+        ]
         documents = [
             document
             for document in (
@@ -336,6 +343,7 @@ class SyntheaAdapter:
             vitals=vitals,
             documents=documents,
             medication_history=medications,
+            allergies=allergies,
             provenance=Provenance(
                 generator="synthea-fhir-import",
                 created_at=created_at,
@@ -1021,4 +1029,39 @@ def _medication_statement(resource: dict) -> MedicationStatement | None:
         dose=dosage.get("text"),
         route=route.get("text") if isinstance(route, Mapping) else None,
         status=resource.get("status", "unknown"),
+    )
+
+
+def _allergy_intolerance(resource: dict) -> AllergyIntolerance | None:
+    codeable = resource.get("code") or {}
+    if not isinstance(codeable, Mapping):
+        return None
+    substance = _codeable_text(codeable)
+    if not substance:
+        return None
+    code = _codeable_concept_to_code(codeable, fallback_code=resource.get("id"))
+    reaction = next(
+        (
+            item
+            for item in resource.get("reaction") or []
+            if isinstance(item, Mapping)
+        ),
+        {},
+    )
+    manifestation = next(
+        (
+            item
+            for item in reaction.get("manifestation") or []
+            if isinstance(item, Mapping)
+        ),
+        {},
+    )
+    return AllergyIntolerance(
+        substance=substance,
+        code=code.code if code else None,
+        system=code.system if code else None,
+        reaction=_codeable_text(manifestation),
+        severity=reaction.get("severity"),
+        status=_codeable_text(resource.get("clinicalStatus")) or "active",
+        recorded_at=resource.get("recordedDate"),
     )

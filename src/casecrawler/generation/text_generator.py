@@ -114,6 +114,13 @@ class TextGenerator:
             f"{med.name} {med.dose or ''} {med.route or ''} {med.frequency or ''}".strip()
             for med in record.medication_history
         )
+        allergies = ", ".join(
+            (
+                f"{allergy.substance}"
+                f"{f' ({allergy.reaction})' if allergy.reaction else ''}"
+            )
+            for allergy in record.allergies
+        )
         diagnoses = ", ".join(
             diagnosis.display
             for encounter in record.encounters
@@ -129,9 +136,10 @@ class TextGenerator:
             f"with {record.topic}. Initial vitals: {vitals}. Initial labs: {labs}. "
             f"Encounter diagnoses: {diagnoses or 'none documented'}. "
             f"Procedures performed or planned: {procedures or 'none documented'}. "
-            f"Medication history: {medications or 'none documented'}. "
             "Assessment and plan document a synthetic but clinically plausible "
-            "presentation."
+            "presentation. "
+            f"Medication history: {medications or 'none documented'}. "
+            f"Allergies: {allergies or 'none documented'}."
         )
         documents = [
             _document(
@@ -151,7 +159,8 @@ class TextGenerator:
                     f"Synthetic progress note for {record.topic}. Vitals trend is "
                     f"reviewed with current values: {vitals}. Abnormal labs include {labs}. "
                     f"Active diagnoses include {diagnoses or 'none documented'}, with "
-                    f"procedures tracked as {procedures or 'none documented'}."
+                    f"procedures tracked as {procedures or 'none documented'}. "
+                    f"Allergies reviewed: {allergies or 'none documented'}."
                 ),
                 noise_profile=self._noise_profile,
             ),
@@ -164,6 +173,7 @@ class TextGenerator:
                     f"Patient monitored for {record.topic}. Nursing assessment notes "
                     "fall risk screening, intake/output review, medication administration, "
                     f"diagnosis awareness ({diagnoses or 'none documented'}), "
+                    f"allergy awareness ({allergies or 'none documented'}), "
                     f"and response to active medications: {medications or 'none documented'}."
                 ),
                 noise_profile=self._noise_profile,
@@ -216,6 +226,7 @@ class TextGenerator:
                         (
                             f"Medication administration record for {record.topic}. "
                             f"Active and historical medications: {medications}. "
+                            f"Allergies: {allergies or 'none documented'}. "
                             f"Relevant diagnoses: {diagnoses or 'none documented'}. "
                             f"Related procedures: {procedures or 'none documented'}. "
                             "Doses, routes, frequencies, and statuses are synthetic "
@@ -237,6 +248,7 @@ class TextGenerator:
                     "Hospital course summarizes presenting symptoms, diagnostic results, "
                     f"encounter diagnoses ({diagnoses or 'none documented'}), "
                     f"procedures ({procedures or 'none documented'}), treatments, "
+                    f"allergies ({allergies or 'none documented'}), "
                     "medication reconciliation, and follow-up needs."
                 ),
                 noise_profile=self._noise_profile,
@@ -498,6 +510,18 @@ def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:
         }
         for med in record.medication_history
     ]
+    allergy_details = [
+        {
+            "substance": allergy.substance,
+            "code": allergy.code,
+            "system": allergy.system,
+            "reaction": allergy.reaction,
+            "severity": allergy.severity,
+            "status": allergy.status,
+            "recorded_at": allergy.recorded_at,
+        }
+        for allergy in record.allergies
+    ]
     procedure_details = [
         {
             "encounter_id": encounter.encounter_id,
@@ -528,6 +552,8 @@ def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:
         "abnormal_vitals": abnormal_vitals,
         "medications": [med.name for med in record.medication_history],
         "medication_details": medication_details,
+        "allergies": [allergy.substance for allergy in record.allergies],
+        "allergy_details": allergy_details,
         "time_series_channels": [channel.name for channel in record.time_series],
     }
     if note_type == "radiology_report":
@@ -600,6 +626,7 @@ def _clinical_document_prompt(record: SyntheticRecord) -> str:
         f"Labs: {[lab.model_dump() for lab in record.labs]}\n"
         f"Vitals: {[vital.model_dump() for vital in record.vitals]}\n"
         f"Medication history: {[med.model_dump() for med in record.medication_history]}\n"
+        f"Allergies: {[allergy.model_dump() for allergy in record.allergies]}\n"
         f"Time series: {[channel.model_dump() for channel in record.time_series]}\n"
         f"Imaging: {[asset.model_dump() for asset in record.imaging]}\n"
         "Required note types: ed_note, progress_note, nursing_note, "

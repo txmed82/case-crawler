@@ -732,6 +732,10 @@ def export_fhir_record(record: SyntheticRecord) -> dict[str, Any]:
         for medication in record.medication_history
     )
     entries.extend(
+        _entry(_allergy_intolerance_resource(record, allergy))
+        for allergy in record.allergies
+    )
+    entries.extend(
         _entry(_document_reference_resource(record, document))
         for document in record.documents
     )
@@ -913,11 +917,15 @@ def _verify_fhir_resource(
 ) -> None:
     resource_type = str(resource.get("resourceType", ""))
     if expected_patient_reference and resource_type not in {"Patient", "Provenance"}:
-        subject = resource.get("subject")
-        if not isinstance(subject, dict) or subject.get("reference") != expected_patient_reference:
+        patient_ref_field = "patient" if resource_type == "AllergyIntolerance" else "subject"
+        patient_ref = resource.get(patient_ref_field)
+        if (
+            not isinstance(patient_ref, dict)
+            or patient_ref.get("reference") != expected_patient_reference
+        ):
             issues.append(
                 {
-                    "field": f"{resource_type}.subject",
+                    "field": f"{resource_type}.{patient_ref_field}",
                     "message": (
                         f"{resource_type} must reference {expected_patient_reference}."
                     ),
@@ -4245,6 +4253,7 @@ def _clinical_context(record: SyntheticRecord) -> dict[str, Any]:
         "labs": [lab.model_dump() for lab in record.labs],
         "vitals": [vital.model_dump() for vital in record.vitals],
         "medication_history": [med.model_dump() for med in record.medication_history],
+        "allergies": [allergy.model_dump() for allergy in record.allergies],
         "time_series": [channel.model_dump() for channel in record.time_series],
         "documents": [document.model_dump() for document in record.documents],
         "imaging": [asset.model_dump() for asset in record.imaging],
@@ -4367,6 +4376,7 @@ def _tool_schema() -> dict[str, Any]:
             "labs": {"type": "array", "items": {"type": "object"}},
             "vitals": {"type": "array", "items": {"type": "object"}},
             "medication_history": {"type": "array", "items": {"type": "object"}},
+            "allergies": {"type": "array", "items": {"type": "object"}},
             "time_series": {"type": "array", "items": {"type": "object"}},
             "documents": {"type": "array", "items": {"type": "object"}},
             "imaging": {"type": "array", "items": {"type": "object"}},
@@ -4381,6 +4391,7 @@ def _tool_schema() -> dict[str, Any]:
             "labs",
             "vitals",
             "medication_history",
+            "allergies",
             "time_series",
             "documents",
             "imaging",
@@ -4662,6 +4673,35 @@ def _medication_statement_resource(record: SyntheticRecord, medication) -> dict[
             resource["effectivePeriod"]["start"] = medication.start
         if medication.end:
             resource["effectivePeriod"]["end"] = medication.end
+    return resource
+
+
+def _allergy_intolerance_resource(record: SyntheticRecord, allergy) -> dict[str, Any]:
+    resource: dict[str, Any] = {
+        "resourceType": "AllergyIntolerance",
+        "id": f"{record.record_id}-allergy-{_slug(allergy.substance)}",
+        "clinicalStatus": {"text": allergy.status or "active"},
+        "code": {"text": allergy.substance},
+        "patient": _patient_reference(record),
+    }
+    if allergy.code:
+        resource["code"] = {
+            "coding": [
+                {
+                    "system": allergy.system or "synthetic",
+                    "code": allergy.code,
+                    "display": allergy.substance,
+                }
+            ],
+            "text": allergy.substance,
+        }
+    if allergy.reaction:
+        reaction: dict[str, Any] = {"manifestation": [{"text": allergy.reaction}]}
+        if allergy.severity:
+            reaction["severity"] = allergy.severity
+        resource["reaction"] = [reaction]
+    if allergy.recorded_at:
+        resource["recordedDate"] = allergy.recorded_at
     return resource
 
 
