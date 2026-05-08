@@ -558,6 +558,104 @@ def test_synthea_adapter_auto_detects_ndjson_output_directory(tmp_path):
     assert records[0].metadata["source_format"] == "fhir_ndjson"
 
 
+def test_synthea_adapter_imports_csv_directory_grouped_by_patient(tmp_path):
+    (tmp_path / "patients.csv").write_text(
+        "\n".join(
+            [
+                "Id,BIRTHDATE,GENDER,RACE,ETHNICITY,MARITAL,CITY,STATE,ZIP",
+                "pat-csv,1972-01-01,F,white,hispanic,M,Austin,TX,78701",
+            ]
+        )
+        + "\n"
+    )
+    (tmp_path / "encounters.csv").write_text(
+        "\n".join(
+            [
+                "Id,START,STOP,PATIENT,ENCOUNTERCLASS,CODE,DESCRIPTION,REASONCODE,REASONDESCRIPTION",
+                "enc-csv,2026-01-01T00:00:00Z,2026-01-01T04:00:00Z,pat-csv,emergency,50849002,Emergency room admission,233604007,Pneumonia",
+            ]
+        )
+        + "\n"
+    )
+    (tmp_path / "conditions.csv").write_text(
+        "\n".join(
+            [
+                "START,STOP,PATIENT,ENCOUNTER,CODE,DESCRIPTION",
+                "2026-01-01,,pat-csv,enc-csv,233604007,Pneumonia",
+            ]
+        )
+        + "\n"
+    )
+    (tmp_path / "procedures.csv").write_text(
+        "\n".join(
+            [
+                "DATE,PATIENT,ENCOUNTER,CODE,DESCRIPTION",
+                "2026-01-01T02:00:00Z,pat-csv,enc-csv,710830005,Chest radiography",
+            ]
+        )
+        + "\n"
+    )
+    (tmp_path / "observations.csv").write_text(
+        "\n".join(
+            [
+                "DATE,PATIENT,ENCOUNTER,CODE,DESCRIPTION,VALUE,UNITS,TYPE",
+                "2026-01-01T01:00:00Z,pat-csv,enc-csv,2345-7,Glucose,145,mg/dL,numeric",
+                "2026-01-01T01:05:00Z,pat-csv,enc-csv,8867-4,Heart rate,118,/min,numeric",
+            ]
+        )
+        + "\n"
+    )
+    (tmp_path / "medications.csv").write_text(
+        "\n".join(
+            [
+                "START,STOP,PATIENT,ENCOUNTER,CODE,DESCRIPTION,REASONCODE,REASONDESCRIPTION",
+                "2026-01-01,,pat-csv,enc-csv,313782,Ceftriaxone 1 g Injection,233604007,Pneumonia",
+            ]
+        )
+        + "\n"
+    )
+
+    records = SyntheaAdapter().import_csv_path(str(tmp_path), dataset_id="ds-csv")
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.record_id == "synthea-pat-csv"
+    assert record.patient.patient_id == "pat-csv"
+    assert record.patient.age == 54
+    assert record.patient.sex == "female"
+    assert record.patient.demographics["race"] == "white"
+    assert record.patient.demographics["address"] == {
+        "city": "Austin",
+        "state": "TX",
+        "postalCode": "78701",
+    }
+    assert record.topic == "Pneumonia"
+    assert record.encounters[0].encounter_id == "enc-csv"
+    assert record.encounters[0].diagnoses[0].code == "233604007"
+    assert record.encounters[0].procedures[0].display == "Chest radiography"
+    assert record.labs[0].name == "Glucose"
+    assert record.labs[0].value == 145.0
+    assert record.vitals[0].name == "Heart rate"
+    assert record.vitals[0].value == 118.0
+    assert record.medication_history[0].name == "Ceftriaxone 1 g Injection"
+    assert record.metadata["source_format"] == "synthea_csv"
+    assert record.provenance.source_refs[0]["format"] == "synthea_csv"
+    assert Modality.LABS in record.modalities
+    assert Modality.VITALS in record.modalities
+
+
+def test_synthea_adapter_auto_detects_csv_output_directory(tmp_path):
+    (tmp_path / "patients.csv").write_text(
+        "Id,BIRTHDATE,GENDER\npat-csv,1980-01-01,M\n"
+    )
+
+    records = SyntheaAdapter().import_fhir_path(str(tmp_path), dataset_id="ds-csv")
+
+    assert len(records) == 1
+    assert records[0].patient.patient_id == "pat-csv"
+    assert records[0].metadata["source_format"] == "synthea_csv"
+
+
 def test_synthea_adapter_runs_command_and_imports_output_directory(tmp_path):
     output_dir = tmp_path / "fhir"
     output_dir.mkdir()

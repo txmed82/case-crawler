@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import subprocess
 from collections.abc import Mapping
@@ -68,10 +69,111 @@ class SyntheaAdapter:
             ndjson_paths = sorted(source.glob("*.ndjson"))
             if ndjson_paths:
                 return self.import_fhir_ndjson_path(path, dataset_id=dataset_id)
+            if _has_synthea_csv_files(source):
+                return self.import_csv_path(path, dataset_id=dataset_id)
             return []
         if source.suffix.lower() == ".ndjson":
             return self.import_fhir_ndjson_path(path, dataset_id=dataset_id)
         return [self.import_fhir_bundle(str(source), dataset_id=dataset_id)]
+
+    def import_csv_path(self, path: str, dataset_id: str) -> list[SyntheticRecord]:
+        source = Path(path)
+        if not source.is_dir():
+            raise ValueError("Synthea CSV import requires a directory.")
+        patients = _read_csv_table(source / "patients.csv")
+        if not patients:
+            return []
+        encounters_by_patient = _csv_rows_by_patient(
+            _read_csv_table(source / "encounters.csv")
+        )
+        conditions_by_patient = _csv_rows_by_patient(
+            _read_csv_table(source / "conditions.csv")
+        )
+        procedures_by_patient = _csv_rows_by_patient(
+            _read_csv_table(source / "procedures.csv")
+        )
+        observations_by_patient = _csv_rows_by_patient(
+            _read_csv_table(source / "observations.csv")
+        )
+        medications_by_patient = _csv_rows_by_patient(
+            _read_csv_table(source / "medications.csv")
+        )
+        records = []
+        for patient_row in sorted(patients, key=lambda row: _csv_value(row, "Id")):
+            patient_id = _csv_value(patient_row, "Id") or "synthea-patient"
+            patient_encounters = encounters_by_patient.get(patient_id, [])
+            created_at = (
+                _csv_value(patient_encounters[0], "START")
+                if patient_encounters
+                else "2026-01-01T00:00:00"
+            )
+            diagnoses = [
+                code
+                for code in (
+                    _csv_code(row, default_system="synthea-csv-condition")
+                    for row in conditions_by_patient.get(patient_id, [])
+                )
+                if code is not None
+            ]
+            procedures = [
+                code
+                for code in (
+                    _csv_code(row, default_system="synthea-csv-procedure")
+                    for row in procedures_by_patient.get(patient_id, [])
+                )
+                if code is not None
+            ]
+            encounters = _csv_encounters(
+                patient_encounters,
+                diagnoses=diagnoses,
+                procedures=procedures,
+                created_at=created_at,
+            )
+            labs, vitals = _csv_observations(
+                observations_by_patient.get(patient_id, []),
+                created_at=created_at,
+            )
+            medications = [
+                medication
+                for medication in (
+                    _csv_medication(row)
+                    for row in medications_by_patient.get(patient_id, [])
+                )
+                if medication is not None
+            ]
+            topic = _csv_topic(patient_encounters, conditions_by_patient.get(patient_id, []))
+            records.append(
+                SyntheticRecord(
+                    record_id=f"synthea-{patient_id}",
+                    dataset_id=dataset_id,
+                    topic=topic,
+                    complexity=ComplexityProfile.MODERATE,
+                    modalities=_modalities(labs=labs, vitals=vitals, documents=[]),
+                    patient=_csv_patient(patient_row, created_at),
+                    encounters=encounters,
+                    labs=labs,
+                    vitals=vitals,
+                    medication_history=medications,
+                    provenance=Provenance(
+                        generator="synthea-csv-import",
+                        created_at=created_at,
+                        source_refs=[
+                            {
+                                "path": str(source),
+                                "format": "synthea_csv",
+                                "patient_id": patient_id,
+                            }
+                        ],
+                    ),
+                    metadata={
+                        "source": "synthea",
+                        "source_format": "synthea_csv",
+                        "reference_key": SYNTHEA_REFERENCE_KEY,
+                        "reference_dataset": SYNTHEA_REFERENCE_KEY,
+                    },
+                )
+            )
+        return records
 
     def import_fhir_bundle(self, path: str, dataset_id: str) -> SyntheticRecord:
         bundle = json.loads(Path(path).read_text())
@@ -256,6 +358,237 @@ def _read_ndjson_resources(path: Path) -> list[dict]:
         if isinstance(value, Mapping):
             resources.append(dict(value))
     return resources
+
+
+def _has_synthea_csv_files(path: Path) -> bool:
+    return (path / "patients.csv").is_file()
+
+
+def _read_csv_table(path: Path) -> list[dict[str, str]]:
+    if not path.is_file():
+        return []
+    with path.open(newline="") as handle:
+        return [dict(row) for row in csv.DictReader(handle)]
+
+
+def _csv_rows_by_patient(rows: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
+    grouped: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        patient_id = _csv_value(row, "PATIENT") or _csv_value(row, "Id")
+        if not patient_id:
+            continue
+        grouped.setdefault(patient_id, []).append(row)
+    return grouped
+
+
+def _csv_patient(row: dict[str, str], created_at: str) -> SyntheticPatient:
+    patient_id = _csv_value(row, "Id") or "synthea-patient"
+    gender = _csv_value(row, "GENDER").lower()
+    sex_map = {"f": "female", "m": "male"}
+    demographics = {"source": "synthea_csv"}
+    birth_date = _csv_value(row, "BIRTHDATE")
+    if birth_date:
+        demographics["birth_date"] = birth_date
+    for key, csv_key in (
+        ("race", "RACE"),
+        ("ethnicity", "ETHNICITY"),
+        ("marital_status", "MARITAL"),
+        ("birthplace", "BIRTHPLACE"),
+    ):
+        value = _csv_value(row, csv_key)
+        if value:
+            demographics[key] = value
+    address = {
+        target: value
+        for target, value in (
+            ("city", _csv_value(row, "CITY")),
+            ("state", _csv_value(row, "STATE")),
+            ("postalCode", _csv_value(row, "ZIP")),
+            ("county", _csv_value(row, "COUNTY")),
+        )
+        if value
+    }
+    if address:
+        demographics["address"] = address
+    return SyntheticPatient(
+        patient_id=patient_id,
+        age=_age(birth_date, created_at),
+        sex=sex_map.get(gender, gender or "unknown"),
+        demographics=demographics,
+    )
+
+
+def _csv_encounters(
+    rows: list[dict[str, str]],
+    *,
+    diagnoses: list[Code],
+    procedures: list[Code],
+    created_at: str,
+) -> list[Encounter]:
+    if not rows:
+        return [
+            Encounter(
+                encounter_id="synthea-csv-encounter",
+                start=created_at,
+                setting="synthea_csv",
+                reason="synthea csv import",
+                diagnoses=diagnoses,
+                procedures=procedures,
+            )
+        ]
+    encounters = []
+    for index, row in enumerate(rows):
+        reason = (
+            _csv_value(row, "REASONDESCRIPTION")
+            or _csv_value(row, "DESCRIPTION")
+            or "synthea csv import"
+        )
+        encounter_diagnoses = diagnoses if index == 0 else []
+        encounter_procedures = procedures if index == 0 else []
+        encounters.append(
+            Encounter(
+                encounter_id=_csv_value(row, "Id") or f"synthea-csv-enc-{index}",
+                start=_csv_value(row, "START") or created_at,
+                end=_csv_value(row, "STOP") or None,
+                setting=_csv_value(row, "ENCOUNTERCLASS") or "synthea_csv",
+                reason=reason,
+                diagnoses=encounter_diagnoses,
+                procedures=encounter_procedures,
+            )
+        )
+    return encounters
+
+
+def _csv_observations(
+    rows: list[dict[str, str]],
+    *,
+    created_at: str,
+) -> tuple[list[LabObservation], list[VitalObservation]]:
+    labs: list[LabObservation] = []
+    vitals: list[VitalObservation] = []
+    for row in rows:
+        name = _csv_value(row, "DESCRIPTION") or "Observation"
+        value = _csv_number_or_text(_csv_value(row, "VALUE"))
+        unit = _csv_value(row, "UNITS")
+        effective_time = _csv_value(row, "DATE") or created_at
+        code = _csv_value(row, "CODE") or None
+        if _csv_observation_is_vital(row):
+            numeric_value = _csv_float(value)
+            if numeric_value is None:
+                continue
+            vitals.append(
+                VitalObservation(
+                    name=name,
+                    value=numeric_value,
+                    unit=unit,
+                    effective_time=effective_time,
+                )
+            )
+            continue
+        labs.append(
+            LabObservation(
+                name=name,
+                loinc=code,
+                value=value,
+                unit=unit,
+                effective_time=effective_time,
+            )
+        )
+    return labs, vitals
+
+
+def _csv_medication(row: dict[str, str]) -> MedicationStatement | None:
+    name = _csv_value(row, "DESCRIPTION")
+    if not name:
+        return None
+    start = _csv_value(row, "START")
+    stop = _csv_value(row, "STOP")
+    status = "stopped" if stop else "active"
+    return MedicationStatement(
+        name=name,
+        dose=None,
+        route=None,
+        frequency=None,
+        start=start or None,
+        end=stop or None,
+        status=status,
+    )
+
+
+def _csv_code(row: dict[str, str], *, default_system: str) -> Code | None:
+    code = _csv_value(row, "CODE")
+    display = _csv_value(row, "DESCRIPTION")
+    if not code and not display:
+        return None
+    return Code(
+        system=default_system,
+        code=code or display,
+        display=display or code,
+    )
+
+
+def _csv_topic(
+    encounter_rows: list[dict[str, str]],
+    condition_rows: list[dict[str, str]],
+) -> str:
+    for row in encounter_rows:
+        topic = _csv_value(row, "REASONDESCRIPTION") or _csv_value(row, "DESCRIPTION")
+        if topic:
+            return topic
+    for row in condition_rows:
+        topic = _csv_value(row, "DESCRIPTION")
+        if topic:
+            return topic
+    return "synthea csv import"
+
+
+def _csv_observation_is_vital(row: dict[str, str]) -> bool:
+    code = _csv_value(row, "CODE")
+    description = _csv_value(row, "DESCRIPTION").lower()
+    vital_codes = {
+        "8867-4",
+        "9279-1",
+        "8310-5",
+        "8302-2",
+        "29463-7",
+        "8480-6",
+        "8462-4",
+        "2708-6",
+    }
+    vital_terms = {
+        "heart rate",
+        "respiratory rate",
+        "body temperature",
+        "body height",
+        "body weight",
+        "systolic blood pressure",
+        "diastolic blood pressure",
+        "oxygen saturation",
+    }
+    return code in vital_codes or description in vital_terms
+
+
+def _csv_number_or_text(value: str) -> float | str:
+    number = _csv_float(value)
+    return number if number is not None else value
+
+
+def _csv_float(value: object) -> float | None:
+    if isinstance(value, int | float):
+        return float(value)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _csv_value(row: Mapping[str, object], key: str) -> str:
+    value = row.get(key)
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 def _group_resources_by_patient(resources: list[dict]) -> dict[str, list[dict]]:
