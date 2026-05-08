@@ -926,6 +926,313 @@ def export_jsonl_split_package(
     return manifest
 
 
+def verify_jsonl_split_package(package_dir: str | Path) -> dict[str, Any]:
+    package_path = Path(package_dir)
+    manifest_path = package_path / "manifest.json"
+    issues: list[dict[str, str]] = []
+    if not manifest_path.exists():
+        return {
+            "package_dir": str(package_path),
+            "valid": False,
+            "issues": [
+                {
+                    "field": "manifest.json",
+                    "message": "Split package manifest.json is missing.",
+                }
+            ],
+            "checked_files": {},
+            "splits": {},
+        }
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except json.JSONDecodeError as exc:
+        return {
+            "package_dir": str(package_path),
+            "valid": False,
+            "issues": [
+                {
+                    "field": "manifest.json",
+                    "message": f"Split package manifest.json is invalid JSON: {exc}.",
+                }
+            ],
+            "checked_files": {},
+            "splits": {},
+        }
+
+    checked_files = _verify_package_files(package_path, manifest, issues)
+    split_summaries = _verify_package_splits(package_path, manifest, issues)
+    _verify_package_audit_artifacts(package_path, manifest, issues)
+    return {
+        "package_dir": str(package_path),
+        "dataset_id": manifest.get("dataset_id"),
+        "export_format": manifest.get("export_format"),
+        "valid": not issues,
+        "issues": issues,
+        "checked_files": checked_files,
+        "splits": split_summaries,
+    }
+
+
+def _verify_package_files(
+    package_path: Path,
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> dict[str, dict[str, Any]]:
+    checked_files: dict[str, dict[str, Any]] = {}
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        issues.append(
+            {
+                "field": "files",
+                "message": "Split package manifest is missing file checksum metadata.",
+            }
+        )
+        return checked_files
+    for file_name, metadata in sorted(files.items()):
+        if not isinstance(file_name, str) or Path(file_name).name != file_name:
+            issues.append(
+                {
+                    "field": "files",
+                    "message": f"Invalid package file name in manifest: {file_name!r}.",
+                }
+            )
+            continue
+        if not isinstance(metadata, dict):
+            issues.append(
+                {
+                    "field": f"files.{file_name}",
+                    "message": "File metadata must be an object.",
+                }
+            )
+            continue
+        file_path = package_path / file_name
+        if not file_path.exists():
+            issues.append(
+                {
+                    "field": f"files.{file_name}",
+                    "message": f"Package file {file_name} is missing.",
+                }
+            )
+            checked_files[file_name] = {"exists": False}
+            continue
+        byte_size = file_path.stat().st_size
+        sha256 = hashlib.sha256(file_path.read_bytes()).hexdigest()
+        expected_byte_size = metadata.get("byte_size")
+        expected_sha256 = metadata.get("sha256")
+        checked_files[file_name] = {
+            "exists": True,
+            "byte_size": byte_size,
+            "sha256": sha256,
+        }
+        if isinstance(expected_byte_size, int) and byte_size != expected_byte_size:
+            issues.append(
+                {
+                    "field": f"files.{file_name}.byte_size",
+                    "message": (
+                        f"Package file {file_name} byte size {byte_size} "
+                        f"does not match manifest value {expected_byte_size}."
+                    ),
+                }
+            )
+        elif not isinstance(expected_byte_size, int):
+            issues.append(
+                {
+                    "field": f"files.{file_name}.byte_size",
+                    "message": f"Package file {file_name} has no integer byte_size.",
+                }
+            )
+        if isinstance(expected_sha256, str) and sha256 != expected_sha256:
+            issues.append(
+                {
+                    "field": f"files.{file_name}.sha256",
+                    "message": f"Package file {file_name} checksum does not match manifest.",
+                }
+            )
+        elif not isinstance(expected_sha256, str):
+            issues.append(
+                {
+                    "field": f"files.{file_name}.sha256",
+                    "message": f"Package file {file_name} has no sha256 checksum.",
+                }
+            )
+    return checked_files
+
+
+def _verify_package_splits(
+    package_path: Path,
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> dict[str, dict[str, Any]]:
+    splits = manifest.get("splits")
+    if not isinstance(splits, dict):
+        issues.append(
+            {
+                "field": "splits",
+                "message": "Split package manifest is missing split metadata.",
+            }
+        )
+        return {}
+
+    summaries: dict[str, dict[str, Any]] = {}
+    total_examples = 0
+    all_record_ids: set[str] = set()
+    duplicate_record_ids: set[str] = set()
+    for split_name in ("train", "validation", "test"):
+        split_metadata = splits.get(split_name)
+        if not isinstance(split_metadata, dict):
+            issues.append(
+                {
+                    "field": f"splits.{split_name}",
+                    "message": f"Split {split_name} metadata is missing.",
+                }
+            )
+            continue
+        jsonl_path = package_path / f"{split_name}.jsonl"
+        examples, parse_issues = _read_jsonl_examples(jsonl_path)
+        for message in parse_issues:
+            issues.append({"field": f"{split_name}.jsonl", "message": message})
+        example_count = len(examples)
+        record_ids = [
+            record_id
+            for example in examples
+            if isinstance((record_id := example.get("record_id")), str)
+        ]
+        observed_record_ids = sorted(set(record_ids))
+        for record_id in observed_record_ids:
+            if record_id in all_record_ids:
+                duplicate_record_ids.add(record_id)
+            all_record_ids.add(record_id)
+        total_examples += example_count
+        summaries[split_name] = {
+            "example_count": example_count,
+            "record_ids": observed_record_ids,
+        }
+        expected_example_count = split_metadata.get("example_count")
+        if (
+            isinstance(expected_example_count, int)
+            and example_count != expected_example_count
+        ):
+            issues.append(
+                {
+                    "field": f"splits.{split_name}.example_count",
+                    "message": (
+                        f"Split {split_name} has {example_count} examples but "
+                        f"manifest declares {expected_example_count}."
+                    ),
+                }
+            )
+        elif not isinstance(expected_example_count, int):
+            issues.append(
+                {
+                    "field": f"splits.{split_name}.example_count",
+                    "message": f"Split {split_name} has no integer example_count.",
+                }
+            )
+        expected_record_ids = split_metadata.get("record_ids")
+        if isinstance(expected_record_ids, list):
+            expected = sorted(
+                item for item in expected_record_ids if isinstance(item, str)
+            )
+            if observed_record_ids != expected:
+                issues.append(
+                    {
+                        "field": f"splits.{split_name}.record_ids",
+                        "message": (
+                            f"Split {split_name} record IDs do not match manifest."
+                        ),
+                    }
+                )
+        else:
+            issues.append(
+                {
+                    "field": f"splits.{split_name}.record_ids",
+                    "message": f"Split {split_name} has no record_ids list.",
+                }
+            )
+
+    expected_total_examples = manifest.get("example_count")
+    if isinstance(expected_total_examples, int) and total_examples != expected_total_examples:
+        issues.append(
+            {
+                "field": "example_count",
+                "message": (
+                    f"Package has {total_examples} examples but manifest declares "
+                    f"{expected_total_examples}."
+                ),
+            }
+        )
+    elif not isinstance(expected_total_examples, int):
+        issues.append(
+            {
+                "field": "example_count",
+                "message": "Split package manifest has no integer example_count.",
+            }
+        )
+    if duplicate_record_ids:
+        issues.append(
+            {
+                "field": "splits.record_ids",
+                "message": (
+                    "Record IDs appear in multiple splits: "
+                    f"{', '.join(sorted(duplicate_record_ids))}."
+                ),
+            }
+        )
+    return summaries
+
+
+def _read_jsonl_examples(path: Path) -> tuple[list[dict[str, Any]], list[str]]:
+    if not path.exists():
+        return [], [f"{path.name} is missing."]
+    examples: list[dict[str, Any]] = []
+    issues: list[str] = []
+    for line_number, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            issues.append(f"Line {line_number} is invalid JSON: {exc}.")
+            continue
+        if not isinstance(payload, dict):
+            issues.append(f"Line {line_number} is not a JSON object.")
+            continue
+        examples.append(payload)
+    return examples, issues
+
+
+def _verify_package_audit_artifacts(
+    package_path: Path,
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    audit_artifacts = manifest.get("audit_artifacts", {})
+    if not isinstance(audit_artifacts, dict):
+        issues.append(
+            {
+                "field": "audit_artifacts",
+                "message": "Split package audit_artifacts metadata must be an object.",
+            }
+        )
+        return
+    for file_name in sorted(audit_artifacts):
+        if not isinstance(file_name, str) or Path(file_name).name != file_name:
+            issues.append(
+                {
+                    "field": "audit_artifacts",
+                    "message": f"Invalid audit artifact name: {file_name!r}.",
+                }
+            )
+            continue
+        if not (package_path / file_name).exists():
+            issues.append(
+                {
+                    "field": f"audit_artifacts.{file_name}",
+                    "message": f"Audit artifact {file_name} is missing.",
+                }
+            )
+
+
 def _package_file_metadata(file_paths: dict[str, str]) -> dict[str, dict[str, Any]]:
     metadata: dict[str, dict[str, Any]] = {}
     for file_name, file_path in sorted(file_paths.items()):

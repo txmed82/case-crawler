@@ -1157,6 +1157,21 @@ def export_dataset_splits(
     )
 
 
+@cli.command("verify-split-package")
+@click.argument(
+    "package_dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+)
+def verify_split_package(package_dir: str) -> None:
+    """Verify a split fine-tuning package manifest, checksums, and JSONL files."""
+    from casecrawler.export.fine_tuning import verify_jsonl_split_package
+
+    report = verify_jsonl_split_package(package_dir)
+    click.echo(json.dumps(report, indent=2))
+    if not report["valid"]:
+        raise click.ClickException("Split package verification failed.")
+
+
 @cli.command("benchmark-dataset")
 @click.option("--dataset-id", required=True, help="Generated dataset id")
 @click.option("--reference-dataset-id", required=True, help="Reference dataset id")
