@@ -135,6 +135,8 @@ export interface ReferenceDatasetCatalogItem {
   split: string;
   license: string;
   description: string;
+  image_field?: string | null;
+  image_label_field?: string | null;
 }
 
 export interface ReferenceDatasetCatalogResponse {
@@ -152,6 +154,10 @@ export interface ReferenceDatasetImportRequest {
   answer_field?: string;
   task_field?: string;
   patient_id_field?: string;
+  image_field?: string;
+  image_label_field?: string;
+  image_modality?: string;
+  image_body_region?: string;
   limit?: number;
 }
 

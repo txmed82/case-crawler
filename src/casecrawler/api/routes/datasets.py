@@ -34,6 +34,10 @@ class ReferenceImportRequest(BaseModel):
     answer_field: str | None = None
     task_field: str | None = None
     patient_id_field: str | None = None
+    image_field: str | None = None
+    image_label_field: str | None = None
+    image_modality: str = "XR"
+    image_body_region: str = "chest"
     limit: int | None = Field(default=None, ge=1)
 
 
@@ -85,6 +89,8 @@ def list_reference_catalog():
                 "split": spec.split,
                 "license": spec.license,
                 "description": spec.description,
+                "image_field": spec.image_field,
+                "image_label_field": spec.image_label_field,
             }
             for key, spec in REFERENCE_DATASETS.items()
         ]
@@ -179,10 +185,14 @@ def import_reference_dataset(req: ReferenceImportRequest):
             note_field=req.note_field,
             question_field=req.question_field,
             answer_field=req.answer_field,
-            task_field=req.task_field,
-            patient_id_field=req.patient_id_field,
-            description="User-specified Hugging Face reference dataset.",
-        )
+                task_field=req.task_field,
+                patient_id_field=req.patient_id_field,
+                image_field=req.image_field,
+                image_label_field=req.image_label_field,
+                image_modality=req.image_modality,
+                image_body_region=req.image_body_region,
+                description="User-specified Hugging Face reference dataset.",
+            )
         try:
             rows = load_huggingface_dataset(req.repo_id, split=split, streaming=True)
             records = import_reference_rows(

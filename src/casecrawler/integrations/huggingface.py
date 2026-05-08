@@ -5,6 +5,7 @@ import importlib
 import re
 from hashlib import sha256
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 from uuid import NAMESPACE_URL, uuid5
 
@@ -42,6 +43,11 @@ class HuggingFaceReferenceDataset:
     answer_field: str | None = None
     task_field: str | None = None
     patient_id_field: str | None = None
+    image_field: str | None = None
+    image_label_field: str | None = None
+    image_label_map: dict[str, str] | None = None
+    image_modality: str = "XR"
+    image_body_region: str = "chest"
     description: str = ""
 
 
@@ -109,6 +115,37 @@ REFERENCE_DATASETS: dict[str, HuggingFaceReferenceDataset] = {
             "image-evidence and report-language alignment benchmarking."
         ),
     ),
+    "synthchex_75k": HuggingFaceReferenceDataset(
+        repo_id="raman07/SynthCheX-75K-v2",
+        split="train",
+        license="apache-2.0",
+        note_field="label",
+        patient_id_field=None,
+        image_field="image",
+        image_label_field="label",
+        image_modality="XR",
+        image_body_region="chest",
+        description=(
+            "Synthetic chest radiograph image-text reference set from "
+            "CheXGenBench, with pathological annotations."
+        ),
+    ),
+    "synthetic_chest_xray_pneumonia": HuggingFaceReferenceDataset(
+        repo_id="chimbiwide/synthetic-chest-xray-pneumonia",
+        split="train",
+        license="cc-by-4.0",
+        note_field="label",
+        patient_id_field=None,
+        image_field="image",
+        image_label_field="label",
+        image_label_map={"0": "normal", "1": "pneumonia"},
+        image_modality="XR",
+        image_body_region="chest",
+        description=(
+            "Synthetic chest X-ray classification reference dataset with "
+            "normal and pneumonia labels."
+        ),
+    ),
 }
 
 
@@ -151,6 +188,11 @@ def reference_dataset_spec(
     answer_field: str | None = None,
     task_field: str | None = None,
     patient_id_field: str | None = None,
+    image_field: str | None = None,
+    image_label_field: str | None = None,
+    image_label_map: dict[str, str] | None = None,
+    image_modality: str = "XR",
+    image_body_region: str = "chest",
     description: str = "",
 ) -> HuggingFaceReferenceDataset:
     return HuggingFaceReferenceDataset(
@@ -162,6 +204,11 @@ def reference_dataset_spec(
         answer_field=answer_field,
         task_field=task_field,
         patient_id_field=patient_id_field,
+        image_field=image_field,
+        image_label_field=image_label_field,
+        image_label_map=image_label_map,
+        image_modality=image_modality,
+        image_body_region=image_body_region,
         description=description,
     )
 
@@ -174,6 +221,7 @@ def import_reference_rows(
     split: str | None = None,
     limit: int | None = None,
     spec: HuggingFaceReferenceDataset | None = None,
+    image_output_dir: str | Path = "./data/reference_images",
 ) -> list[SyntheticRecord]:
     resolved_spec = spec or REFERENCE_DATASETS[reference_key]
     effective_split = split or resolved_spec.split
@@ -187,6 +235,7 @@ def import_reference_rows(
                 dataset_id=dataset_id,
                 spec=resolved_spec,
                 split=effective_split,
+                image_output_dir=image_output_dir,
             )
         )
     return records
@@ -198,9 +247,13 @@ def reference_row_to_record(
     dataset_id: str,
     spec: HuggingFaceReferenceDataset,
     split: str | None = None,
+    image_output_dir: str | Path = "./data/reference_images",
 ) -> SyntheticRecord:
     effective_split = split or spec.split
+    image_label = _image_label(row, spec)
     note = _coerce_text(row.get(spec.note_field))
+    if spec.image_field and image_label and note == _coerce_text(row.get(spec.note_field)):
+        note = f"Synthetic reference {spec.image_body_region} {spec.image_modality} labeled {image_label}."
     question = _coerce_text(row.get(spec.question_field)) if spec.question_field else ""
     answer = _coerce_text(row.get(spec.answer_field)) if spec.answer_field else ""
     task = _coerce_text(row.get(spec.task_field)) if spec.task_field else "clinical_note"
@@ -217,7 +270,16 @@ def reference_row_to_record(
     record_id = f"hf-{uuid5(NAMESPACE_URL, stable_seed)}"
     patient_id = f"pat-{uuid5(NAMESPACE_URL, stable_seed + ':patient')}"
     labs, vitals, medications = _fhir_artifacts(answer)
-    imaging = _radiology_artifacts(row, spec, stable_seed, report_text=note)
+    imaging = [
+        *_radiology_artifacts(row, spec, stable_seed, report_text=note),
+        *_image_reference_artifacts(
+            row,
+            spec,
+            stable_seed,
+            report_text=note,
+            image_output_dir=image_output_dir,
+        ),
+    ]
     modalities = _reference_modalities(
         labs=labs,
         vitals=vitals,
@@ -544,6 +606,90 @@ def _radiology_artifacts(
             generation_backend="huggingface-reference",
         )
     ]
+
+
+def _image_reference_artifacts(
+    row: dict,
+    spec: HuggingFaceReferenceDataset,
+    stable_seed: str,
+    *,
+    report_text: str,
+    image_output_dir: str | Path,
+) -> list[ImagingAsset]:
+    if not spec.image_field:
+        return []
+    image_value = row.get(spec.image_field)
+    image_path = _persist_reference_image(
+        image_value,
+        stable_seed=stable_seed,
+        image_output_dir=image_output_dir,
+    )
+    label_text = _image_label(row, spec)
+    labels = _radiology_labels(label_text)
+    if label_text and not labels and label_text != "normal":
+        labels = [
+            Code(
+                system="huggingface-reference",
+                code=re.sub(r"\W+", "_", label_text.lower()).strip("_"),
+                display=label_text,
+            )
+        ]
+    prompt = (
+        f"Synthetic reference {spec.image_body_region} {spec.image_modality} "
+        f"labeled {label_text or 'unknown'}."
+    )
+    return [
+        ImagingAsset(
+            image_id=f"img-{uuid5(NAMESPACE_URL, stable_seed + ':image-reference')}",
+            modality=spec.image_modality,
+            body_region=spec.image_body_region,
+            prompt=prompt,
+            file_path=image_path,
+            report_text=report_text or prompt,
+            labels=labels,
+            generation_backend=f"huggingface-reference:{spec.repo_id}",
+        )
+    ]
+
+
+def _persist_reference_image(
+    image_value,
+    *,
+    stable_seed: str,
+    image_output_dir: str | Path,
+) -> str | None:
+    if image_value is None:
+        return None
+    if isinstance(image_value, str):
+        return image_value
+    if isinstance(image_value, dict):
+        path = image_value.get("path")
+        if isinstance(path, str) and path:
+            return path
+        bytes_value = image_value.get("bytes")
+        if isinstance(bytes_value, bytes):
+            output_dir = Path(image_output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_path = output_dir / f"hf-{uuid5(NAMESPACE_URL, stable_seed + ':image')}.png"
+            output_path.write_bytes(bytes_value)
+            return str(output_path)
+    if hasattr(image_value, "save"):
+        output_dir = Path(image_output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / f"hf-{uuid5(NAMESPACE_URL, stable_seed + ':image')}.png"
+        image_value.save(output_path)
+        return str(output_path)
+    return None
+
+
+def _image_label(row: dict, spec: HuggingFaceReferenceDataset) -> str:
+    if not spec.image_label_field:
+        return ""
+    raw_label = row.get(spec.image_label_field)
+    label = _coerce_text(raw_label)
+    if spec.image_label_map:
+        return spec.image_label_map.get(label, label)
+    return label
 
 
 def _radiology_labels(findings: str) -> list[Code]:
