@@ -933,6 +933,9 @@ def test_verify_jsonl_split_package_validates_quality_report_release_fields(tmp_
                 "approved_count": 3,
                 "approval_rate": 1.0,
                 "export_ready": True,
+                "mean_imaging_prompt_chars": "long",
+                "mean_imaging_report_chars": False,
+                "imaging_report_label_evidence_rate": 1.5,
                 "core_artifact_coverage": {"records": "yes"},
                 "multimodal_release_ready": "false",
                 "multimodal_release_missing": [False],
@@ -953,6 +956,12 @@ def test_verify_jsonl_split_package_validates_quality_report_release_fields(tmp_
     assert report["valid"] is False
     issue_fields = {issue["field"] for issue in report["issues"]}
     assert "audit_artifacts.quality_report.json.core_artifact_coverage" in issue_fields
+    assert "audit_artifacts.quality_report.json.mean_imaging_prompt_chars" in issue_fields
+    assert "audit_artifacts.quality_report.json.mean_imaging_report_chars" in issue_fields
+    assert (
+        "audit_artifacts.quality_report.json.imaging_report_label_evidence_rate"
+        in issue_fields
+    )
     assert "audit_artifacts.quality_report.json.multimodal_release_ready" in issue_fields
     assert "audit_artifacts.quality_report.json.multimodal_release_missing" in issue_fields
 
