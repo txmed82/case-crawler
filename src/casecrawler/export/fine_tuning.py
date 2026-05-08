@@ -1297,6 +1297,54 @@ def _verify_package_audit_artifacts(
                     "message": f"Audit artifact {file_name} is missing.",
                 }
             )
+            continue
+        if file_name == "benchmark_profile.json":
+            _verify_benchmark_profile_artifact(
+                package_path / file_name,
+                manifest,
+                issues,
+            )
+
+
+def _verify_benchmark_profile_artifact(
+    path: Path,
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    from casecrawler.validation.benchmark import parse_benchmark_profile_artifact
+
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_profile.json",
+                "message": f"Benchmark profile artifact is invalid JSON: {exc}.",
+            }
+        )
+        return
+    try:
+        profile = parse_benchmark_profile_artifact(payload)
+    except ValueError as exc:
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_profile.json",
+                "message": str(exc),
+            }
+        )
+        return
+    manifest_dataset_id = manifest.get("dataset_id")
+    if isinstance(manifest_dataset_id, str) and profile.dataset_id != manifest_dataset_id:
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_profile.json.profile.dataset_id",
+                "message": (
+                    "Benchmark profile dataset_id "
+                    f"{profile.dataset_id!r} does not match package dataset_id "
+                    f"{manifest_dataset_id!r}."
+                ),
+            }
+        )
 
 
 def _package_file_metadata(file_paths: dict[str, str]) -> dict[str, dict[str, Any]]:
