@@ -431,9 +431,13 @@ def test_dataset_api_lists_hf_reference_catalog(tmp_path, monkeypatch):
     assert response.status_code == 200
     datasets = response.json()["datasets"]
     assert any(item["key"] == "asclepius" for item in datasets)
+    assert any(item["key"] == "rexgradient_160k" for item in datasets)
     asclepius = next(item for item in datasets if item["key"] == "asclepius")
+    rexgradient = next(item for item in datasets if item["key"] == "rexgradient_160k")
     assert asclepius["repo_id"] == "starmpcc/Asclepius-Synthetic-Clinical-Notes"
     assert asclepius["license"]
+    assert rexgradient["repo_id"] == "rajpurkarlab/ReXGradient-160K"
+    assert rexgradient["license"] == "rexgradient-non-commercial-gated"
 
 
 def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
