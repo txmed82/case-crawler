@@ -30,6 +30,7 @@ def build_dataset_quality_report(
     medication_dose_counts: Counter[str] = Counter()
     medication_frequency_counts: Counter[str] = Counter()
     medication_status_counts: Counter[str] = Counter()
+    time_series_channel_counts: Counter[str] = Counter()
     time_series_unit_counts: Counter[str] = Counter()
     time_series_backend_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
@@ -40,6 +41,8 @@ def build_dataset_quality_report(
     vital_numeric_values: dict[str, list[float]] = {}
     time_series_numeric_values: dict[str, list[float]] = {}
     time_series_sampling_rates: list[float] = []
+    time_series_point_counts: list[int] = []
+    time_series_durations: list[float] = []
     imaging_prompt_lengths: list[int] = []
     imaging_report_lengths: list[int] = []
     imaging_report_label_evidence_values: list[int] = []
@@ -79,6 +82,7 @@ def build_dataset_quality_report(
             medication_dose_counts,
             medication_frequency_counts,
             medication_status_counts,
+            time_series_channel_counts,
             time_series_unit_counts,
             time_series_backend_counts,
             imaging_backend_counts,
@@ -89,6 +93,8 @@ def build_dataset_quality_report(
             vital_numeric_values,
             time_series_numeric_values,
             time_series_sampling_rates,
+            time_series_point_counts,
+            time_series_durations,
             imaging_prompt_lengths,
             imaging_report_lengths,
             imaging_report_label_evidence_values,
@@ -198,10 +204,13 @@ def build_dataset_quality_report(
         medication_dose_counts=dict(sorted(medication_dose_counts.items())),
         medication_frequency_counts=dict(sorted(medication_frequency_counts.items())),
         medication_status_counts=dict(sorted(medication_status_counts.items())),
+        time_series_channel_counts=dict(sorted(time_series_channel_counts.items())),
         time_series_unit_counts=dict(sorted(time_series_unit_counts.items())),
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
         time_series_numeric_summaries=_numeric_summaries(time_series_numeric_values),
         mean_time_series_sampling_rate_hz=_mean_float(time_series_sampling_rates),
+        mean_time_series_points=_mean_float(time_series_point_counts),
+        mean_time_series_duration_hours=_mean_float(time_series_durations),
         imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
         imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
         mean_imaging_prompt_chars=_mean_float(imaging_prompt_lengths),
@@ -278,6 +287,7 @@ def _count_artifacts(
     medication_dose_counts: Counter[str],
     medication_frequency_counts: Counter[str],
     medication_status_counts: Counter[str],
+    time_series_channel_counts: Counter[str],
     time_series_unit_counts: Counter[str],
     time_series_backend_counts: Counter[str],
     imaging_backend_counts: Counter[str],
@@ -288,6 +298,8 @@ def _count_artifacts(
     vital_numeric_values: dict[str, list[float]],
     time_series_numeric_values: dict[str, list[float]],
     time_series_sampling_rates: list[float],
+    time_series_point_counts: list[int],
+    time_series_durations: list[float],
     imaging_prompt_lengths: list[int],
     imaging_report_lengths: list[int],
     imaging_report_label_evidence_values: list[int],
@@ -334,10 +346,15 @@ def _count_artifacts(
         medication_status_counts[medication.status or "unknown"] += 1
     artifact_counts["time_series_channels"] += len(record.time_series)
     for channel in record.time_series:
+        time_series_channel_counts[channel.name] += 1
         time_series_unit_counts[channel.unit] += 1
         time_series_backend_counts[channel.generation_backend or "unknown"] += 1
         if channel.sampling_rate_hz is not None:
             time_series_sampling_rates.append(channel.sampling_rate_hz)
+        time_series_point_counts.append(len(channel.points))
+        duration = _channel_duration_hours(channel)
+        if duration is not None:
+            time_series_durations.append(duration)
         _collect_time_series_numeric_values(channel, time_series_numeric_values)
     artifact_counts["time_series_waveform_channels"] += sum(
         1
@@ -581,6 +598,16 @@ def _encounter_span_hours(record: SyntheticRecord) -> float | None:
     if len(timestamps) < 2:
         return None
     return round((max(timestamps) - min(timestamps)).total_seconds() / 3600, 4)
+
+
+def _channel_duration_hours(channel) -> float | None:
+    if len(channel.points) < 2:
+        return None
+    timestamps = [_parse_datetime(point.timestamp) for point in channel.points]
+    valid_timestamps = [timestamp for timestamp in timestamps if timestamp is not None]
+    if len(valid_timestamps) < 2:
+        return None
+    return (max(valid_timestamps) - min(valid_timestamps)).total_seconds() / 3600
 
 
 def _parse_datetime(value: str) -> datetime | None:

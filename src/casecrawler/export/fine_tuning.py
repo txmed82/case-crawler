@@ -2582,6 +2582,17 @@ def _string_list_payload(value: object) -> set[str]:
     return {item.strip() for item in value if isinstance(item, str) and item.strip()}
 
 
+def _string_int_map(value: object) -> bool:
+    return isinstance(value, dict) and all(
+        isinstance(key, str)
+        and bool(key.strip())
+        and isinstance(item, int)
+        and not isinstance(item, bool)
+        and item >= 0
+        for key, item in value.items()
+    )
+
+
 def _verify_benchmark_report_payload(
     payload: dict[str, Any],
     *,
@@ -2755,6 +2766,8 @@ def _verify_optional_quality_numeric_fields(
     issues: list[dict[str, str]],
 ) -> None:
     for key in (
+        "mean_time_series_points",
+        "mean_time_series_duration_hours",
         "mean_imaging_prompt_chars",
         "mean_imaging_report_chars",
         "mean_imaging_width",
@@ -2776,6 +2789,19 @@ def _verify_optional_quality_numeric_fields(
         issues,
         key="imaging_report_label_evidence_rate",
     )
+    time_series_channel_counts = payload.get("time_series_channel_counts")
+    if time_series_channel_counts is not None and not _string_int_map(
+        time_series_channel_counts
+    ):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json.time_series_channel_counts",
+                "message": (
+                    "Quality report artifact time_series_channel_counts must be "
+                    "a string-to-integer map."
+                ),
+            }
+        )
 
 
 def _verify_optional_quality_rate(
@@ -2991,6 +3017,8 @@ def _verify_release_summary_quality_numeric_fields(
 ) -> None:
     field_prefix = "audit_artifacts.release_package_summary.json.quality_report"
     for key in (
+        "mean_time_series_points",
+        "mean_time_series_duration_hours",
         "mean_imaging_prompt_chars",
         "mean_imaging_report_chars",
         "mean_imaging_width",
@@ -3010,6 +3038,19 @@ def _verify_release_summary_quality_numeric_fields(
                     ),
                 }
             )
+    time_series_channel_counts = quality.get("time_series_channel_counts")
+    if time_series_channel_counts is not None and not _string_int_map(
+        time_series_channel_counts
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.time_series_channel_counts",
+                "message": (
+                    "Release package summary quality_report."
+                    "time_series_channel_counts must be a string-to-integer map."
+                ),
+            }
+        )
     value = quality.get("imaging_report_label_evidence_rate")
     if value is None:
         return
