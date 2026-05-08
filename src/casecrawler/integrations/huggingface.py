@@ -21,6 +21,8 @@ from casecrawler.models.synthetic import (
     Provenance,
     SyntheticPatient,
     SyntheticRecord,
+    TimeSeriesChannel,
+    TimeSeriesPoint,
     VitalObservation,
 )
 
@@ -54,6 +56,10 @@ class HuggingFaceReferenceDataset:
     phi_annotations_field: str | None = None
     diagnosis_codes_field: str | None = None
     diagnosis_code_system: str = "ICD-9-CM"
+    lab_values_field: str | None = None
+    vital_values_field: str | None = None
+    medications_field: str | None = None
+    time_series_field: str | None = None
     quality_score_field: str | None = None
     gated: bool = False
     use_policy: str = "review_license_before_use"
@@ -255,6 +261,10 @@ def reference_dataset_spec(
     phi_annotations_field: str | None = None,
     diagnosis_codes_field: str | None = None,
     diagnosis_code_system: str = "ICD-9-CM",
+    lab_values_field: str | None = None,
+    vital_values_field: str | None = None,
+    medications_field: str | None = None,
+    time_series_field: str | None = None,
     quality_score_field: str | None = None,
     description: str = "",
 ) -> HuggingFaceReferenceDataset:
@@ -277,6 +287,10 @@ def reference_dataset_spec(
         phi_annotations_field=phi_annotations_field,
         diagnosis_codes_field=diagnosis_codes_field,
         diagnosis_code_system=diagnosis_code_system,
+        lab_values_field=lab_values_field,
+        vital_values_field=vital_values_field,
+        medications_field=medications_field,
+        time_series_field=time_series_field,
         quality_score_field=quality_score_field,
         description=description,
     )
@@ -350,6 +364,13 @@ def reference_row_to_record(
         answer,
         stable_seed=stable_seed,
     )
+    labs = [*labs, *_structured_labs(row.get(spec.lab_values_field))]
+    vitals = [*vitals, *_structured_vitals(row.get(spec.vital_values_field))]
+    medications = [
+        *medications,
+        *_structured_medications(row.get(spec.medications_field)),
+    ]
+    time_series = _structured_time_series(row.get(spec.time_series_field))
     if spec.diagnosis_codes_field:
         diagnoses = [
             *diagnoses,
@@ -372,6 +393,7 @@ def reference_row_to_record(
         diagnoses=diagnoses,
         procedures=procedures,
         imaging=imaging,
+        time_series=time_series,
     )
     document = ClinicalDocument(
         document_id=f"doc-{uuid5(NAMESPACE_URL, stable_seed + ':document')}",
@@ -392,6 +414,7 @@ def reference_row_to_record(
             diagnoses=diagnoses,
             procedures=procedures,
             imaging=imaging,
+            time_series=time_series,
         ),
     )
     encounters = []
@@ -422,6 +445,7 @@ def reference_row_to_record(
         labs=labs,
         vitals=vitals,
         medication_history=medications,
+        time_series=time_series,
         documents=[document, *diagnostic_documents],
         imaging=imaging,
         provenance=Provenance(
@@ -484,6 +508,7 @@ def _reference_modalities(
     diagnoses: list[Code],
     procedures: list[Code],
     imaging: list[ImagingAsset],
+    time_series: list[TimeSeriesChannel],
 ) -> list[Modality]:
     modalities = [Modality.CLINICAL_TEXT]
     if labs or vitals or medications or diagnoses or procedures:
@@ -492,6 +517,8 @@ def _reference_modalities(
         modalities.append(Modality.LABS)
     if vitals:
         modalities.append(Modality.VITALS)
+    if time_series:
+        modalities.append(Modality.TIME_SERIES)
     if imaging:
         modalities.append(Modality.IMAGING)
     return modalities
@@ -551,6 +578,7 @@ def _reference_extracted_facts(
     diagnoses: list[Code],
     procedures: list[Code],
     imaging: list[ImagingAsset],
+    time_series: list[TimeSeriesChannel],
 ) -> dict:
     facts = {
         "source_task": source_task,
@@ -580,6 +608,7 @@ def _reference_extracted_facts(
                 "reference_high": lab.reference_high,
                 "flag": lab.flag,
                 "effective_time": lab.effective_time,
+                "specimen": lab.specimen,
             }
             for lab in labs
         ]
@@ -607,6 +636,23 @@ def _reference_extracted_facts(
                 "end": medication.end,
             }
             for medication in medications
+        ]
+    if time_series:
+        facts["time_series_channels"] = [
+            {
+                "name": channel.name,
+                "unit": channel.unit,
+                "generation_backend": channel.generation_backend,
+                "sampling_rate_hz": channel.sampling_rate_hz,
+                "points": [
+                    {
+                        "timestamp": point.timestamp,
+                        "values": point.values,
+                    }
+                    for point in channel.points
+                ],
+            }
+            for channel in time_series
         ]
     if diagnoses:
         facts["diagnoses"] = [
@@ -689,6 +735,127 @@ def _numeric_or_none(value: object) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _structured_labs(value: object) -> list[LabObservation]:
+    labs: list[LabObservation] = []
+    for item in _list_of_dicts(value):
+        name = _coerce_text(item.get("name") or item.get("test") or item.get("label"))
+        unit = _coerce_text(item.get("unit"))
+        effective_time = _coerce_text(
+            item.get("effective_time") or item.get("timestamp") or item.get("time")
+        )
+        if not name or not unit:
+            continue
+        raw_value = item.get("value")
+        numeric_value = _numeric_or_none(raw_value)
+        labs.append(
+            LabObservation(
+                name=name,
+                loinc=_coerce_optional_text(item.get("loinc")),
+                value=numeric_value if numeric_value is not None else _coerce_text(raw_value),
+                unit=unit,
+                reference_low=_numeric_or_none(item.get("reference_low")),
+                reference_high=_numeric_or_none(item.get("reference_high")),
+                flag=_coerce_optional_text(item.get("flag")),
+                effective_time=effective_time or "2026-01-01T00:00:00",
+                specimen=_coerce_optional_text(item.get("specimen")),
+            )
+        )
+    return labs
+
+
+def _structured_vitals(value: object) -> list[VitalObservation]:
+    vitals: list[VitalObservation] = []
+    for item in _list_of_dicts(value):
+        name = _coerce_text(item.get("name") or item.get("vital") or item.get("label"))
+        unit = _coerce_text(item.get("unit"))
+        numeric_value = _numeric_or_none(item.get("value"))
+        effective_time = _coerce_text(
+            item.get("effective_time") or item.get("timestamp") or item.get("time")
+        )
+        if not name or not unit or numeric_value is None:
+            continue
+        vitals.append(
+            VitalObservation(
+                name=name,
+                value=numeric_value,
+                unit=unit,
+                effective_time=effective_time or "2026-01-01T00:00:00",
+            )
+        )
+    return vitals
+
+
+def _structured_medications(value: object) -> list[MedicationStatement]:
+    medications: list[MedicationStatement] = []
+    for item in _list_of_dicts(value):
+        name = _coerce_text(item.get("name") or item.get("medication") or item.get("drug"))
+        if not name:
+            continue
+        medications.append(
+            MedicationStatement(
+                name=name,
+                rxnorm=_coerce_optional_text(item.get("rxnorm")),
+                dose=_coerce_optional_text(item.get("dose")),
+                route=_coerce_optional_text(item.get("route")),
+                frequency=_coerce_optional_text(item.get("frequency")),
+                status=_coerce_text(item.get("status")) or "unknown",
+                start=_coerce_optional_text(item.get("start")),
+                end=_coerce_optional_text(item.get("end")),
+            )
+        )
+    return medications
+
+
+def _structured_time_series(value: object) -> list[TimeSeriesChannel]:
+    channels: list[TimeSeriesChannel] = []
+    for item in _list_of_dicts(value):
+        name = _coerce_text(item.get("name") or item.get("channel") or item.get("label"))
+        unit = _coerce_text(item.get("unit"))
+        if not name or not unit:
+            continue
+        points = _structured_time_series_points(item.get("points"))
+        if not points:
+            continue
+        channels.append(
+            TimeSeriesChannel(
+                name=name,
+                unit=unit,
+                generation_backend=(
+                    _coerce_text(item.get("generation_backend")) or "reference"
+                ),
+                sampling_rate_hz=_numeric_or_none(item.get("sampling_rate_hz")),
+                points=points,
+            )
+        )
+    return channels
+
+
+def _structured_time_series_points(value: object) -> list[TimeSeriesPoint]:
+    points: list[TimeSeriesPoint] = []
+    for item in _list_of_dicts(value):
+        timestamp = _coerce_text(
+            item.get("timestamp") or item.get("effective_time") or item.get("time")
+        )
+        values = item.get("values")
+        if not isinstance(values, dict):
+            numeric_value = _numeric_or_none(item.get("value"))
+            values = {"value": numeric_value} if numeric_value is not None else {}
+        numeric_values = {
+            str(key): numeric
+            for key, raw in values.items()
+            if (numeric := _numeric_or_none(raw)) is not None
+        }
+        if not timestamp or not numeric_values:
+            continue
+        points.append(TimeSeriesPoint(timestamp=timestamp, values=numeric_values))
+    return points
+
+
+def _coerce_optional_text(value: object) -> str | None:
+    text = _coerce_text(value)
+    return text or None
 
 
 def _fhir_artifacts(
