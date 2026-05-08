@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   datasetExportUrl,
   fetchDataset,
   fetchDatasetBenchmark,
   fetchDatasetCard,
+  fetchDatasetExports,
   fetchDatasetQuality,
   fetchDatasetReviewQueue,
   fetchDatasets,
@@ -13,6 +14,7 @@ import {
 import type {
   DatasetManifest,
   ExportFormat,
+  ExportManifest,
   BenchmarkReport,
   DatasetQualityReport,
   HumanReviewStatus,
@@ -52,6 +54,9 @@ export default function DatasetsPage() {
     enabled: Boolean(activeDatasetId),
   });
   const exportFormats = detail?.manifest.export_formats ?? ["sft_jsonl"];
+  const effectiveExportFormat = exportFormats.includes(exportFormat)
+    ? exportFormat
+    : (exportFormats[0] ?? "sft_jsonl");
   const {
     data: reviewQueue,
     isLoading: isReviewLoading,
@@ -68,6 +73,15 @@ export default function DatasetsPage() {
   } = useQuery({
     queryKey: ["dataset-quality", activeDatasetId],
     queryFn: () => fetchDatasetQuality(activeDatasetId as string),
+    enabled: Boolean(activeDatasetId),
+  });
+  const {
+    data: exportAudit,
+    isLoading: isExportAuditLoading,
+    error: exportAuditError,
+  } = useQuery({
+    queryKey: ["dataset-exports", activeDatasetId],
+    queryFn: () => fetchDatasetExports(activeDatasetId as string, 10),
     enabled: Boolean(activeDatasetId),
   });
   const {
@@ -120,12 +134,6 @@ export default function DatasetsPage() {
       queryClient.invalidateQueries({ queryKey: ["datasets"] });
     },
   });
-
-  useEffect(() => {
-    if (detail && !detail.manifest.export_formats.includes(exportFormat)) {
-      setExportFormat(detail.manifest.export_formats[0] ?? "sft_jsonl");
-    }
-  }, [detail, exportFormat]);
 
   return (
     <div className="space-y-6">
@@ -205,7 +213,7 @@ export default function DatasetsPage() {
                     </div>
                     <div className="flex gap-2">
                       <select
-                        value={exportFormat}
+                        value={effectiveExportFormat}
                         onChange={(event) => setExportFormat(event.target.value as ExportFormat)}
                         className="rounded-md border border-gray-300 px-3 py-2 text-sm"
                       >
@@ -218,13 +226,13 @@ export default function DatasetsPage() {
                       <a
                         href={datasetExportUrl(
                           detail.manifest.dataset_id,
-                          exportFormat,
+                          effectiveExportFormat,
                           referenceDatasetId
                             ? {
-                                referenceDatasetId,
-                                minOverallScore: benchmarkMinOverallScore,
-                                minMetricScore: benchmarkMinMetricScore,
-                              }
+                      referenceDatasetId,
+                      minOverallScore: benchmarkMinOverallScore,
+                      minMetricScore: benchmarkMinMetricScore,
+                    }
                             : undefined
                         )}
                         className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -297,6 +305,12 @@ export default function DatasetsPage() {
                   minMetricScore={benchmarkMinMetricScore}
                   onMinOverallScoreChange={setBenchmarkMinOverallScore}
                   onMinMetricScoreChange={setBenchmarkMinMetricScore}
+                />
+
+                <ExportAuditPanel
+                  exports={exportAudit?.exports ?? []}
+                  isLoading={isExportAuditLoading}
+                  error={exportAuditError}
                 />
 
                 <div className="space-y-3">
@@ -450,6 +464,77 @@ function BenchmarkPanel({
               ))}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExportAuditPanel({
+  exports,
+  isLoading,
+  error,
+}: {
+  exports: ExportManifest[];
+  isLoading: boolean;
+  error: unknown;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Export audit trail</p>
+          <p className="text-xs text-gray-500">Recent fine-tuning exports and benchmark gates</p>
+        </div>
+        <span className="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700">
+          {exports.length} export(s)
+        </span>
+      </div>
+      {isLoading && <p className="mt-3 text-sm text-gray-500">Loading export audit trail...</p>}
+      {Boolean(error) && (
+        <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error instanceof Error ? error.message : "Failed to load export audit trail."}
+        </p>
+      )}
+      {!isLoading && !error && exports.length === 0 && (
+        <p className="mt-3 rounded-md bg-gray-50 p-3 text-sm text-gray-500">
+          No exports have been recorded for this dataset.
+        </p>
+      )}
+      {exports.length > 0 && (
+        <div className="mt-4 overflow-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead>
+              <tr className="text-left text-xs font-medium uppercase text-gray-500">
+                <th className="py-2 pr-4">Format</th>
+                <th className="py-2 pr-4">Records</th>
+                <th className="py-2 pr-4">Gate</th>
+                <th className="py-2 pr-4">Reference</th>
+                <th className="py-2 pr-4">Created</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {exports.map((item) => (
+                <tr key={`${item.created_at}-${item.export_format}-${item.file_path}`}>
+                  <td className="py-2 pr-4 font-medium text-gray-900">
+                    {item.export_format.replace("_", " ")}
+                  </td>
+                  <td className="py-2 pr-4 text-gray-600">{item.record_count}</td>
+                  <td className="py-2 pr-4">
+                    <span className={exportGateClass(item.metadata.benchmark_passed)}>
+                      {formatExportGate(item.metadata.benchmark_passed)}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-4 text-gray-600">
+                    {formatMetadataValue(item.metadata.benchmark_reference_dataset_id)}
+                  </td>
+                  <td className="py-2 pr-4 text-gray-600">
+                    {formatTimestamp(item.created_at)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -783,6 +868,31 @@ function formatMetricValue(value: number | string | null) {
   if (typeof value === "number") return value.toFixed(2);
   if (value === null) return "none";
   return value;
+}
+
+function formatMetadataValue(value: unknown) {
+  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "none";
+}
+
+function formatExportGate(value: unknown) {
+  if (value === true) return "passed";
+  if (value === false) return "failed";
+  return "not run";
+}
+
+function exportGateClass(value: unknown) {
+  const base = "rounded-md px-2 py-1 text-xs font-medium";
+  if (value === true) return `${base} bg-green-50 text-green-700`;
+  if (value === false) return `${base} bg-red-50 text-red-700`;
+  return `${base} bg-gray-100 text-gray-700`;
+}
+
+function formatTimestamp(value: string) {
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return value;
+  return new Date(timestamp).toLocaleString();
 }
 
 function RecordPreview({ record }: { record: SyntheticRecordPreview }) {
