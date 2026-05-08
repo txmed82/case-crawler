@@ -524,12 +524,12 @@ def export_dataset(
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     records = list(store.iter_records(dataset_id=dataset_id))
+    report = build_dataset_quality_report(
+        dataset_id,
+        records,
+        effective_approved=store.effective_approved,
+    )
     if not allow_blocked:
-        report = build_dataset_quality_report(
-            dataset_id,
-            records,
-            effective_approved=store.effective_approved,
-        )
         if not report.export_ready:
             raise HTTPException(
                 status_code=409,
@@ -679,6 +679,7 @@ def export_dataset_splits(
                     "Set allow_blocked=true to export anyway."
                 ),
             )
+    manifest_snapshot = store.get_manifest(dataset_id)
     try:
         with TemporaryDirectory() as temp_dir:
             manifest = export_jsonl_split_package(
@@ -690,11 +691,16 @@ def export_dataset_splits(
                 validation_ratio=validation_ratio,
                 test_ratio=test_ratio,
                 seed=seed,
+                audit_artifacts={
+                    "quality_report.json": report.model_dump(mode="json"),
+                    "dataset_card.md": build_dataset_card(manifest_snapshot, records),
+                    "model_card.md": build_model_card(manifest_snapshot, records),
+                },
             )
             payload = BytesIO()
             with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for name in ("manifest.json", "train.jsonl", "validation.jsonl", "test.jsonl"):
-                    archive.write(Path(temp_dir) / name, arcname=name)
+                for path in sorted(Path(temp_dir).iterdir()):
+                    archive.write(path, arcname=path.name)
             zip_bytes = payload.getvalue()
     except ValueError as err:
         raise HTTPException(status_code=422, detail=str(err)) from err
@@ -713,6 +719,9 @@ def export_dataset_splits(
             "zip_bytes": len(zip_bytes),
             "seed": manifest["seed"],
             "ratios": manifest["ratios"],
+            "audit_artifacts": {
+                name: Path(path).name for name, path in manifest["audit_artifacts"].items()
+            },
             "splits": {
                 name: {
                     "record_count": data["record_count"],

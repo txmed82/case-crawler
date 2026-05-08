@@ -117,7 +117,10 @@ def test_dataset_api_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert exported.headers["content-type"] == "application/zip"
     with zipfile.ZipFile(BytesIO(exported.content)) as archive:
         assert sorted(archive.namelist()) == [
+            "dataset_card.md",
             "manifest.json",
+            "model_card.md",
+            "quality_report.json",
             "test.jsonl",
             "train.jsonl",
             "validation.jsonl",
@@ -128,8 +131,11 @@ def test_dataset_api_exports_split_fine_tuning_package(tmp_path, monkeypatch):
         assert manifest["splits"]["train"]["record_count"] == 1
         assert manifest["splits"]["validation"]["record_count"] == 1
         assert manifest["splits"]["test"]["record_count"] == 1
+        assert json.loads(archive.read("quality_report.json"))["export_ready"] is True
+        assert "Dataset Card" in archive.read("dataset_card.md").decode()
     assert listed.json()["exports"][0]["metadata"]["split_package"] is True
     assert listed.json()["exports"][0]["metadata"]["transport"] == "api"
+    assert "model_card.md" in listed.json()["exports"][0]["metadata"]["audit_artifacts"]
 
 
 def test_dataset_api_export_can_require_benchmark_gate(tmp_path, monkeypatch):

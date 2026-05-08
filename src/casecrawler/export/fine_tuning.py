@@ -863,6 +863,7 @@ def export_jsonl_split_package(
     validation_ratio: float = 0.1,
     test_ratio: float = 0.1,
     seed: str = "casecrawler",
+    audit_artifacts: dict[str, str | dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Write deterministic train/validation/test JSONL files plus a manifest."""
     resolved_format = ExportFormat(export_format)
@@ -891,6 +892,7 @@ def export_jsonl_split_package(
             "example_count": example_count,
             "record_ids": [record.record_id for record in split_items],
         }
+    artifact_entries = _write_audit_artifacts(output_path, audit_artifacts or {})
 
     manifest = {
         "dataset_id": dataset_id or _dataset_id(record_list),
@@ -905,12 +907,30 @@ def export_jsonl_split_package(
         "record_count": len(record_list),
         "example_count": total_examples,
         "splits": split_entries,
+        "audit_artifacts": artifact_entries,
         "synthetic": True,
     }
     manifest_path = output_path / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     manifest["manifest_path"] = str(manifest_path)
     return manifest
+
+
+def _write_audit_artifacts(
+    output_path: Path,
+    audit_artifacts: dict[str, str | dict[str, Any]],
+) -> dict[str, str]:
+    entries: dict[str, str] = {}
+    for file_name, content in sorted(audit_artifacts.items()):
+        if Path(file_name).name != file_name:
+            raise ValueError("Audit artifact names must be plain file names.")
+        artifact_path = output_path / file_name
+        if isinstance(content, str):
+            artifact_path.write_text(content)
+        else:
+            artifact_path.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n")
+        entries[file_name] = str(artifact_path)
+    return entries
 
 
 def _split_records(
