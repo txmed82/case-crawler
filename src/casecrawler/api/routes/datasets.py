@@ -286,6 +286,9 @@ async def generate_release_package(req: ReleasePackageRequest):
                                 quality_report.multimodal_release_missing
                             ),
                             "core_artifact_coverage": quality_report.core_artifact_coverage,
+                            "clinical_text_model_policy_counts": (
+                                quality_report.clinical_text_model_policy_counts
+                            ),
                             "time_series_channel_counts": (
                                 quality_report.time_series_channel_counts
                             ),

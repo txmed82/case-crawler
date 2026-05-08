@@ -78,6 +78,12 @@ def test_build_model_card_documents_generator_and_validation_gates(tmp_path):
     assert "# Model Card: sepsis-synthetic synthetic generation pipeline" in card
     assert "- unit-test-generator: 1" in card
     assert "- unit-test-model: 1" in card
+    assert "## Clinical Text Model Policies" in card
+    assert (
+        "- backend=llm provider=ollama model_id=medgemma-local "
+        "gated=False "
+        "use_policy=synthetic_clinical_text_review_outputs_before_release: 1"
+    ) in card
     assert "- imaging_model_profile=cxr_pneumonia_dreambooth: 1" in card
     assert "## Imaging Model Policies" in card
     assert (
@@ -266,6 +272,16 @@ def _record(tmp_path) -> SyntheticRecord:
                 "license": "mit",
                 "gated": False,
                 "use_policy": "wrap_external_sampler_validate_outputs",
+            },
+            "clinical_text_model_policy": {
+                "backend": "llm",
+                "provider": "ollama",
+                "model_id": "medgemma-local",
+                "license": "provider_terms",
+                "gated": False,
+                "use_policy": (
+                    "synthetic_clinical_text_review_outputs_before_release"
+                ),
             },
         },
     )

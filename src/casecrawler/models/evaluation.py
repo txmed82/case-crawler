@@ -14,6 +14,7 @@ class CohortProfile(BaseModel):
     mean_document_chars: float | None = None
     note_type_counts: dict[str, int] = Field(default_factory=dict)
     document_author_role_counts: dict[str, int] = Field(default_factory=dict)
+    clinical_text_model_policy_counts: dict[str, int] = Field(default_factory=dict)
     messy_document_rate: float | None = None
     extracted_fact_key_counts: dict[str, int] = Field(default_factory=dict)
     extracted_fact_density: dict[str, float] = Field(default_factory=dict)
@@ -103,6 +104,7 @@ class DatasetQualityReport(BaseModel):
     mean_encounter_span_hours: float | None = None
     mean_observations_per_encounter: float | None = None
     note_type_counts: dict[str, int] = Field(default_factory=dict)
+    clinical_text_model_policy_counts: dict[str, int] = Field(default_factory=dict)
     extracted_fact_key_counts: dict[str, int] = Field(default_factory=dict)
     lab_unit_counts: dict[str, int] = Field(default_factory=dict)
     lab_numeric_summaries: dict[str, dict[str, float | int]] = Field(default_factory=dict)

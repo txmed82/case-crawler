@@ -111,6 +111,17 @@ class SyntheticPipeline:
                 )
             if Modality.CLINICAL_TEXT in plan.modalities:
                 record = await text_generator.add_documents_async(record)
+                record = record.model_copy(
+                    update={
+                        "metadata": _with_clinical_text_generation_metadata(
+                            record.metadata,
+                            req,
+                            self._config.synthetic.clinical_text_backend,
+                            self._config.llm.provider,
+                            self._config.llm.model,
+                        )
+                    }
+                )
             validator = self._validator_for(record_req)
             validation = validator.validate(record)
             if validation.modality_alignment_score is not None:
@@ -285,6 +296,33 @@ def _with_time_series_generation_metadata(
             "license": profile.license,
             "gated": profile.gated,
             "use_policy": profile.use_policy,
+        },
+    }
+
+
+def _with_clinical_text_generation_metadata(
+    metadata: dict,
+    req: GenerationRequest,
+    configured_backend: str,
+    configured_provider: str,
+    configured_model: str,
+) -> dict:
+    backend = req.clinical_text_backend or (
+        "llm" if (req.llm_provider or req.llm_model) else configured_backend
+    )
+    if backend != "llm":
+        return metadata
+    provider = req.llm_provider or configured_provider
+    model = req.llm_model or configured_model
+    return {
+        **metadata,
+        "clinical_text_model_policy": {
+            "backend": "llm",
+            "provider": provider,
+            "model_id": model,
+            "license": "provider_terms",
+            "gated": False,
+            "use_policy": "synthetic_clinical_text_review_outputs_before_release",
         },
     }
 

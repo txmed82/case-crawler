@@ -2985,6 +2985,19 @@ def _verify_optional_quality_numeric_fields(
                 ),
             }
         )
+    clinical_text_model_policy_counts = payload.get("clinical_text_model_policy_counts")
+    if clinical_text_model_policy_counts is not None and not _string_int_map(
+        clinical_text_model_policy_counts
+    ):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json.clinical_text_model_policy_counts",
+                "message": (
+                    "Quality report artifact clinical_text_model_policy_counts "
+                    "must be a string-to-integer map."
+                ),
+            }
+        )
     image_validator_policy_counts = payload.get("image_validator_policy_counts")
     if image_validator_policy_counts is not None and not _string_int_map(
         image_validator_policy_counts
@@ -3303,6 +3316,19 @@ def _verify_release_summary_quality_numeric_fields(
                 "message": (
                     "Release package summary quality_report."
                     "time_series_model_policy_counts must be a string-to-integer map."
+                ),
+            }
+        )
+    clinical_text_model_policy_counts = quality.get("clinical_text_model_policy_counts")
+    if clinical_text_model_policy_counts is not None and not _string_int_map(
+        clinical_text_model_policy_counts
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.clinical_text_model_policy_counts",
+                "message": (
+                    "Release package summary quality_report."
+                    "clinical_text_model_policy_counts must be a string-to-integer map."
                 ),
             }
         )

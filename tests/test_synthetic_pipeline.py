@@ -497,6 +497,14 @@ async def test_synthetic_pipeline_allows_request_clinical_text_backend_override(
     ]
     assert len(created_generators) == 1
     assert result["generated"] == 1
+    assert result["records"][0].metadata["clinical_text_model_policy"] == {
+        "backend": "llm",
+        "provider": "ollama",
+        "model_id": "medgemma-local",
+        "license": "provider_terms",
+        "gated": False,
+        "use_policy": "synthetic_clinical_text_review_outputs_before_release",
+    }
 
 
 @pytest.mark.asyncio
