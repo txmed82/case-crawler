@@ -42,6 +42,20 @@ TIME_SERIES_MODEL_PROFILES: dict[str, TimeSeriesModelProfile] = {
             "exported sampler output into TimeSeriesChannel JSON."
         ),
     ),
+    "mira": TimeSeriesModelProfile(
+        name="mira",
+        adapter_type="external_command",
+        reference="https://huggingface.co/MIRA-Mode/MIRA",
+        model_id="MIRA-Mode/MIRA",
+        license="mit",
+        gated=False,
+        use_policy="forecasting_backbone_validate_synthetic_rollouts",
+        notes=(
+            "Medical time-series foundation model profile for irregular, "
+            "heterogeneous clinical forecasting; wrap as a backbone or critic "
+            "for synthetic rollouts and validate generated channels before export."
+        ),
+    ),
 }
 
 

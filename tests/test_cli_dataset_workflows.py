@@ -65,6 +65,9 @@ def test_dataset_cli_lists_time_series_model_policy_metadata(tmp_path, monkeypat
     assert "model_id=MuhangTian/TimeDiff" in result.output
     assert "license=mit" in result.output
     assert "use_policy=wrap_external_sampler_validate_outputs" in result.output
+    assert "mira: adapter=external_command" in result.output
+    assert "model_id=MIRA-Mode/MIRA" in result.output
+    assert "use_policy=forecasting_backbone_validate_synthetic_rollouts" in result.output
 
 
 def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
@@ -615,6 +618,12 @@ def test_dataset_cli_lists_imaging_model_use_policies():
     assert result.exit_code == 0
     assert "medisyn" in result.output
     assert "use_policy=non_commercial_no_derivatives_review_before_release" in result.output
+    assert "chexgenbench_sana_e20" in result.output
+    assert "raman07/CheXGenBench-Models-Sana-e20" in result.output
+    assert (
+        "use_policy=model_card_missing_review_terms_and_validate_privacy_utility"
+        in result.output
+    )
     assert "roentgen_v2_gated" in result.output
     assert "gated=True" in result.output
 

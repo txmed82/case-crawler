@@ -60,6 +60,20 @@ IMAGING_MODEL_PROFILES: dict[str, ImagingModelProfile] = {
             "medical image synthesis across multiple specialties and image types."
         ),
     ),
+    "chexgenbench_sana_e20": ImagingModelProfile(
+        name="chexgenbench_sana_e20",
+        model_id="raman07/CheXGenBench-Models-Sana-e20",
+        modality="XR",
+        body_region="chest",
+        prompt_prefix="synthetic frontal chest radiograph:",
+        license=None,
+        use_policy="model_card_missing_review_terms_and_validate_privacy_utility",
+        notes=(
+            "CheXGenBench Sana 0.6B chest-radiograph model profile; model page "
+            "currently has sparse licensing details, so release packages should "
+            "review terms and run privacy, fidelity, and clinical utility checks."
+        ),
+    ),
     "mimic_cxr_editing": ImagingModelProfile(
         name="mimic_cxr_editing",
         model_id="IrohXu/stable-diffusion-mimic-cxr-v0.1",
