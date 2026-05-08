@@ -169,6 +169,7 @@ def timeseries_models() -> None:
 def reference_datasets() -> None:
     """List configured reference datasets for benchmarking."""
     from casecrawler.integrations.huggingface import REFERENCE_DATASETS
+    from casecrawler.integrations.reference_fixtures import FIXTURE_REFERENCE_KEYS
     from casecrawler.integrations.synthea import (
         SYNTHEA_REFERENCE_DESCRIPTION,
         SYNTHEA_REFERENCE_KEY,
@@ -184,6 +185,12 @@ def reference_datasets() -> None:
         )
         if spec.description:
             click.echo(f"  {spec.description}")
+    click.echo(
+        "bundled_fixtures: "
+        f"{','.join(FIXTURE_REFERENCE_KEYS)} "
+        "source=casecrawler-fixtures"
+    )
+    click.echo("  Use import-reference-fixture for offline benchmark smoke tests.")
 
 
 @cli.command("generation-recipes")
@@ -334,6 +341,38 @@ def import_reference_dataset(
     click.echo(
         f"Imported {len(records)} reference record(s) from {source_name} "
         f"into {dataset_id}"
+    )
+
+
+@cli.command("import-reference-fixture")
+@click.argument("reference_key")
+@click.option("--dataset-id", required=True, help="Dataset id for imported fixture records")
+@click.option("--limit", default=None, type=int, help="Maximum fixture records to import")
+def import_reference_fixture_command(
+    reference_key: str,
+    dataset_id: str,
+    limit: int | None,
+) -> None:
+    """Import bundled reference fixture records without network access."""
+    from casecrawler.integrations.reference_fixtures import import_reference_fixture
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    if limit is not None and limit < 1:
+        raise click.ClickException("limit must be at least 1.")
+    try:
+        records = import_reference_fixture(
+            reference_key,
+            dataset_id=dataset_id,
+            limit=limit,
+        )
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+    store = DatasetStore()
+    for record in records:
+        store.save_record(record)
+    click.echo(
+        f"Imported {len(records)} bundled reference fixture record(s) "
+        f"from {reference_key} into {dataset_id}"
     )
 
 

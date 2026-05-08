@@ -1073,6 +1073,33 @@ def test_dataset_cli_imports_hf_reference_dataset(tmp_path, monkeypatch):
     assert store.get_manifest("ds-hf-reference").metadata["record_ids"]
 
 
+def test_dataset_cli_imports_bundled_reference_fixture(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    listed = runner.invoke(cli, ["reference-datasets"])
+    imported = runner.invoke(
+        cli,
+        [
+            "import-reference-fixture",
+            "clinical_notes_to_fhir",
+            "--dataset-id",
+            "ds-fixture-reference",
+        ],
+    )
+    store = DatasetStore()
+    manifest = store.get_manifest("ds-fixture-reference")
+    record = store.list_records(dataset_id="ds-fixture-reference")[0]
+
+    assert listed.exit_code == 0
+    assert "bundled_fixtures" in listed.output
+    assert imported.exit_code == 0
+    assert "Imported 1 bundled reference fixture record" in imported.output
+    assert manifest.metadata["primary_reference_key"] == "clinical_notes_to_fhir"
+    assert record.labs[0].name == "Lactate"
+    assert record.medication_history[0].name == "Ceftriaxone"
+
+
 def test_dataset_cli_imports_synthea_fhir_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
