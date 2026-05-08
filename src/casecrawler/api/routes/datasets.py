@@ -301,8 +301,9 @@ async def generate_release_package(req: ReleasePackageRequest):
             )
             payload = BytesIO()
             with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(Path(temp_dir).iterdir()):
-                    archive.write(path, arcname=path.name)
+                for path in sorted(Path(temp_dir).rglob("*")):
+                    if path.is_file():
+                        archive.write(path, arcname=path.relative_to(temp_dir))
             zip_bytes = payload.getvalue()
     except ValueError as err:
         raise HTTPException(status_code=422, detail=str(err)) from err
@@ -1151,8 +1152,9 @@ def export_dataset_splits(
             )
             payload = BytesIO()
             with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(Path(temp_dir).iterdir()):
-                    archive.write(path, arcname=path.name)
+                for path in sorted(Path(temp_dir).rglob("*")):
+                    if path.is_file():
+                        archive.write(path, arcname=path.relative_to(temp_dir))
             zip_bytes = payload.getvalue()
     except ValueError as err:
         raise HTTPException(status_code=422, detail=str(err)) from err

@@ -191,7 +191,8 @@ human approvals as `human_review.missing` blockers.
 ready multimodal package. It generates with the full multimodal acute-care
 recipe by default, writes file-backed synthetic radiology images, seeds bundled
 reference fixtures for the generated recipe, runs the benchmark gate, writes
-dataset/model cards plus quality and benchmark audit reports, exports
+dataset/model cards plus quality and benchmark audit reports, copies file-backed
+radiology images into the package `images/` directory, exports
 train/validation/test JSONL splits, and verifies strict multimodal release
 readiness. The default benchmark thresholds are intentionally set to zero for
 fixture smoke tests; pass higher `--min-overall-score` and `--min-metric-score`

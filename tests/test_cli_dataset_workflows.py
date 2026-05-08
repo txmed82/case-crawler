@@ -351,6 +351,10 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
         "model_card.md",
         "quality_report.json",
     }
+    image_artifact = next(iter(manifest["image_artifacts"].values()))
+    assert image_artifact["package_path"].startswith("images/")
+    assert (tmp_path / "release-package" / image_artifact["package_path"]).is_file()
+    assert image_artifact["package_path"] in manifest["files"]
     assert quality["multimodal_release_ready"] is True
     assert benchmark["passed"] is True
     assert benchmark_suite["passed"] is True
