@@ -336,6 +336,16 @@ class DatasetBenchmark:
                 reference_profile.imaging_model_policy_counts,
             ),
             _jaccard_metric(
+                "image_validator_policy_overlap",
+                set(generated_profile.image_validator_policy_counts),
+                set(reference_profile.image_validator_policy_counts),
+            ),
+            _distribution_metric(
+                "image_validator_policy_distribution",
+                generated_profile.image_validator_policy_counts,
+                reference_profile.image_validator_policy_counts,
+            ),
+            _jaccard_metric(
                 "imaging_label_overlap",
                 set(generated_profile.imaging_label_counts),
                 set(reference_profile.imaging_label_counts),
@@ -794,6 +804,16 @@ def _profile_metrics(
             reference_profile.imaging_model_policy_counts,
         ),
         _jaccard_metric(
+            "image_validator_policy_overlap",
+            set(generated_profile.image_validator_policy_counts),
+            set(reference_profile.image_validator_policy_counts),
+        ),
+        _distribution_metric(
+            "image_validator_policy_distribution",
+            generated_profile.image_validator_policy_counts,
+            reference_profile.image_validator_policy_counts,
+        ),
+        _jaccard_metric(
             "imaging_label_overlap",
             set(generated_profile.imaging_label_counts),
             set(reference_profile.imaging_label_counts),
@@ -889,6 +909,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     imaging_body_region_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
     imaging_model_policy_counts: Counter[str] = Counter()
+    image_validator_policy_counts: Counter[str] = Counter()
     imaging_label_counts: Counter[str] = Counter()
     imaging_label_pair_counts: Counter[str] = Counter()
     imaging_prompt_lengths: list[int] = []
@@ -1013,6 +1034,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         imaging_policy_key = _imaging_model_policy_key(record)
         if imaging_policy_key:
             imaging_model_policy_counts[imaging_policy_key] += 1
+        validator_policy_key = _image_validator_policy_key(record)
+        if validator_policy_key and record.validation is not None:
+            image_validator_policy_counts[validator_policy_key] += 1
         if record.validation is not None:
             approved_values.append(record.validation.approved)
             if record.validation.modality_alignment_score is not None:
@@ -1066,6 +1090,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         imaging_body_region_counts=dict(sorted(imaging_body_region_counts.items())),
         imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
         imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
+        image_validator_policy_counts=dict(
+            sorted(image_validator_policy_counts.items())
+        ),
         imaging_label_counts=dict(sorted(imaging_label_counts.items())),
         imaging_label_pair_counts=dict(sorted(imaging_label_pair_counts.items())),
         mean_imaging_prompt_chars=_mean(imaging_prompt_lengths),
@@ -1478,6 +1505,21 @@ def _imaging_model_policy_key(record: SyntheticRecord) -> str | None:
     gated = str(bool(policy.get("gated"))).lower()
     return (
         f"profile={profile}|license={license_name}|"
+        f"gated={gated}|use_policy={use_policy}"
+    )
+
+
+def _image_validator_policy_key(record: SyntheticRecord) -> str | None:
+    policy = record.metadata.get("image_validator_policy")
+    if not isinstance(policy, dict):
+        return None
+    profile = _metric_key(str(policy.get("profile") or "unspecified"))
+    backend = _metric_key(str(policy.get("backend") or "unspecified"))
+    license_name = _metric_key(str(policy.get("license") or "unspecified"))
+    use_policy = _metric_key(str(policy.get("use_policy") or "review_license_before_use"))
+    gated = str(bool(policy.get("gated"))).lower()
+    return (
+        f"profile={profile}|backend={backend}|license={license_name}|"
         f"gated={gated}|use_policy={use_policy}"
     )
 
