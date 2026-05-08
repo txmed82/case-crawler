@@ -133,6 +133,42 @@ def test_dataset_store_manifest_includes_recipe_benchmark_plan(tmp_path):
     assert manifest.metadata["benchmark_thresholds"]["min_overall_score"] == 0.7
 
 
+def test_dataset_store_manifest_derives_task_export_benchmark_plan(tmp_path):
+    store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
+    record = SyntheticRecord(
+        record_id="rec-1",
+        dataset_id="ds-1",
+        topic="sepsis",
+        complexity=ComplexityProfile.MODERATE,
+        modalities=[Modality.STRUCTURED_EHR, Modality.LABS, Modality.VITALS],
+        patient=SyntheticPatient(patient_id="pat-1", age=64, sex="female"),
+        encounters=[],
+        provenance=Provenance(
+            generator="unit-test",
+            created_at="2026-05-06T10:00:00",
+        ),
+        metadata={
+            "requested_export_formats": [
+                "clinical_observation_jsonl",
+                "medication_reconciliation_jsonl",
+            ]
+        },
+    )
+
+    store.save_record(record)
+    manifest = store.get_manifest("ds-1")
+
+    assert manifest.metadata["recommended_reference_keys"] == [
+        "synthea_fhir",
+        "clinical_notes_to_fhir",
+        "medsynth_dialogue_note",
+    ]
+    assert manifest.metadata["benchmark_thresholds"] == {
+        "min_overall_score": 0.75,
+        "min_metric_score": 0.5,
+    }
+
+
 def test_dataset_store_manifest_includes_reference_keys(tmp_path):
     store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
     record = SyntheticRecord(

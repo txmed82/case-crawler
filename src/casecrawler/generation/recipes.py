@@ -40,6 +40,8 @@ RECIPES: dict[str, GenerationRecipe] = {
             ExportFormat.MULTIMODAL_JSONL,
             ExportFormat.SFT_JSONL,
             ExportFormat.NOTE_FACT_SFT_JSONL,
+            ExportFormat.CLINICAL_OBSERVATION_JSONL,
+            ExportFormat.MEDICATION_RECONCILIATION_JSONL,
             ExportFormat.TIME_SERIES_JSONL,
             ExportFormat.FHIR_NDJSON,
             ExportFormat.PARQUET,
@@ -59,6 +61,8 @@ RECIPES: dict[str, GenerationRecipe] = {
         recommended_reference_keys=[
             "synthea_fhir",
             "clinical_notes_to_fhir",
+            "medsynth_dialogue_note",
+            "technetium_i",
             "synthchex_75k",
             "radiology_report_consistency",
         ],
@@ -111,6 +115,8 @@ RECIPES: dict[str, GenerationRecipe] = {
         export_formats=[
             ExportFormat.SFT_JSONL,
             ExportFormat.NOTE_FACT_SFT_JSONL,
+            ExportFormat.CLINICAL_OBSERVATION_JSONL,
+            ExportFormat.MEDICATION_RECONCILIATION_JSONL,
             ExportFormat.TIME_SERIES_JSONL,
             ExportFormat.PARQUET,
         ],
@@ -138,8 +144,65 @@ RECIPES: dict[str, GenerationRecipe] = {
 }
 
 
+TASK_EXPORT_REFERENCE_KEYS: dict[ExportFormat, list[str]] = {
+    ExportFormat.CLINICAL_OBSERVATION_JSONL: [
+        "synthea_fhir",
+        "clinical_notes_to_fhir",
+    ],
+    ExportFormat.MEDICATION_RECONCILIATION_JSONL: [
+        "synthea_fhir",
+        "clinical_notes_to_fhir",
+        "medsynth_dialogue_note",
+    ],
+    ExportFormat.NOTE_FACT_SFT_JSONL: [
+        "synthclinicalnotes",
+        "augmented_clinical_notes",
+        "clinical_notes_to_fhir",
+        "technetium_i",
+    ],
+    ExportFormat.TOOL_CALL_JSONL: [
+        "clinical_notes_to_fhir",
+        "technetium_i",
+    ],
+    ExportFormat.FHIR_NDJSON: [
+        "synthea_fhir",
+        "clinical_notes_to_fhir",
+    ],
+    ExportFormat.TIME_SERIES_JSONL: [
+        "synthea_fhir",
+    ],
+    ExportFormat.MULTIMODAL_JSONL: [
+        "synthchex_75k",
+        "radiology_report_consistency",
+        "synthetic_chest_xray_pneumonia",
+    ],
+}
+
+
 def list_generation_recipes() -> list[GenerationRecipe]:
     return list(RECIPES.values())
+
+
+def task_export_reference_keys(
+    export_formats: list[ExportFormat],
+) -> dict[str, list[str]]:
+    references: dict[str, list[str]] = {}
+    for export_format in export_formats:
+        keys = TASK_EXPORT_REFERENCE_KEYS.get(export_format)
+        if keys:
+            references[export_format.value] = list(keys)
+    return references
+
+
+def recommended_reference_keys_for_exports(
+    export_formats: list[ExportFormat],
+) -> list[str]:
+    keys: list[str] = []
+    for reference_keys in task_export_reference_keys(export_formats).values():
+        for reference_key in reference_keys:
+            if reference_key not in keys:
+                keys.append(reference_key)
+    return keys
 
 
 def apply_generation_recipe(req: GenerationRequest) -> GenerationRequest:

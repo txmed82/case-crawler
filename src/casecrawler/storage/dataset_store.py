@@ -4,7 +4,11 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from casecrawler.generation.recipes import RECIPES
+from casecrawler.generation.recipes import (
+    RECIPES,
+    recommended_reference_keys_for_exports,
+    task_export_reference_keys,
+)
 from casecrawler.models.dataset import (
     DatasetManifest,
     ExportFormat,
@@ -376,6 +380,7 @@ def _manifest_export_formats(records: list[SyntheticRecord]) -> list[ExportForma
 
 
 def _manifest_recipe_metadata(records: list[SyntheticRecord]) -> dict:
+    export_formats = _manifest_export_formats(records)
     recipe_counts: dict[str, int] = {}
     for record in records:
         overrides = record.metadata.get("generation_overrides", {})
@@ -385,7 +390,17 @@ def _manifest_recipe_metadata(records: list[SyntheticRecord]) -> dict:
         if isinstance(recipe, str) and recipe:
             recipe_counts[recipe] = recipe_counts.get(recipe, 0) + 1
     if not recipe_counts:
-        return {}
+        reference_keys = recommended_reference_keys_for_exports(export_formats)
+        if not reference_keys:
+            return {}
+        return {
+            "recommended_reference_keys": reference_keys,
+            "task_export_reference_keys": task_export_reference_keys(export_formats),
+            "benchmark_thresholds": {
+                "min_overall_score": 0.75,
+                "min_metric_score": 0.5,
+            },
+        }
     selected_recipe = max(recipe_counts, key=recipe_counts.get)
     metadata = {
         "generation_recipes": dict(sorted(recipe_counts.items())),
@@ -393,7 +408,13 @@ def _manifest_recipe_metadata(records: list[SyntheticRecord]) -> dict:
     }
     recipe_spec = RECIPES.get(selected_recipe)
     if recipe_spec is not None:
-        metadata["recommended_reference_keys"] = recipe_spec.recommended_reference_keys
+        export_reference_keys = recommended_reference_keys_for_exports(export_formats)
+        reference_keys = list(recipe_spec.recommended_reference_keys)
+        for reference_key in export_reference_keys:
+            if reference_key not in reference_keys:
+                reference_keys.append(reference_key)
+        metadata["recommended_reference_keys"] = reference_keys
+        metadata["task_export_reference_keys"] = task_export_reference_keys(export_formats)
         metadata["benchmark_thresholds"] = {
             "min_overall_score": recipe_spec.benchmark_min_overall_score,
             "min_metric_score": recipe_spec.benchmark_min_metric_score,

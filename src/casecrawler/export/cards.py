@@ -48,6 +48,7 @@ def build_dataset_card(
             f"- Approved fraction: {_fraction(manifest.approved_count, manifest.generated_count)}",
             *_score_lines(validation_scores),
             *_benchmark_plan_lines(manifest),
+            *_task_export_reference_lines(manifest),
             "",
             "## Extracted Fact Targets",
             "",
@@ -404,6 +405,24 @@ def _benchmark_plan_lines(manifest: DatasetManifest) -> list[str]:
                 f"overall >= {min_overall}, metric >= {min_metric}"
             )
     return lines
+
+
+def _task_export_reference_lines(manifest: DatasetManifest) -> list[str]:
+    references = manifest.metadata.get("task_export_reference_keys", {})
+    if not isinstance(references, dict) or not references:
+        return []
+    lines = ["", "## Task-Specific Export References", ""]
+    for export_format, reference_keys in sorted(references.items()):
+        if not isinstance(reference_keys, list):
+            continue
+        rendered_keys = [
+            str(reference_key)
+            for reference_key in reference_keys
+            if str(reference_key).strip()
+        ]
+        if rendered_keys:
+            lines.append(f"- {export_format}: {', '.join(rendered_keys)}")
+    return lines if len(lines) > 3 else []
 
 
 def _fraction(numerator: int, denominator: int) -> str:
