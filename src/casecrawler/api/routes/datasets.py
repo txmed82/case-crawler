@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import PlainTextResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from casecrawler.config import get_config
@@ -361,6 +362,28 @@ def get_dataset_card(dataset_id: str, kind: str = Query("dataset", pattern="^(da
     return build_model_card(manifest, records)
 
 
+@router.get("/datasets/{dataset_id}/images/{image_id}")
+def get_dataset_image(dataset_id: str, image_id: str):
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+    for record in store.iter_records(dataset_id=dataset_id):
+        for image in record.imaging:
+            if image.image_id != image_id:
+                continue
+            if not image.file_path:
+                raise HTTPException(status_code=404, detail="image file not available")
+            image_path = Path(image.file_path).expanduser()
+            if not image_path.is_file():
+                raise HTTPException(status_code=404, detail="image file not found")
+            return FileResponse(
+                image_path,
+                filename=image_path.name,
+                media_type=_image_media_type(image_path),
+            )
+    raise HTTPException(status_code=404, detail="image not found")
+
+
 @router.get("/datasets/{dataset_id}/benchmark")
 def benchmark_dataset(
     dataset_id: str,
@@ -498,3 +521,12 @@ def export_dataset(
             )
 
     return StreamingResponse(_iter_jsonl(), media_type="application/x-ndjson")
+
+
+def _image_media_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    if suffix == ".webp":
+        return "image/webp"
+    return "image/png"

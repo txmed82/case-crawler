@@ -7,6 +7,7 @@ from casecrawler.api.app import app
 from casecrawler.models.config import AppConfig, SyntheticConfig
 from casecrawler.models.synthetic import (
     ComplexityProfile,
+    ImagingAsset,
     Modality,
     Provenance,
     SyntheticPatient,
@@ -174,6 +175,45 @@ def test_dataset_api_exports_parquet_payload(tmp_path, monkeypatch):
     assert exported.content == b"PAR1synthetic-parquet"
     assert exported.headers["content-type"] == "application/vnd.apache.parquet"
     assert f'filename="{dataset_id}.parquet"' in exported.headers["content-disposition"]
+
+
+def test_dataset_api_serves_dataset_image_asset(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    image_path = tmp_path / "image.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nsynthetic-image")
+    store = DatasetStore()
+    store.save_record(
+        SyntheticRecord(
+            record_id="rec-image",
+            dataset_id="ds-image",
+            topic="pneumonia",
+            complexity=ComplexityProfile.MODERATE,
+            modalities=[Modality.IMAGING],
+            patient=SyntheticPatient(patient_id="pat-1", age=64, sex="female"),
+            encounters=[],
+            imaging=[
+                ImagingAsset(
+                    image_id="img-1",
+                    modality="XR",
+                    body_region="chest",
+                    prompt="portable chest x-ray pneumonia",
+                    file_path=str(image_path),
+                    report_text="Right lower lobe opacity.",
+                    generation_backend="unit-test",
+                )
+            ],
+            provenance=Provenance(generator="unit-test", created_at="2026-01-01T00:00:00"),
+        )
+    )
+    client = TestClient(app)
+
+    served = client.get("/api/datasets/ds-image/images/img-1")
+    missing = client.get("/api/datasets/ds-image/images/img-missing")
+
+    assert served.status_code == 200
+    assert served.headers["content-type"] == "image/png"
+    assert served.content == b"\x89PNG\r\n\x1a\nsynthetic-image"
+    assert missing.status_code == 404
 
 
 def test_dataset_api_export_blocks_unready_dataset_without_override(tmp_path, monkeypatch):

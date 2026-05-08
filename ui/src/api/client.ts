@@ -542,3 +542,7 @@ export function datasetExportUrl(
   }
   return `${BASE}/datasets/${datasetId}/export?${qs}`;
 }
+
+export function datasetImageUrl(datasetId: string, imageId: string): string {
+  return `${BASE}/datasets/${datasetId}/images/${encodeURIComponent(imageId)}`;
+}
