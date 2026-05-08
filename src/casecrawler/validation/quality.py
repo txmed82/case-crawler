@@ -22,6 +22,7 @@ def build_dataset_quality_report(
     modality_counts: Counter[str] = Counter()
     artifact_counts: Counter[str] = Counter()
     note_type_counts: Counter[str] = Counter()
+    clinical_text_model_policy_counts: Counter[str] = Counter()
     extracted_fact_key_counts: Counter[str] = Counter()
     diagnosis_code_system_counts: Counter[str] = Counter()
     diagnosis_code_counts: Counter[str] = Counter()
@@ -76,6 +77,7 @@ def build_dataset_quality_report(
             record,
             artifact_counts,
             note_type_counts,
+            clinical_text_model_policy_counts,
             extracted_fact_key_counts,
             diagnosis_code_system_counts,
             diagnosis_code_counts,
@@ -196,6 +198,9 @@ def build_dataset_quality_report(
         mean_encounter_span_hours=_mean_float(encounter_spans),
         mean_observations_per_encounter=_mean_float(observations_per_encounter),
         note_type_counts=dict(sorted(note_type_counts.items())),
+        clinical_text_model_policy_counts=dict(
+            sorted(clinical_text_model_policy_counts.items())
+        ),
         extracted_fact_key_counts=dict(sorted(extracted_fact_key_counts.items())),
         lab_unit_counts=dict(sorted(lab_unit_counts.items())),
         lab_numeric_summaries=_numeric_summaries(lab_numeric_values),
@@ -289,6 +294,7 @@ def _count_artifacts(
     record: SyntheticRecord,
     artifact_counts: Counter[str],
     note_type_counts: Counter[str],
+    clinical_text_model_policy_counts: Counter[str],
     extracted_fact_key_counts: Counter[str],
     diagnosis_code_system_counts: Counter[str],
     diagnosis_code_counts: Counter[str],
@@ -321,6 +327,9 @@ def _count_artifacts(
     documents = len(record.documents)
     artifact_counts["documents"] += documents
     artifact_counts["messy_documents"] += sum(1 for doc in record.documents if doc.messy_text)
+    clinical_text_policy_key = _clinical_text_model_policy_key(record)
+    if clinical_text_policy_key:
+        clinical_text_model_policy_counts[clinical_text_policy_key] += documents
     artifact_counts["encounters"] += len(record.encounters)
     artifact_counts["diagnoses"] += sum(
         len(encounter.diagnoses) for encounter in record.encounters
@@ -684,6 +693,21 @@ def _time_series_model_policy_key(record: SyntheticRecord) -> str | None:
     gated = str(bool(policy.get("gated"))).lower()
     return (
         f"profile={profile}|license={license_name}|"
+        f"gated={gated}|use_policy={use_policy}"
+    )
+
+
+def _clinical_text_model_policy_key(record: SyntheticRecord) -> str | None:
+    policy = record.metadata.get("clinical_text_model_policy")
+    if not isinstance(policy, dict):
+        return None
+    backend = _policy_value(policy.get("backend"), "unspecified")
+    provider = _policy_value(policy.get("provider"), "unspecified")
+    model_id = _policy_value(policy.get("model_id"), "unspecified")
+    use_policy = _policy_value(policy.get("use_policy"), "review_outputs_before_release")
+    gated = str(bool(policy.get("gated"))).lower()
+    return (
+        f"backend={backend}|provider={provider}|model_id={model_id}|"
         f"gated={gated}|use_policy={use_policy}"
     )
 

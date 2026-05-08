@@ -89,6 +89,16 @@ class DatasetBenchmark:
                 reference_profile.note_type_counts,
             ),
             _jaccard_metric(
+                "clinical_text_model_policy_overlap",
+                set(generated_profile.clinical_text_model_policy_counts),
+                set(reference_profile.clinical_text_model_policy_counts),
+            ),
+            _distribution_metric(
+                "clinical_text_model_policy_distribution",
+                generated_profile.clinical_text_model_policy_counts,
+                reference_profile.clinical_text_model_policy_counts,
+            ),
+            _jaccard_metric(
                 "document_author_role_overlap",
                 set(generated_profile.document_author_role_counts),
                 set(reference_profile.document_author_role_counts),
@@ -567,6 +577,16 @@ def _profile_metrics(
             reference_profile.note_type_counts,
         ),
         _jaccard_metric(
+            "clinical_text_model_policy_overlap",
+            set(generated_profile.clinical_text_model_policy_counts),
+            set(reference_profile.clinical_text_model_policy_counts),
+        ),
+        _distribution_metric(
+            "clinical_text_model_policy_distribution",
+            generated_profile.clinical_text_model_policy_counts,
+            reference_profile.clinical_text_model_policy_counts,
+        ),
+        _jaccard_metric(
             "document_author_role_overlap",
             set(generated_profile.document_author_role_counts),
             set(reference_profile.document_author_role_counts),
@@ -906,6 +926,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     sex_counts: Counter[str] = Counter()
     note_type_counts: Counter[str] = Counter()
     document_author_role_counts: Counter[str] = Counter()
+    clinical_text_model_policy_counts: Counter[str] = Counter()
     extracted_fact_key_counts: Counter[str] = Counter()
     artifact_counts: Counter[str] = Counter()
     lab_name_counts: Counter[str] = Counter()
@@ -980,6 +1001,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
                 if _has_fact_value(value):
                     extracted_fact_key_counts[_fact_key(key)] += 1
             _count_phi_entities(document.extracted_facts, phi_entity_counts)
+        clinical_text_policy_key = _clinical_text_model_policy_key(record)
+        if clinical_text_policy_key:
+            clinical_text_model_policy_counts[clinical_text_policy_key] += 1
         for lab in record.labs:
             lab_name_counts[lab.name] += 1
             lab_unit_counts[lab.unit] += 1
@@ -1075,6 +1099,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         mean_document_chars=_mean(document_lengths),
         note_type_counts=dict(sorted(note_type_counts.items())),
         document_author_role_counts=dict(sorted(document_author_role_counts.items())),
+        clinical_text_model_policy_counts=dict(
+            sorted(clinical_text_model_policy_counts.items())
+        ),
         messy_document_rate=_mean(messy_document_values),
         extracted_fact_key_counts=dict(sorted(extracted_fact_key_counts.items())),
         extracted_fact_density=_counter_density(extracted_fact_key_counts, len(records)),
@@ -1546,6 +1573,21 @@ def _time_series_model_policy_key(record: SyntheticRecord) -> str | None:
     gated = str(bool(policy.get("gated"))).lower()
     return (
         f"profile={profile}|license={license_name}|"
+        f"gated={gated}|use_policy={use_policy}"
+    )
+
+
+def _clinical_text_model_policy_key(record: SyntheticRecord) -> str | None:
+    policy = record.metadata.get("clinical_text_model_policy")
+    if not isinstance(policy, dict):
+        return None
+    backend = _metric_key(str(policy.get("backend") or "unspecified"))
+    provider = _metric_key(str(policy.get("provider") or "unspecified"))
+    model_id = _metric_key(str(policy.get("model_id") or "unspecified"))
+    use_policy = _metric_key(str(policy.get("use_policy") or "review_outputs_before_release"))
+    gated = str(bool(policy.get("gated"))).lower()
+    return (
+        f"backend={backend}|provider={provider}|model_id={model_id}|"
         f"gated={gated}|use_policy={use_policy}"
     )
 

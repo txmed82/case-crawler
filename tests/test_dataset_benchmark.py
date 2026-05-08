@@ -401,6 +401,8 @@ def test_dataset_benchmark_compares_longitudinal_profiles():
         "modality_overlap",
         "mean_age",
         "note_type_distribution",
+        "clinical_text_model_policy_overlap",
+        "clinical_text_model_policy_distribution",
         "lab_name_overlap",
         "lab_unit_overlap",
         "lab_unit_distribution",
@@ -532,6 +534,61 @@ def test_dataset_benchmark_compares_imaging_finding_labels():
     assert label_metric.details["reference_only"] == ["pleural effusion"]
     assert distribution_metric.score == 0.0
     assert any("imaging_label_overlap" in warning for warning in report.warnings)
+
+
+def test_dataset_benchmark_compares_clinical_text_model_policies():
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "metadata": {
+                    "clinical_text_model_policy": {
+                        "backend": "llm",
+                        "provider": "ollama",
+                        "model_id": "medgemma-local",
+                        "license": "provider_terms",
+                        "gated": False,
+                        "use_policy": (
+                            "synthetic_clinical_text_review_outputs_before_release"
+                        ),
+                    }
+                }
+            }
+        )
+    ]
+    reference = [
+        _record("ref-1", "ds-ref").model_copy(
+            update={
+                "metadata": {
+                    "clinical_text_model_policy": {
+                        "backend": "llm",
+                        "provider": "openrouter",
+                        "model_id": "clinical-reference-model",
+                        "license": "provider_terms",
+                        "gated": False,
+                        "use_policy": (
+                            "synthetic_clinical_text_review_outputs_before_release"
+                        ),
+                    }
+                }
+            }
+        )
+    ]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    overlap_metric = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "clinical_text_model_policy_overlap"
+    )
+
+    assert report.generated_profile.clinical_text_model_policy_counts == {
+        (
+            "backend=llm|provider=ollama|model_id=medgemma-local|gated=false|"
+            "use_policy=synthetic clinical text review outputs before release"
+        ): 1
+    }
+    assert overlap_metric.score == 0.0
+    assert "clinical_text_model_policy_overlap" in report.failing_metrics
 
 
 def test_profile_records_summarizes_imaging_file_dimensions(tmp_path):

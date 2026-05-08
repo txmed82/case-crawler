@@ -151,6 +151,7 @@ def build_model_card(
     time_series_units = Counter(
         channel.unit for record in records for channel in record.time_series
     )
+    clinical_text_model_policies = _clinical_text_model_policy_counts(records)
     imaging_dimension_summary = _imaging_dimension_summary(records)
     procedure_counts = _procedure_counts(records)
     generation_overrides = _generation_override_counts(records)
@@ -179,6 +180,10 @@ def build_model_card(
             "## Model Backends",
             "",
             *_counter_lines(models),
+            "",
+            "## Clinical Text Model Policies",
+            "",
+            *_counter_lines(clinical_text_model_policies or Counter({"none": 1})),
             "",
             "## Imaging Backends",
             "",
@@ -427,6 +432,24 @@ def _time_series_model_policy_counts(records: list[SyntheticRecord]) -> Counter[
         gated = policy.get("gated")
         counter[
             f"profile={profile} license={license_name} "
+            f"gated={gated} use_policy={use_policy}"
+        ] += 1
+    return counter
+
+
+def _clinical_text_model_policy_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        policy = record.metadata.get("clinical_text_model_policy", {})
+        if not isinstance(policy, dict):
+            continue
+        backend = policy.get("backend") or "unspecified"
+        provider = policy.get("provider") or "unspecified"
+        model_id = policy.get("model_id") or "unspecified"
+        use_policy = policy.get("use_policy") or "review_outputs_before_release"
+        gated = policy.get("gated")
+        counter[
+            f"backend={backend} provider={provider} model_id={model_id} "
             f"gated={gated} use_policy={use_policy}"
         ] += 1
     return counter

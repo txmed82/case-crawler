@@ -141,6 +141,35 @@ def test_quality_report_marks_fully_approved_dataset_export_ready():
     assert report.recommendations == []
 
 
+def test_quality_report_counts_clinical_text_model_policy():
+    record = _record("rec-1").model_copy(
+        update={
+            "metadata": {
+                "clinical_text_model_policy": {
+                    "backend": "llm",
+                    "provider": "ollama",
+                    "model_id": "medgemma-local",
+                    "license": "provider_terms",
+                    "gated": False,
+                    "use_policy": (
+                        "synthetic_clinical_text_review_outputs_before_release"
+                    ),
+                }
+            }
+        }
+    )
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.clinical_text_model_policy_counts == {
+        (
+            "backend=llm|provider=ollama|model_id=medgemma_local|"
+            "gated=false|"
+            "use_policy=synthetic_clinical_text_review_outputs_before_release"
+        ): len(record.documents)
+    }
+
+
 def test_quality_report_marks_multimodal_release_ready_with_core_artifacts(tmp_path):
     image_path = tmp_path / "cxr.png"
     image_path.write_bytes(_png_bytes(width=96, height=96))
