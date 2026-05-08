@@ -32,6 +32,11 @@ def test_build_dataset_card_includes_validation_and_use_limits(tmp_path):
     assert "- clinical_text: 1" in card
     assert "- Mean clinical consistency score: 0.900" in card
     assert "- Mean modality alignment score: 0.850" in card
+    assert "## Multimodal Release Readiness" in card
+    assert "- Ready: False" in card
+    assert "- nursing_notes: False" in card
+    assert "- radiology_reports: False" in card
+    assert "- benchmark_reference: True" in card
     assert "Records are synthetic" in card
     assert "- sft_jsonl" in card
     assert "- imaging_backend=diffusers: 1" in card
@@ -93,6 +98,9 @@ def test_build_model_card_documents_generator_and_validation_gates(tmp_path):
     assert "## PHI Annotation Signals" in card
     assert "- NAME: 1" in card
     assert "PHI-like privacy scanning" in card
+    assert "## Multimodal Release Readiness" in card
+    assert "- Ready: False" in card
+    assert "nursing_notes" in card
 
 
 def _record(tmp_path) -> SyntheticRecord:
