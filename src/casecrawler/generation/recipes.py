@@ -56,6 +56,7 @@ RECIPES: dict[str, GenerationRecipe] = {
         },
         validation_threshold=0.75,
         recommended_reference_keys=[
+            "synthea_fhir",
             "clinical_notes_to_fhir",
             "synthchex_75k",
             "radiology_report_consistency",
@@ -122,6 +123,7 @@ RECIPES: dict[str, GenerationRecipe] = {
         },
         validation_threshold=0.8,
         recommended_reference_keys=[
+            "synthea_fhir",
             "synthclinicalnotes",
             "augmented_clinical_notes",
             "medsynth_dialogue_note",

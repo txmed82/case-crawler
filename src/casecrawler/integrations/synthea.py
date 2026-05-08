@@ -159,7 +159,11 @@ class SyntheaAdapter:
                 created_at=created_at,
                 source_refs=[{"path": path}],
             ),
-            metadata={"source": "synthea"},
+            metadata={
+                "source": "synthea",
+                "reference_key": "synthea_fhir",
+                "reference_dataset": "synthea_fhir",
+            },
         )
 
 
