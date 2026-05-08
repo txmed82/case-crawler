@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from math import isfinite
 from datetime import datetime, timezone
 
 from casecrawler.generation.imaging_templates import get_imaging_template
@@ -184,8 +185,31 @@ def validate_temporal_consistency(record: SyntheticRecord) -> list[ValidationIss
             )
 
     for channel in record.time_series:
+        if not channel.points:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.TIME_SERIES,
+                    field=f"time_series.{channel.name}.points",
+                    message=f"Time series channel {channel.name} has no sample points.",
+                )
+            )
+            continue
         previous: datetime | None = None
         for point in channel.points:
+            for key, value in point.values.items():
+                if not isfinite(value):
+                    issues.append(
+                        ValidationIssue(
+                            severity="error",
+                            modality=Modality.TIME_SERIES,
+                            field=f"time_series.{channel.name}.values",
+                            message=(
+                                f"Time series channel {channel.name} has a non-finite "
+                                f"value for {key} at {point.timestamp}."
+                            ),
+                        )
+                    )
             timestamp = _parse_datetime(point.timestamp)
             if timestamp is None:
                 issues.append(

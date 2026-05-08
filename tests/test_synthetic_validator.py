@@ -1161,6 +1161,35 @@ def test_validator_rejects_non_chronological_time_series():
     assert any(issue.field == "time_series.order" for issue in report.issues)
 
 
+def test_validator_rejects_empty_or_non_finite_time_series_samples():
+    bad = _record(
+        modalities=[Modality.TIME_SERIES],
+        time_series=[
+            TimeSeriesChannel(
+                name="heart_rate",
+                unit="/min",
+                points=[],
+            ),
+            TimeSeriesChannel(
+                name="spo2",
+                unit="%",
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T10:00:00",
+                        values={"value": float("nan")},
+                    )
+                ],
+            ),
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "time_series.heart_rate.points" for issue in report.issues)
+    assert any(issue.field == "time_series.spo2.values" for issue in report.issues)
+
+
 def test_validator_rejects_implausible_waveform_channels():
     bad = _record(
         modalities=[Modality.TIME_SERIES],
