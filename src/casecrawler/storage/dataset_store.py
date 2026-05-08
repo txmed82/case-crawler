@@ -57,6 +57,18 @@ class DatasetStore:
             )
             """
         )
+        self._conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_export_manifests_dataset_created_id
+            ON export_manifests(dataset_id, created_at DESC, id DESC)
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_export_manifests_created_id
+            ON export_manifests(created_at DESC, id DESC)
+            """
+        )
         self._conn.commit()
 
     def save_record(self, record: SyntheticRecord) -> None:
