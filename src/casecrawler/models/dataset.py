@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -64,6 +64,9 @@ class GenerationRequest(BaseModel):
     export_formats: list[ExportFormat] = Field(
         default_factory=lambda: [ExportFormat.SFT_JSONL]
     )
+    imaging_backend: Literal["placeholder", "diffusers"] | None = None
+    imaging_model_profile: str | None = Field(default=None, min_length=1)
+    diffusers_model_id: str | None = Field(default=None, min_length=1)
     ingest_first: bool = False
     validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
 

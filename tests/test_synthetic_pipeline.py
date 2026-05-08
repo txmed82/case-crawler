@@ -80,6 +80,64 @@ async def test_synthetic_pipeline_uses_configured_diffusers_backend(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_synthetic_pipeline_allows_request_imaging_backend_override(tmp_path):
+    imaging_generator = FakeImagingGenerator()
+    pipeline = SyntheticPipeline(
+        imaging_generator=imaging_generator,
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="pneumonia",
+            count=1,
+            modalities=[Modality.IMAGING],
+            imaging_backend="diffusers",
+        )
+    )
+
+    assert result["records"][0].imaging[0].generation_backend == "diffusers:test"
+    assert imaging_generator.diffusers_calls[0][0] == str(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_uses_request_imaging_model_profile(monkeypatch, tmp_path):
+    created = []
+
+    class RequestScopedImagingGenerator(FakeImagingGenerator):
+        def __init__(self, diffusers_model_id: str, imaging_model_profile: str):
+            super().__init__()
+            created.append((diffusers_model_id, imaging_model_profile))
+
+    monkeypatch.setattr(
+        "casecrawler.generation.synthetic_pipeline.ImagingGenerator",
+        RequestScopedImagingGenerator,
+    )
+    pipeline = SyntheticPipeline(
+        imaging_generator=FakeImagingGenerator(),
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="pneumonia",
+            count=1,
+            modalities=[Modality.IMAGING],
+            imaging_backend="diffusers",
+            imaging_model_profile="cxr_pneumonia_dreambooth",
+            diffusers_model_id="hf/test-cxr",
+        )
+    )
+
+    assert created == [("hf/test-cxr", "cxr_pneumonia_dreambooth")]
+    assert result["records"][0].imaging[0].generation_backend == "diffusers:test"
+
+
+@pytest.mark.asyncio
 async def test_synthetic_pipeline_honors_request_validation_threshold(tmp_path):
     pipeline = SyntheticPipeline(
         image_output_dir=str(tmp_path),

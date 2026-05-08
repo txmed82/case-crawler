@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import {
+  fetchDatasetCapabilities,
   fetchReferenceDatasetCatalog,
   importReferenceDataset,
   importSyntheaFhir,
   startDatasetGenerate,
 } from "../api/client";
 import type {
+  DatasetCapabilitiesResponse,
   DatasetGenerateResponse,
   ExportFormat,
   ReferenceDatasetCatalogItem,
@@ -54,6 +56,11 @@ export default function GeneratePage() {
     "vitals",
   ]);
   const [exportFormats, setExportFormats] = useState<ExportFormat[]>(["sft_jsonl"]);
+  const [imagingBackend, setImagingBackend] =
+    useState<"placeholder" | "diffusers">("placeholder");
+  const [imagingProfile, setImagingProfile] = useState("");
+  const [diffusersModelId, setDiffusersModelId] = useState("");
+  const [capabilities, setCapabilities] = useState<DatasetCapabilitiesResponse | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<DatasetGenerateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +108,22 @@ export default function GeneratePage() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    fetchDatasetCapabilities()
+      .then((resp) => {
+        if (!active) return;
+        setCapabilities(resp);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCapabilities(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const handleGenerate = async () => {
     if (!topic.trim() || modalities.length === 0 || exportFormats.length === 0 || isGenerating) {
       return;
@@ -131,6 +154,7 @@ export default function GeneratePage() {
     if (parsedAgeMax !== undefined) cohortConstraints.age_max = parsedAgeMax;
     if (sexes.length > 0) cohortConstraints.sexes = sexes;
     if (baseTime) cohortConstraints.base_time = baseTime;
+    const includesImaging = modalities.includes("imaging");
 
     setResult(null);
     setError(null);
@@ -142,6 +166,11 @@ export default function GeneratePage() {
         count,
         modalities,
         export_formats: exportFormats,
+        ...(includesImaging ? { imaging_backend: imagingBackend } : {}),
+        ...(includesImaging && imagingProfile ? { imaging_model_profile: imagingProfile } : {}),
+        ...(includesImaging && diffusersModelId.trim()
+          ? { diffusers_model_id: diffusersModelId.trim() }
+          : {}),
         ...(Object.keys(cohortConstraints).length > 0
           ? { cohort_constraints: cohortConstraints }
           : {}),
@@ -252,6 +281,7 @@ export default function GeneratePage() {
   };
 
   const selectedReference = referenceCatalog.find((item) => item.key === referenceKey);
+  const includesImaging = modalities.includes("imaging");
 
   return (
     <div className="space-y-6">
@@ -259,7 +289,7 @@ export default function GeneratePage() {
         <h1 className="text-2xl font-bold">Generate Dataset</h1>
         <p className="mt-1 text-sm text-gray-600">
           Create synthetic healthcare records with structured EHR fields, notes, labs, vitals,
-          time series, and image placeholders.
+          time series, and generated or placeholder imaging assets.
         </p>
       </div>
 
@@ -404,6 +434,52 @@ export default function GeneratePage() {
             );
           })}
         </div>
+
+        {includesImaging && (
+          <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,18rem)_minmax(0,1fr)]">
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Imaging backend</span>
+              <select
+                aria-label="Imaging backend"
+                value={imagingBackend}
+                onChange={(event) =>
+                  setImagingBackend(event.target.value as "placeholder" | "diffusers")
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              >
+                <option value="placeholder">Placeholder</option>
+                <option value="diffusers">Diffusers</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Model profile</span>
+              <select
+                aria-label="Imaging model profile"
+                value={imagingProfile}
+                onChange={(event) => setImagingProfile(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              >
+                <option value="">Config default</option>
+                {(capabilities?.imaging_model_profiles ?? []).map((profile) => (
+                  <option key={profile.name} value={profile.name}>
+                    {profile.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium text-gray-700">
+              <span>Diffusers model id</span>
+              <input
+                aria-label="Diffusers model id"
+                type="text"
+                value={diffusersModelId}
+                onChange={(event) => setDiffusersModelId(event.target.value)}
+                placeholder="Use profile or config default"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+              />
+            </label>
+          </div>
+        )}
 
         <div>
           <button

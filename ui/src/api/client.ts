@@ -108,6 +108,9 @@ export interface DatasetGenerateRequest {
   complexity?: "simple" | "moderate" | "complex" | "rare";
   modalities?: SyntheticModality[];
   export_formats?: ExportFormat[];
+  imaging_backend?: "placeholder" | "diffusers";
+  imaging_model_profile?: string;
+  diffusers_model_id?: string;
   cohort_constraints?: Record<string, unknown>;
 }
 
