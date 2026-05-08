@@ -207,6 +207,13 @@ def test_quality_report_marks_multimodal_release_ready_with_core_artifacts(tmp_p
                 )
             ],
             "metadata": {
+                "time_series_model_policy": {
+                    "profile": "timediff",
+                    "model_id": "MuhangTian/TimeDiff",
+                    "license": "mit",
+                    "gated": False,
+                    "use_policy": "wrap_external_sampler_validate_outputs",
+                },
                 "imaging_model_policy": {
                     "profile": "cxr_pneumonia_dreambooth",
                     "model_id": "chimbiwide/cxr-pneumonia-dreambooth",
@@ -330,6 +337,13 @@ def test_quality_report_blocks_release_when_task_reference_coverage_is_missing(
                 )
             ],
             "metadata": {
+                "time_series_model_policy": {
+                    "profile": "timediff",
+                    "model_id": "MuhangTian/TimeDiff",
+                    "license": "mit",
+                    "gated": False,
+                    "use_policy": "wrap_external_sampler_validate_outputs",
+                },
                 "imaging_model_policy": {
                     "profile": "cxr_pneumonia_dreambooth",
                     "model_id": "chimbiwide/cxr-pneumonia-dreambooth",
@@ -459,6 +473,13 @@ def test_quality_report_blocks_release_without_expected_clinical_document_famili
                 )
             ],
             "metadata": {
+                "time_series_model_policy": {
+                    "profile": "timediff",
+                    "model_id": "MuhangTian/TimeDiff",
+                    "license": "mit",
+                    "gated": False,
+                    "use_policy": "wrap_external_sampler_validate_outputs",
+                },
                 "imaging_model_policy": {
                     "profile": "cxr_pneumonia_dreambooth",
                     "model_id": "chimbiwide/cxr-pneumonia-dreambooth",
@@ -950,6 +971,13 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
                 )
             ],
             "metadata": {
+                "time_series_model_policy": {
+                    "profile": "timediff",
+                    "model_id": "MuhangTian/TimeDiff",
+                    "license": "mit",
+                    "gated": False,
+                    "use_policy": "wrap_external_sampler_validate_outputs",
+                },
                 "imaging_model_policy": {
                     "profile": "cxr_pneumonia_dreambooth",
                     "model_id": "chimbiwide/cxr-pneumonia-dreambooth",
@@ -1009,6 +1037,12 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
     assert report.time_series_backend_counts == {
         "deterministic": 1,
         "external:timediff-sample": 1,
+    }
+    assert report.time_series_model_policy_counts == {
+        (
+            "profile=timediff|license=mit|gated=false|"
+            "use_policy=wrap_external_sampler_validate_outputs"
+        ): 2
     }
     assert report.mean_imaging_width == 96.0
     assert report.mean_imaging_height == 64.0

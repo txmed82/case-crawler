@@ -289,6 +289,9 @@ async def generate_release_package(req: ReleasePackageRequest):
                             "time_series_channel_counts": (
                                 quality_report.time_series_channel_counts
                             ),
+                            "time_series_model_policy_counts": (
+                                quality_report.time_series_model_policy_counts
+                            ),
                             "image_validator_policy_counts": (
                                 quality_report.image_validator_policy_counts
                             ),

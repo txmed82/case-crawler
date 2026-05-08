@@ -436,6 +436,13 @@ async def test_synthetic_pipeline_allows_request_time_series_backend_override(
 
     assert created == [["timediff-sample"]]
     assert result["generated"] == 1
+    assert result["records"][0].metadata["time_series_model_policy"] == {
+        "profile": "timediff",
+        "model_id": "MuhangTian/TimeDiff",
+        "license": "mit",
+        "gated": False,
+        "use_policy": "wrap_external_sampler_validate_outputs",
+    }
 
 
 @pytest.mark.asyncio

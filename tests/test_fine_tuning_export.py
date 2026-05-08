@@ -240,7 +240,21 @@ def test_export_jsonl_split_package_copies_file_backed_images(tmp_path):
 
 
 def test_export_jsonl_split_package_writes_time_series_artifacts(tmp_path):
-    record = _multimodal_record().model_copy(update={"dataset_id": "ds-split"})
+    record = _multimodal_record().model_copy(
+        update={
+            "dataset_id": "ds-split",
+            "metadata": {
+                **_multimodal_record().metadata,
+                "time_series_model_policy": {
+                    "profile": "timediff",
+                    "model_id": "MuhangTian/TimeDiff",
+                    "license": "mit",
+                    "gated": False,
+                    "use_policy": "wrap_external_sampler_validate_outputs",
+                },
+            },
+        }
+    )
 
     manifest = export_jsonl_split_package(
         [record],
@@ -258,6 +272,13 @@ def test_export_jsonl_split_package_writes_time_series_artifacts(tmp_path):
     assert artifact["channel_name"] == "heart_rate"
     assert artifact["unit"] == "/min"
     assert artifact["generation_backend"] == "deterministic"
+    assert artifact["time_series_model_policy"] == {
+        "profile": "timediff",
+        "model_id": "MuhangTian/TimeDiff",
+        "license": "mit",
+        "gated": False,
+        "use_policy": "wrap_external_sampler_validate_outputs",
+    }
     assert artifact["point_count"] == 1
     assert copied_payload["record_id"] == "rec-1"
     assert copied_payload["channel"]["name"] == "heart_rate"
@@ -396,6 +417,7 @@ def test_verify_jsonl_split_package_validates_time_series_artifact_metadata(tmp_
     artifact["record_id"] = "rec-other"
     artifact["channel_name"] = ""
     artifact.pop("generation_backend")
+    artifact["time_series_model_policy"] = {"profile": "timediff"}
     artifact["point_count"] = 0
     manifest["files"].pop(artifact["package_path"])
     manifest_path.write_text(json.dumps(manifest))
@@ -407,6 +429,7 @@ def test_verify_jsonl_split_package_validates_time_series_artifact_metadata(tmp_
     assert any(field.endswith(".record_id") for field in issue_fields)
     assert any(field.endswith(".channel_name") for field in issue_fields)
     assert any(field.endswith(".generation_backend") for field in issue_fields)
+    assert any(field.endswith(".time_series_model_policy.license") for field in issue_fields)
     assert any(field.endswith(".point_count") for field in issue_fields)
     assert any(field.endswith(".package_path") for field in issue_fields)
 

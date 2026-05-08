@@ -33,6 +33,7 @@ def build_dataset_quality_report(
     time_series_channel_counts: Counter[str] = Counter()
     time_series_unit_counts: Counter[str] = Counter()
     time_series_backend_counts: Counter[str] = Counter()
+    time_series_model_policy_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
     imaging_model_policy_counts: Counter[str] = Counter()
     image_validator_policy_counts: Counter[str] = Counter()
@@ -86,6 +87,7 @@ def build_dataset_quality_report(
             time_series_channel_counts,
             time_series_unit_counts,
             time_series_backend_counts,
+            time_series_model_policy_counts,
             imaging_backend_counts,
             imaging_model_policy_counts,
             image_validator_policy_counts,
@@ -209,6 +211,9 @@ def build_dataset_quality_report(
         time_series_channel_counts=dict(sorted(time_series_channel_counts.items())),
         time_series_unit_counts=dict(sorted(time_series_unit_counts.items())),
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
+        time_series_model_policy_counts=dict(
+            sorted(time_series_model_policy_counts.items())
+        ),
         time_series_numeric_summaries=_numeric_summaries(time_series_numeric_values),
         mean_time_series_sampling_rate_hz=_mean_float(time_series_sampling_rates),
         mean_time_series_points=_mean_float(time_series_point_counts),
@@ -295,6 +300,7 @@ def _count_artifacts(
     time_series_channel_counts: Counter[str],
     time_series_unit_counts: Counter[str],
     time_series_backend_counts: Counter[str],
+    time_series_model_policy_counts: Counter[str],
     imaging_backend_counts: Counter[str],
     imaging_model_policy_counts: Counter[str],
     image_validator_policy_counts: Counter[str],
@@ -362,6 +368,9 @@ def _count_artifacts(
         if duration is not None:
             time_series_durations.append(duration)
         _collect_time_series_numeric_values(channel, time_series_numeric_values)
+    time_series_policy_key = _time_series_model_policy_key(record)
+    if time_series_policy_key:
+        time_series_model_policy_counts[time_series_policy_key] += len(record.time_series)
     artifact_counts["time_series_waveform_channels"] += sum(
         1
         for channel in record.time_series
@@ -653,6 +662,20 @@ def _imaging_report_has_label_evidence(asset) -> bool:
 
 def _imaging_model_policy_key(record: SyntheticRecord) -> str | None:
     policy = record.metadata.get("imaging_model_policy")
+    if not isinstance(policy, dict):
+        return None
+    profile = _policy_value(policy.get("profile"), "unspecified")
+    license_name = _policy_value(policy.get("license"), "unspecified")
+    use_policy = _policy_value(policy.get("use_policy"), "review_license_before_use")
+    gated = str(bool(policy.get("gated"))).lower()
+    return (
+        f"profile={profile}|license={license_name}|"
+        f"gated={gated}|use_policy={use_policy}"
+    )
+
+
+def _time_series_model_policy_key(record: SyntheticRecord) -> str | None:
+    policy = record.metadata.get("time_series_model_policy")
     if not isinstance(policy, dict):
         return None
     profile = _policy_value(policy.get("profile"), "unspecified")
