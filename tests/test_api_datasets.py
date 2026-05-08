@@ -200,6 +200,7 @@ def test_dataset_api_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
         "augmented_clinical_notes",
         "medsynth_dialogue_note",
         "clinical_notes_to_fhir",
+        "technetium_i",
     ]
     assert body["resolved_reference_dataset_id"] == reference_dataset_id
     assert body["resolved_reference_key"] == "synthclinicalnotes"
@@ -230,6 +231,7 @@ def test_dataset_api_quality_report_includes_recipe_benchmark_readiness(
         "augmented_clinical_notes",
         "medsynth_dialogue_note",
         "clinical_notes_to_fhir",
+        "technetium_i",
     ]
     assert "clinical_notes_to_fhir" in body["missing_reference_keys"]
     assert body["benchmark_thresholds"] == {
@@ -666,9 +668,11 @@ def test_dataset_api_lists_hf_reference_catalog(tmp_path, monkeypatch):
     assert any(item["key"] == "asclepius" for item in datasets)
     assert any(item["key"] == "rexgradient_160k" for item in datasets)
     assert any(item["key"] == "synthea_fhir" for item in datasets)
+    assert any(item["key"] == "technetium_i" for item in datasets)
     asclepius = next(item for item in datasets if item["key"] == "asclepius")
     rexgradient = next(item for item in datasets if item["key"] == "rexgradient_160k")
     synthea = next(item for item in datasets if item["key"] == "synthea_fhir")
+    technetium = next(item for item in datasets if item["key"] == "technetium_i")
     assert asclepius["repo_id"] == "starmpcc/Asclepius-Synthetic-Clinical-Notes"
     assert asclepius["license"]
     assert rexgradient["repo_id"] == "rajpurkarlab/ReXGradient-160K"
@@ -676,6 +680,8 @@ def test_dataset_api_lists_hf_reference_catalog(tmp_path, monkeypatch):
     assert synthea["repo_id"] is None
     assert synthea["source"] == "synthea"
     assert synthea["use_policy"] == "local_synthea_import"
+    assert technetium["repo_id"] == "temlm-foundation/Technetium-I"
+    assert technetium["license"] == "eupl-1.2"
     assert rexgradient["gated"] is True
     assert rexgradient["use_policy"] == "non_commercial_research_only"
     assert rexgradient["image_modality"] == "XR"
