@@ -82,6 +82,11 @@ class DatasetBenchmark:
                 set(generated_profile.note_type_counts),
                 set(reference_profile.note_type_counts),
             ),
+            _distribution_metric(
+                "note_type_distribution",
+                generated_profile.note_type_counts,
+                reference_profile.note_type_counts,
+            ),
             _jaccard_metric(
                 "document_author_role_overlap",
                 set(generated_profile.document_author_role_counts),
@@ -478,6 +483,11 @@ def _profile_metrics(
             "note_type_overlap",
             set(generated_profile.note_type_counts),
             set(reference_profile.note_type_counts),
+        ),
+        _distribution_metric(
+            "note_type_distribution",
+            generated_profile.note_type_counts,
+            reference_profile.note_type_counts,
         ),
         _jaccard_metric(
             "document_author_role_overlap",

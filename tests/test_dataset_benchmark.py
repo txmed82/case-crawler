@@ -386,6 +386,7 @@ def test_dataset_benchmark_compares_longitudinal_profiles():
     assert {metric.name for metric in report.metrics} >= {
         "modality_overlap",
         "mean_age",
+        "note_type_distribution",
         "lab_name_overlap",
         "lab_unit_overlap",
         "lab_unit_distribution",
@@ -613,6 +614,35 @@ def test_dataset_benchmark_fails_on_lab_and_vital_unit_mismatch():
     assert metrics["vital_unit_distribution"].score == 0.0
     assert "lab_unit_overlap" in report.failing_metrics
     assert "vital_unit_overlap" in report.failing_metrics
+
+
+def test_dataset_benchmark_fails_on_note_type_distribution_mismatch():
+    generated = [_record("rec-1", "ds-gen")]
+    reference_base = _record("ref-1", "ds-ref")
+    reference = [
+        reference_base.model_copy(
+            update={
+                "documents": [
+                    reference_base.documents[0].model_copy(
+                        update={
+                            "note_type": "nursing_note",
+                            "author_role": "nurse",
+                        }
+                    )
+                ]
+            }
+        )
+    ]
+
+    report = DatasetBenchmark(min_metric_score=0.5).compare(generated, reference)
+    metric = next(
+        item for item in report.metrics if item.name == "note_type_distribution"
+    )
+
+    assert metric.score == 0.0
+    assert metric.details["generated_counts"] == {"progress_note": 1}
+    assert metric.details["reference_counts"] == {"nursing_note": 1}
+    assert "note_type_distribution" in report.failing_metrics
 
 
 def test_dataset_benchmark_compares_imaging_generation_backends():
