@@ -946,6 +946,7 @@ function QualityPanel({
           </div>
           <div className="grid gap-3 sm:grid-cols-4">
             <Metric label="Documents" value={quality.artifact_counts.documents ?? 0} />
+            <Metric label="Encounters" value={quality.artifact_counts.encounters ?? 0} />
             <Metric label="Diagnoses" value={quality.artifact_counts.diagnoses ?? 0} />
             <Metric label="Labs" value={quality.artifact_counts.labs ?? 0} />
             <Metric label="Vitals" value={quality.artifact_counts.vitals ?? 0} />
@@ -955,6 +956,33 @@ function QualityPanel({
             <Metric label="Images" value={quality.artifact_counts.imaging_assets ?? 0} />
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
+            <Metric
+              label="Longitudinal"
+              value={
+                quality.longitudinal_record_rate === null ||
+                quality.longitudinal_record_rate === undefined
+                  ? "none"
+                  : `${Math.round(quality.longitudinal_record_rate * 100)}%`
+              }
+            />
+            <Metric
+              label="Encounter span"
+              value={
+                quality.mean_encounter_span_hours === null ||
+                quality.mean_encounter_span_hours === undefined
+                  ? "none"
+                  : `${quality.mean_encounter_span_hours.toFixed(1)}h`
+              }
+            />
+            <Metric
+              label="Obs/encounter"
+              value={
+                quality.mean_observations_per_encounter === null ||
+                quality.mean_observations_per_encounter === undefined
+                  ? "none"
+                  : quality.mean_observations_per_encounter.toFixed(1)
+              }
+            />
             <Metric
               label="Fact keys"
               value={Object.keys(quality.extracted_fact_key_counts).length}

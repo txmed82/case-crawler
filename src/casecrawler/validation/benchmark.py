@@ -113,6 +113,24 @@ class DatasetBenchmark:
                 generated_profile.artifact_density,
                 reference_profile.artifact_density,
             ),
+            _closeness_metric(
+                "longitudinal_record_rate",
+                generated_profile.longitudinal_record_rate,
+                reference_profile.longitudinal_record_rate,
+                tolerance=0.5,
+            ),
+            _closeness_metric(
+                "mean_encounter_span_hours",
+                generated_profile.mean_encounter_span_hours,
+                reference_profile.mean_encounter_span_hours,
+                tolerance=72.0,
+            ),
+            _closeness_metric(
+                "mean_observations_per_encounter",
+                generated_profile.mean_observations_per_encounter,
+                reference_profile.mean_observations_per_encounter,
+                tolerance=8.0,
+            ),
             *_coverage_metrics(
                 generated_profile.modality_artifact_coverage,
                 reference_profile.modality_artifact_coverage,
@@ -366,6 +384,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     time_series_numeric_values: dict[str, list[float]] = {}
     time_series_point_counts: list[int] = []
     time_series_durations: list[float] = []
+    longitudinal_values: list[int] = []
+    encounter_spans: list[float] = []
+    observations_per_encounter: list[float] = []
     approved_values: list[bool] = []
     modality_alignment_scores: list[float] = []
     modality_declared_counts: Counter[str] = Counter()
@@ -379,6 +400,14 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             modality_declared_counts[modality.value] += 1
         _count_record_artifacts(record, artifact_counts)
         _count_modality_artifact_coverage(record, modality_artifact_counts)
+        longitudinal_values.append(1 if len(record.encounters) > 1 else 0)
+        encounter_span = _encounter_span_hours(record)
+        if encounter_span is not None:
+            encounter_spans.append(encounter_span)
+        if record.encounters:
+            observations_per_encounter.append(
+                (len(record.labs) + len(record.vitals)) / len(record.encounters)
+            )
         for document in record.documents:
             note_type_counts[document.note_type] += 1
             document_author_role_counts[document.author_role or "unknown"] += 1
@@ -460,6 +489,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         extracted_fact_density=_counter_density(extracted_fact_key_counts, len(records)),
         artifact_counts=dict(sorted(artifact_counts.items())),
         artifact_density=_artifact_density(artifact_counts, len(records)),
+        longitudinal_record_rate=_mean(longitudinal_values),
+        mean_encounter_span_hours=_mean_float(encounter_spans),
+        mean_observations_per_encounter=_mean_float(observations_per_encounter),
         modality_artifact_coverage=_modality_artifact_coverage(
             modality_declared_counts,
             modality_artifact_counts,
@@ -829,6 +861,23 @@ def _channel_duration_hours(channel) -> float | None:
     if len(valid_timestamps) < 2:
         return None
     return (max(valid_timestamps) - min(valid_timestamps)).total_seconds() / 3600
+
+
+def _encounter_span_hours(record: SyntheticRecord) -> float | None:
+    if len(record.encounters) < 2:
+        return None
+    timestamps: list[datetime] = []
+    for encounter in record.encounters:
+        start = _parse_datetime(encounter.start)
+        if start is not None:
+            timestamps.append(start)
+        if encounter.end:
+            end = _parse_datetime(encounter.end)
+            if end is not None:
+                timestamps.append(end)
+    if len(timestamps) < 2:
+        return None
+    return (max(timestamps) - min(timestamps)).total_seconds() / 3600
 
 
 def _parse_datetime(value: str) -> datetime | None:

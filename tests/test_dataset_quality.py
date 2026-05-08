@@ -121,7 +121,54 @@ def test_quality_report_marks_fully_approved_dataset_export_ready():
     assert report.export_ready is True
     assert report.approval_rate == 1.0
     assert report.modality_counts == {"clinical_text": 2, "labs": 2, "structured_ehr": 2}
+    assert report.longitudinal_record_rate == 0
+    assert report.mean_encounter_span_hours is None
+    assert report.mean_observations_per_encounter == 1
     assert report.recommendations == []
+
+
+def test_quality_report_summarizes_longitudinal_encounter_depth():
+    base = _record("rec-1")
+    record = base.model_copy(
+        update={
+            "encounters": [
+                *base.encounters,
+                Encounter(
+                    encounter_id="enc-rec-1-follow-up",
+                    start="2026-01-02T00:00:00",
+                    end="2026-01-02T04:00:00",
+                    setting="inpatient",
+                    reason="follow-up sepsis reassessment",
+                    diagnoses=base.encounters[0].diagnoses,
+                ),
+            ],
+            "labs": [
+                *base.labs,
+                LabObservation(
+                    name="WBC",
+                    value=9.0,
+                    unit="K/uL",
+                    reference_low=4.5,
+                    reference_high=11.0,
+                    effective_time="2026-01-02T01:00:00",
+                ),
+            ],
+            "vitals": [
+                VitalObservation(
+                    name="HR",
+                    value=92,
+                    unit="/min",
+                    effective_time="2026-01-02T00:15:00",
+                )
+            ],
+        }
+    )
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.longitudinal_record_rate == 1
+    assert report.mean_encounter_span_hours == 28
+    assert report.mean_observations_per_encounter == 1.5
 
 
 def test_quality_report_blocks_export_when_required_human_review_is_missing():
