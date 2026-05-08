@@ -193,6 +193,7 @@ def test_export_fhir_record_contains_training_bundle_resources():
     assert "Patient" in resource_types
     assert "Encounter" in resource_types
     assert "Observation" in resource_types
+    assert "Condition" in resource_types
     assert "MedicationStatement" in resource_types
     assert "DocumentReference" in resource_types
     assert "DiagnosticReport" in resource_types
@@ -203,6 +204,16 @@ def test_export_fhir_record_contains_training_bundle_resources():
         for resource in resources
         if resource["resourceType"] == "Observation"
         and resource["code"].get("coding")
+    )
+    conditions = [
+        resource for resource in resources if resource["resourceType"] == "Condition"
+    ]
+    assert conditions[0]["code"]["coding"][0]["code"] == "91302008"
+    encounter = next(
+        resource for resource in resources if resource["resourceType"] == "Encounter"
+    )
+    assert encounter["diagnosis"][0]["condition"]["reference"] == (
+        f"Condition/{conditions[0]['id']}"
     )
 
 
