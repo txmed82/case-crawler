@@ -450,6 +450,8 @@ def test_dataset_benchmark_compares_longitudinal_profiles():
         "time_series_unit_distribution",
         "time_series_backend_overlap",
         "time_series_backend_distribution",
+        "time_series_model_policy_overlap",
+        "time_series_model_policy_distribution",
         "mean_time_series_sampling_rate_hz",
         "mean_time_series_points",
         "mean_time_series_duration_hours",
@@ -1077,6 +1079,61 @@ def test_dataset_benchmark_compares_time_series_generation_backends():
     }
     assert backend_metric.score == 0.0
     assert "time_series_backend_overlap" in report.failing_metrics
+
+
+def test_dataset_benchmark_compares_time_series_model_policies():
+    generated = [
+        _record("rec-1", "ds-gen").model_copy(
+            update={
+                "metadata": {
+                    "time_series_model_policy": {
+                        "profile": "timediff",
+                        "model_id": "MuhangTian/TimeDiff",
+                        "license": "mit",
+                        "gated": False,
+                        "use_policy": "wrap_external_sampler_validate_outputs",
+                    }
+                }
+            }
+        )
+    ]
+    reference = [
+        _record("ref-1", "ds-ref").model_copy(
+            update={
+                "metadata": {
+                    "time_series_model_policy": {
+                        "profile": "rawmed",
+                        "model_id": "eunbyeol-cho/RawMed",
+                        "license": None,
+                        "gated": False,
+                        "use_policy": "research_reference_validate_outputs",
+                    }
+                }
+            }
+        )
+    ]
+
+    report = DatasetBenchmark().compare(generated, reference)
+    overlap_metric = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "time_series_model_policy_overlap"
+    )
+    distribution_metric = next(
+        metric
+        for metric in report.metrics
+        if metric.name == "time_series_model_policy_distribution"
+    )
+
+    assert report.generated_profile.time_series_model_policy_counts == {
+        (
+            "profile=timediff|license=mit|gated=false|"
+            "use_policy=wrap external sampler validate outputs"
+        ): 1
+    }
+    assert overlap_metric.score == 0.0
+    assert distribution_metric.score == 0.0
+    assert "time_series_model_policy_overlap" in report.failing_metrics
 
 
 def test_dataset_benchmark_fails_on_time_series_unit_and_sampling_rate_mismatch():
