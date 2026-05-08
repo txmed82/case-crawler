@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import struct
+import zlib
 from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
@@ -48,13 +50,16 @@ class ImagingGenerator:
         body_region: str = "chest",
     ) -> ImagingAsset:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
+        image_id = f"img-placeholder-{uuid4()}"
+        file_path = Path(output_dir) / f"{image_id}.png"
+        _write_placeholder_png(file_path, prompt=prompt, modality=modality)
         labels = infer_imaging_labels(prompt, modality)
         return ImagingAsset(
-            image_id="placeholder",
+            image_id=image_id,
             modality=modality,
             body_region=body_region,
             prompt=prompt,
-            file_path=None,
+            file_path=str(file_path),
             report_text=build_imaging_report(
                 prompt=prompt,
                 modality=modality,
@@ -122,3 +127,40 @@ class ImagingGenerator:
         if hasattr(pipeline, "to"):
             return pipeline.to("cpu")
         return pipeline
+
+
+def _write_placeholder_png(
+    path: Path,
+    *,
+    prompt: str,
+    modality: str,
+    width: int = 128,
+    height: int = 128,
+) -> None:
+    seed = zlib.crc32(f"{modality}:{prompt}".encode("utf-8"))
+    rows = []
+    for y in range(height):
+        row = bytearray()
+        for x in range(width):
+            radial = abs(x - width // 2) + abs(y - height // 2)
+            texture = ((x * 17 + y * 31 + seed) % 53) - 26
+            intensity = max(0, min(255, 210 - radial * 2 + texture))
+            row.append(intensity)
+        rows.append(b"\x00" + bytes(row))
+    raw = b"".join(rows)
+    png = [
+        b"\x89PNG\r\n\x1a\n",
+        _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)),
+        _png_chunk(b"IDAT", zlib.compress(raw)),
+        _png_chunk(b"IEND", b""),
+    ]
+    path.write_bytes(b"".join(png))
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + chunk_type
+        + data
+        + struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
+    )

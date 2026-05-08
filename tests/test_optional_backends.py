@@ -11,6 +11,8 @@ def test_imaging_placeholder_does_not_require_diffusers(tmp_path):
 
     assert asset.generation_backend == "placeholder"
     assert asset.modality == "XR"
+    assert asset.file_path is not None
+    assert (tmp_path / f"{asset.image_id}.png").read_bytes().startswith(b"\x89PNG")
     assert asset.labels[0].display == "Pulmonary edema"
     assert "Pulmonary edema" in asset.report_text
 
