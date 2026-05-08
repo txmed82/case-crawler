@@ -20,6 +20,9 @@ def release_coverage_requirement_description(key: str) -> str:
         "benchmark_reference": (
             "At least one recommended benchmark reference dataset is resolved."
         ),
+        "clinical_text_model_policy": (
+            "Clinical text records include generator license/use-policy metadata."
+        ),
         "discharge_summaries": "Clinical text includes physician discharge summaries.",
         "imaging_model_policy": (
             "Generated image records include model license/use-policy metadata."

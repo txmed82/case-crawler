@@ -16,6 +16,14 @@ async def test_synthetic_pipeline_generates_valid_records():
     assert result["approved"] == 2
     assert len(result["records"]) == 2
     assert result["records"][0].documents
+    assert result["records"][0].metadata["clinical_text_model_policy"] == {
+        "backend": "deterministic",
+        "provider": "casecrawler",
+        "model_id": "casecrawler-template-clinical-documents",
+        "license": "casecrawler",
+        "gated": False,
+        "use_policy": "deterministic_synthetic_templates_validate_outputs",
+    }
     assert result["records"][0].labs
     assert {
         "ed_note",

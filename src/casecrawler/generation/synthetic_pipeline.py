@@ -365,6 +365,18 @@ def _with_clinical_text_generation_metadata(
             else configured_backend
         )
     )
+    if backend == "deterministic":
+        return {
+            **metadata,
+            "clinical_text_model_policy": {
+                "backend": "deterministic",
+                "provider": "casecrawler",
+                "model_id": "casecrawler-template-clinical-documents",
+                "license": "casecrawler",
+                "gated": False,
+                "use_policy": "deterministic_synthetic_templates_validate_outputs",
+            },
+        }
     if backend not in {"llm", "external"}:
         return metadata
     if backend == "external":

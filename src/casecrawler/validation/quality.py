@@ -164,6 +164,7 @@ def build_dataset_quality_report(
         artifact_counts=artifact_counts,
         note_type_counts=note_type_counts,
         extracted_fact_key_counts=extracted_fact_key_counts,
+        clinical_text_model_policy_counts=clinical_text_model_policy_counts,
         imaging_model_policy_counts=imaging_model_policy_counts,
         issue_counts_by_field=issue_counts_by_field,
         benchmark_summary=benchmark_summary,
@@ -795,6 +796,7 @@ def _multimodal_release_readiness(
     artifact_counts: Counter[str],
     note_type_counts: Counter[str],
     extracted_fact_key_counts: Counter[str],
+    clinical_text_model_policy_counts: Counter[str],
     imaging_model_policy_counts: Counter[str],
     issue_counts_by_field: Counter[str],
     benchmark_summary: dict,
@@ -833,6 +835,7 @@ def _multimodal_release_readiness(
             and artifact_counts.get("time_series_points", 0) > 0
         ),
         "radiology_images": artifact_counts.get("imaging_file_assets", 0) > 0,
+        "clinical_text_model_policy": bool(clinical_text_model_policy_counts),
         "imaging_model_policy": bool(imaging_model_policy_counts),
         "modality_alignment_scores": mean_modality_alignment_score is not None,
     }

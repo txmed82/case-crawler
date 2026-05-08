@@ -1188,6 +1188,7 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
         for requirement in body["release_coverage_requirements"]
     }
     assert "lab_reports" in release_requirements
+    assert "clinical_text_model_policy" in release_requirements
     assert "vital_signs_flowsheets" in release_requirements
     assert "medication_administration_records" in release_requirements
     assert "discharge_summaries" in release_requirements
