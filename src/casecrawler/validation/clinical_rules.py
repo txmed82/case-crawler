@@ -6,6 +6,44 @@ from datetime import datetime, timezone
 from casecrawler.generation.imaging_templates import get_imaging_template
 from casecrawler.models.synthetic import Modality, SyntheticRecord, ValidationIssue
 
+_EXPECTED_LAB_UNITS = {
+    "anion-gap": {"mmol/l", "meq/l"},
+    "bicarbonate": {"mmol/l", "meq/l"},
+    "bnp": {"pg/ml"},
+    "bun": {"mg/dl"},
+    "creatinine": {"mg/dl"},
+    "d-dimer": {"mcg/mlfeu", "ng/ml"},
+    "egfr": {"ml/min/1.73m2"},
+    "glucose": {"mg/dl"},
+    "hemoglobin": {"g/dl"},
+    "hgb": {"g/dl"},
+    "inr": {""},
+    "lactate": {"mmol/l"},
+    "platelets": {"k/ul"},
+    "plt": {"k/ul"},
+    "potassium": {"mmol/l", "meq/l"},
+    "sodium": {"mmol/l", "meq/l"},
+    "troponin-i": {"ng/ml"},
+    "wbc": {"k/ul", "cells/ul"},
+}
+
+_EXPECTED_VITAL_UNITS = {
+    "dbp": {"mmhg"},
+    "diastolic-blood-pressure": {"mmhg"},
+    "diastolic-bp": {"mmhg"},
+    "heart-rate": {"/min", "bpm"},
+    "hr": {"/min", "bpm"},
+    "oxygen-saturation": {"%"},
+    "respiratory-rate": {"/min", "breaths/min"},
+    "rr": {"/min", "breaths/min"},
+    "sbp": {"mmhg"},
+    "spo2": {"%"},
+    "systolic-blood-pressure": {"mmhg"},
+    "systolic-bp": {"mmhg"},
+    "temperature": {"c", "f"},
+    "temp": {"c", "f"},
+}
+
 
 def validate_temporal_consistency(record: SyntheticRecord) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
@@ -331,6 +369,45 @@ def validate_lab_flags(record: SyntheticRecord) -> list[ValidationIssue]:
                             message=f"{lab.name} is above range but flagged low.",
                         )
                     )
+    return issues
+
+
+def validate_observation_units(record: SyntheticRecord) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    for lab in record.labs:
+        expected_units = _EXPECTED_LAB_UNITS.get(_normalize_name(lab.name))
+        if expected_units is None:
+            continue
+        observed_unit = _normalize_unit(lab.unit)
+        if observed_unit not in expected_units:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.LABS,
+                    field="labs.unit",
+                    message=(
+                        f"Lab {lab.name} uses unit {lab.unit!r}; expected one of "
+                        f"{', '.join(sorted(expected_units)) or '<unitless>'}."
+                    ),
+                )
+            )
+    for vital in record.vitals:
+        expected_units = _EXPECTED_VITAL_UNITS.get(_normalize_name(vital.name))
+        if expected_units is None:
+            continue
+        observed_unit = _normalize_unit(vital.unit)
+        if observed_unit not in expected_units:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.VITALS,
+                    field="vitals.unit",
+                    message=(
+                        f"Vital {vital.name} uses unit {vital.unit!r}; expected one of "
+                        f"{', '.join(sorted(expected_units)) or '<unitless>'}."
+                    ),
+                )
+            )
     return issues
 
 
@@ -832,6 +909,16 @@ def _contains_negated_term(text: str, term: str) -> bool:
 
 def _normalize_name(value: str) -> str:
     return "-".join(re.findall(r"[a-z0-9]+", value.lower()))
+
+
+def _normalize_unit(value: str) -> str:
+    return (
+        value.strip()
+        .lower()
+        .replace("μ", "u")
+        .replace("µ", "u")
+        .replace(" ", "")
+    )
 
 
 def _slug(value: str) -> str:
