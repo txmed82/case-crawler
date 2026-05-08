@@ -654,6 +654,10 @@ def export_dataset_splits(
     test_ratio: float = Query(0.1, ge=0.0),
     seed: str = "casecrawler",
     allow_blocked: bool = False,
+    reference_dataset_id: str | None = Query(default=None, min_length=1),
+    auto_benchmark: bool = False,
+    min_overall_score: float = Query(0.75, ge=0.0, le=1.0),
+    min_metric_score: float = Query(0.5, ge=0.0, le=1.0),
 ):
     store = DatasetStore()
     if not store.dataset_exists(dataset_id):
@@ -664,18 +668,67 @@ def export_dataset_splits(
             detail="Split package export writes JSONL profiles, not parquet.",
         )
     records = list(store.iter_records(dataset_id=dataset_id))
+    report = build_dataset_quality_report(
+        dataset_id,
+        records,
+        effective_approved=store.effective_approved,
+    )
     if not allow_blocked:
-        report = build_dataset_quality_report(
-            dataset_id,
-            records,
-            effective_approved=store.effective_approved,
-        )
         if not report.export_ready:
             raise HTTPException(
                 status_code=409,
                 detail=(
                     "Dataset is not ready for split fine-tuning export. "
                     f"Blockers: {report.issue_counts_by_field}. "
+                    "Set allow_blocked=true to export anyway."
+                ),
+            )
+    try:
+        from casecrawler.validation.benchmark_selection import resolve_benchmark_gate
+
+        benchmark_gate = resolve_benchmark_gate(
+            store,
+            dataset_id=dataset_id,
+            reference_dataset_id=reference_dataset_id,
+            auto_benchmark=auto_benchmark,
+            min_overall_score=min_overall_score,
+            min_metric_score=min_metric_score,
+        )
+    except KeyError as err:
+        raise HTTPException(status_code=404, detail="reference dataset not found") from err
+    except LookupError as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+
+    benchmark_metadata = {}
+    benchmark_audit = {}
+    if benchmark_gate:
+        reference_records = list(
+            store.iter_records(dataset_id=benchmark_gate.reference_dataset_id)
+        )
+        try:
+            benchmark_report = DatasetBenchmark(
+                min_overall_score=benchmark_gate.min_overall_score,
+                min_metric_score=benchmark_gate.min_metric_score,
+            ).compare(records, reference_records)
+        except ValueError as err:
+            raise HTTPException(status_code=422, detail=str(err)) from err
+        benchmark_metadata = {
+            "benchmark_reference_dataset_id": benchmark_gate.reference_dataset_id,
+            "benchmark_reference_key": benchmark_gate.reference_key,
+            "benchmark_auto_selected": benchmark_gate.auto_selected,
+            "benchmark_overall_score": benchmark_report.overall_score,
+            "benchmark_passed": benchmark_report.passed,
+            "benchmark_failing_metrics": benchmark_report.failing_metrics,
+            "benchmark_thresholds": benchmark_report.thresholds,
+        }
+        benchmark_audit["benchmark_report.json"] = benchmark_report.model_dump(mode="json")
+        if not benchmark_report.passed and not allow_blocked:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Dataset failed benchmark gate for split fine-tuning export. "
+                    f"Overall score: {benchmark_report.overall_score}. "
+                    f"Failing metrics: {benchmark_report.failing_metrics}. "
                     "Set allow_blocked=true to export anyway."
                 ),
             )
@@ -695,6 +748,7 @@ def export_dataset_splits(
                     "quality_report.json": report.model_dump(mode="json"),
                     "dataset_card.md": build_dataset_card(manifest_snapshot, records),
                     "model_card.md": build_model_card(manifest_snapshot, records),
+                    **benchmark_audit,
                 },
             )
             payload = BytesIO()
@@ -722,6 +776,7 @@ def export_dataset_splits(
             "audit_artifacts": {
                 name: Path(path).name for name, path in manifest["audit_artifacts"].items()
             },
+            **benchmark_metadata,
             "splits": {
                 name: {
                     "record_count": data["record_count"],

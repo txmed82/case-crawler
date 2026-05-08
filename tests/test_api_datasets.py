@@ -138,6 +138,36 @@ def test_dataset_api_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert "model_card.md" in listed.json()["exports"][0]["metadata"]["audit_artifacts"]
 
 
+def test_dataset_api_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 3})
+    reference = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 3})
+    dataset_id = generated.json()["dataset_id"]
+    reference_dataset_id = reference.json()["dataset_id"]
+
+    exported = client.get(
+        f"/api/datasets/{dataset_id}/export-splits",
+        params={
+            "export_format": "sft_jsonl",
+            "reference_dataset_id": reference_dataset_id,
+            "min_overall_score": 0,
+            "min_metric_score": 0,
+        },
+    )
+    listed = client.get(f"/api/datasets/{dataset_id}/exports")
+
+    assert exported.status_code == 200
+    with zipfile.ZipFile(BytesIO(exported.content)) as archive:
+        assert "benchmark_report.json" in archive.namelist()
+        benchmark_report = json.loads(archive.read("benchmark_report.json"))
+        assert benchmark_report["reference_dataset_id"] == reference_dataset_id
+        assert benchmark_report["passed"] is True
+    metadata = listed.json()["exports"][0]["metadata"]
+    assert metadata["benchmark_reference_dataset_id"] == reference_dataset_id
+    assert metadata["benchmark_passed"] is True
+
+
 def test_dataset_api_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

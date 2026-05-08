@@ -141,6 +141,42 @@ def test_dataset_cli_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert "quality_report.json" in exports[0].metadata["audit_artifacts"]
 
 
+def test_dataset_cli_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generated = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "3"])
+    reference = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "3"])
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output).group(1)
+    reference_dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", reference.output).group(1)
+
+    exported = runner.invoke(
+        cli,
+        [
+            "export-dataset-splits",
+            "--dataset-id",
+            dataset_id,
+            "--reference-dataset-id",
+            reference_dataset_id,
+            "--min-overall-score",
+            "0",
+            "--min-metric-score",
+            "0",
+            "--output-dir",
+            "benchmark-split-package",
+        ],
+    )
+
+    manifest = json.loads((tmp_path / "benchmark-split-package" / "manifest.json").read_text())
+    exports = DatasetStore().list_export_manifests(dataset_id=dataset_id)
+
+    assert exported.exit_code == 0
+    assert "benchmark_report.json" in manifest["audit_artifacts"]
+    assert (tmp_path / "benchmark-split-package" / "benchmark_report.json").exists()
+    assert exports[0].metadata["benchmark_reference_dataset_id"] == reference_dataset_id
+    assert exports[0].metadata["benchmark_passed"] is True
+
+
 def test_dataset_cli_blocks_export_until_required_human_review(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
