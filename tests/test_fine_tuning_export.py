@@ -355,8 +355,10 @@ def test_verify_jsonl_split_package_requires_release_image_artifact_metadata(tmp
     manifest_path = tmp_path / "package" / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
     image_artifact = next(iter(manifest["image_artifacts"].values()))
+    image_artifact["record_id"] = "rec-other"
+    image_artifact["image_id"] = "img-other"
     image_artifact.pop("generation_backend")
-    image_artifact["labels"] = "opacity"
+    image_artifact["labels"] = [{"system": "synthetic", "code": "opacity"}]
     image_artifact["imaging_model_policy"].pop("use_policy")
     manifest_path.write_text(json.dumps(manifest))
 
@@ -364,6 +366,8 @@ def test_verify_jsonl_split_package_requires_release_image_artifact_metadata(tmp
     issue_fields = {issue["field"] for issue in report["issues"]}
 
     assert report["valid"] is False
+    assert any(field.endswith(".record_id") for field in issue_fields)
+    assert any(field.endswith(".image_id") for field in issue_fields)
     assert any(field.endswith(".generation_backend") for field in issue_fields)
     assert any(field.endswith(".labels") for field in issue_fields)
     assert any(
