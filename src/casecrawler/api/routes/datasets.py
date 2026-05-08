@@ -5,6 +5,7 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
@@ -71,6 +72,23 @@ class BenchmarkProfileCompareRequest(BaseModel):
     min_metric_score: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
+class ReleasePackageRequest(BaseModel):
+    topic: str = Field(min_length=1)
+    count: int = Field(default=1, ge=1)
+    recipe: str = "full_multimodal_acute_care"
+    export_format: ExportFormat = ExportFormat.MULTIMODAL_JSONL
+    train_ratio: float = Field(default=0.8, ge=0.0)
+    validation_ratio: float = Field(default=0.1, ge=0.0)
+    test_ratio: float = Field(default=0.1, ge=0.0)
+    seed: str = "casecrawler"
+    imaging_backend: Literal["placeholder", "diffusers"] = "placeholder"
+    imaging_model_profile: str | None = Field(default=None, min_length=1)
+    diffusers_model_id: str | None = Field(default=None, min_length=1)
+    fixture_limit: int = Field(default=1, ge=1)
+    min_overall_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    min_metric_score: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
 @router.get("/datasets")
 def list_datasets(limit: int = Query(100, ge=1, le=1000)):
     store = DatasetStore()
@@ -103,6 +121,214 @@ async def generate_dataset(req: GenerationRequest):
         "total_records": len(result["records"]),
         "records": [record.model_dump() for record in returned_records],
     }
+
+
+@router.post("/datasets/release-package")
+async def generate_release_package(req: ReleasePackageRequest):
+    config = get_config()
+    if req.count > config.synthetic.max_api_generation_count:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "count must be less than or equal to "
+                f"{config.synthetic.max_api_generation_count}"
+            ),
+        )
+    if req.export_format == ExportFormat.PARQUET:
+        raise HTTPException(
+            status_code=422,
+            detail="Release package export writes JSONL split packages, not parquet.",
+        )
+    try:
+        generation_request = GenerationRequest(
+            topic=req.topic,
+            count=req.count,
+            recipe=req.recipe,
+            export_formats=[req.export_format],
+            imaging_backend=req.imaging_backend,
+            imaging_model_profile=req.imaging_model_profile,
+            diffusers_model_id=req.diffusers_model_id,
+        )
+        result = await SyntheticPipeline().generate(generation_request)
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+
+    from casecrawler.integrations.reference_fixtures import (
+        seed_recommended_reference_fixtures,
+    )
+    from casecrawler.validation.benchmark_selection import build_benchmark_plan_summary
+
+    store = DatasetStore()
+    records = result["records"]
+    for record in records:
+        store.save_record(record)
+    dataset_id = result["dataset_id"]
+    seeded_references = seed_recommended_reference_fixtures(
+        store,
+        dataset_id=dataset_id,
+        dataset_id_prefix=f"{dataset_id}-release-fixture",
+        limit=req.fixture_limit,
+    )
+    benchmark_plan_summary = build_benchmark_plan_summary(store, dataset_id)
+    reference_dataset_id = benchmark_plan_summary.get("resolved_reference_dataset_id")
+    if not isinstance(reference_dataset_id, str) or not reference_dataset_id:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Generated dataset has no seeded benchmark reference. "
+                f"Missing: {benchmark_plan_summary.get('missing_reference_keys', [])}."
+            ),
+        )
+    reference_records = list(store.iter_records(dataset_id=reference_dataset_id))
+    try:
+        benchmark_report = DatasetBenchmark(
+            min_overall_score=req.min_overall_score,
+            min_metric_score=req.min_metric_score,
+        ).compare(records, reference_records)
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+
+    benchmark_reference_key = benchmark_plan_summary.get("resolved_reference_key")
+    benchmark_plan = {
+        "recommended_reference_keys": benchmark_plan_summary["recommended_reference_keys"],
+        "ready": benchmark_report.passed,
+        "resolved_reference_dataset_id": reference_dataset_id
+        if benchmark_report.passed
+        else None,
+        "missing_reference_keys": []
+        if benchmark_report.passed
+        else [benchmark_reference_key or reference_dataset_id],
+        "thresholds": benchmark_report.thresholds,
+        "task_export_reference_readiness": benchmark_plan_summary[
+            "task_export_reference_readiness"
+        ],
+    }
+    quality_report = build_dataset_quality_report(
+        dataset_id,
+        records,
+        effective_approved=store.effective_approved,
+        benchmark_plan=benchmark_plan,
+    )
+    if not quality_report.export_ready:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Generated dataset is not ready for fine-tuning export. "
+                f"Blockers: {quality_report.issue_counts_by_field}."
+            ),
+        )
+    profile_blocker = export_profile_blocker(quality_report, req.export_format.value)
+    if profile_blocker:
+        raise HTTPException(status_code=409, detail=profile_blocker)
+    if not quality_report.multimodal_release_ready:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Generated dataset is not multimodal-release-ready. "
+                f"Missing: {quality_report.multimodal_release_missing}."
+            ),
+        )
+
+    manifest_snapshot = store.get_manifest(dataset_id)
+    try:
+        with TemporaryDirectory() as temp_dir:
+            manifest = export_jsonl_split_package(
+                records,
+                temp_dir,
+                req.export_format,
+                dataset_id=dataset_id,
+                train_ratio=req.train_ratio,
+                validation_ratio=req.validation_ratio,
+                test_ratio=req.test_ratio,
+                seed=req.seed,
+                audit_artifacts={
+                    "quality_report.json": quality_report.model_dump(mode="json"),
+                    "benchmark_profile.json": benchmark_profile_artifact(
+                        profile_records(records)
+                    ),
+                    "benchmark_report.json": benchmark_report.model_dump(mode="json"),
+                    "dataset_card.md": build_dataset_card(manifest_snapshot, records),
+                    "model_card.md": build_model_card(manifest_snapshot, records),
+                    "release_package_summary.json": {
+                        "dataset_id": dataset_id,
+                        "generated": result["generated"],
+                        "approved": result["approved"],
+                        "seeded_references": seeded_references,
+                        "quality_report": {
+                            "export_ready": quality_report.export_ready,
+                            "multimodal_release_ready": (
+                                quality_report.multimodal_release_ready
+                            ),
+                            "multimodal_release_missing": (
+                                quality_report.multimodal_release_missing
+                            ),
+                            "core_artifact_coverage": quality_report.core_artifact_coverage,
+                        },
+                        "benchmark": {
+                            "reference_dataset_id": reference_dataset_id,
+                            "reference_key": benchmark_reference_key,
+                            "passed": benchmark_report.passed,
+                            "overall_score": benchmark_report.overall_score,
+                            "failing_metrics": benchmark_report.failing_metrics,
+                            "thresholds": benchmark_report.thresholds,
+                        },
+                    },
+                },
+            )
+            payload = BytesIO()
+            with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                for path in sorted(Path(temp_dir).iterdir()):
+                    archive.write(path, arcname=path.name)
+            zip_bytes = payload.getvalue()
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+
+    store.save_export_manifest(
+        dataset_id=dataset_id,
+        export_format=req.export_format,
+        file_path=(
+            f"api://datasets/release-package?export_format={req.export_format.value}"
+        ),
+        record_count=manifest["example_count"],
+        metadata={
+            "transport": "api",
+            "split_package": True,
+            "release_package": True,
+            "zip_bytes": len(zip_bytes),
+            "seed": manifest["seed"],
+            "ratios": manifest["ratios"],
+            "audit_artifacts": {
+                name: Path(path).name for name, path in manifest["audit_artifacts"].items()
+            },
+            "multimodal_release_ready": quality_report.multimodal_release_ready,
+            "multimodal_release_missing": quality_report.multimodal_release_missing,
+            "core_artifact_coverage": quality_report.core_artifact_coverage,
+            "benchmark_reference_dataset_id": reference_dataset_id,
+            "benchmark_reference_key": benchmark_reference_key,
+            "benchmark_auto_selected": True,
+            "benchmark_overall_score": benchmark_report.overall_score,
+            "benchmark_passed": benchmark_report.passed,
+            "benchmark_failing_metrics": benchmark_report.failing_metrics,
+            "benchmark_thresholds": benchmark_report.thresholds,
+            "splits": {
+                name: {
+                    "record_count": data["record_count"],
+                    "example_count": data["example_count"],
+                }
+                for name, data in manifest["splits"].items()
+            },
+        },
+    )
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{dataset_id}-{req.export_format.value}-release.zip"'
+            ),
+            "X-CaseCrawler-Dataset-Id": dataset_id,
+        },
+    )
 
 
 @router.get("/datasets/reference-catalog")
