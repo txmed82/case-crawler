@@ -289,6 +289,10 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     assert summary["seeded_references"]["imported"]
     assert exports[0].metadata["release_package"] is True
     assert exports[0].metadata["multimodal_release_ready"] is True
+    assert exports[0].metadata["image_artifact_count"] == 1
+    assert next(iter(exports[0].metadata["image_artifacts"].values()))[
+        "package_path"
+    ] == image_files[0]
     assert exports[0].metadata["benchmark_passed"] is True
     assert exports[0].metadata["benchmark_suite_passed"] is True
 

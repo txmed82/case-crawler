@@ -325,6 +325,8 @@ async def generate_release_package(req: ReleasePackageRequest):
             "audit_artifacts": {
                 name: Path(path).name for name, path in manifest["audit_artifacts"].items()
             },
+            "image_artifacts": manifest["image_artifacts"],
+            "image_artifact_count": len(manifest["image_artifacts"]),
             "multimodal_release_ready": quality_report.multimodal_release_ready,
             "multimodal_release_missing": quality_report.multimodal_release_missing,
             "core_artifact_coverage": quality_report.core_artifact_coverage,
@@ -1176,6 +1178,8 @@ def export_dataset_splits(
             "audit_artifacts": {
                 name: Path(path).name for name, path in manifest["audit_artifacts"].items()
             },
+            "image_artifacts": manifest["image_artifacts"],
+            "image_artifact_count": len(manifest["image_artifacts"]),
             "multimodal_release_ready": report.multimodal_release_ready,
             "multimodal_release_missing": report.multimodal_release_missing,
             "core_artifact_coverage": report.core_artifact_coverage,
