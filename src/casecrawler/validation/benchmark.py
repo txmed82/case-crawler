@@ -4,7 +4,7 @@ from collections import Counter
 from datetime import datetime, timezone
 
 from casecrawler.models.evaluation import BenchmarkMetric, BenchmarkReport, CohortProfile
-from casecrawler.models.synthetic import Modality, SyntheticRecord
+from casecrawler.models.synthetic import Modality, SyntheticRecord, TimeSeriesChannel
 
 
 ARTIFACT_DENSITY_KEYS = {
@@ -226,6 +226,12 @@ class DatasetBenchmark:
                 reference_profile.mean_time_series_duration_hours,
                 tolerance=48.0,
             ),
+            *_numeric_summary_metrics(
+                prefix="time_series_value_mean",
+                generated_summaries=generated_profile.time_series_numeric_summaries,
+                reference_summaries=reference_profile.time_series_numeric_summaries,
+                tolerance=25.0,
+            ),
             _jaccard_metric(
                 "imaging_modality_overlap",
                 set(generated_profile.imaging_modality_counts),
@@ -351,6 +357,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     messy_document_values: list[int] = []
     lab_numeric_values: dict[str, list[float]] = {}
     vital_numeric_values: dict[str, list[float]] = {}
+    time_series_numeric_values: dict[str, list[float]] = {}
     time_series_point_counts: list[int] = []
     time_series_durations: list[float] = []
     approved_values: list[bool] = []
@@ -404,6 +411,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             time_series_channel_counts[channel.name] += 1
             time_series_backend_counts[channel.generation_backend] += 1
             time_series_point_counts.append(len(channel.points))
+            _collect_time_series_numeric_values(channel, time_series_numeric_values)
             duration = _channel_duration_hours(channel)
             if duration is not None:
                 time_series_durations.append(duration)
@@ -461,6 +469,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         medication_status_counts=dict(sorted(medication_status_counts.items())),
         time_series_channel_counts=dict(sorted(time_series_channel_counts.items())),
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
+        time_series_numeric_summaries=_numeric_summaries(time_series_numeric_values),
         mean_time_series_points=_mean(time_series_point_counts),
         mean_time_series_duration_hours=_mean_float(time_series_durations),
         imaging_modality_counts=dict(sorted(imaging_modality_counts.items())),
@@ -781,6 +790,19 @@ def _numeric_summaries(values_by_name: dict[str, list[float]]) -> dict[str, dict
             "min": round(min(values), 4),
         }
     return summaries
+
+
+def _collect_time_series_numeric_values(
+    channel: TimeSeriesChannel,
+    values_by_name: dict[str, list[float]],
+) -> None:
+    channel_key = _fact_key(channel.name)
+    for point in channel.points:
+        for value_name, value in point.values.items():
+            values_by_name.setdefault(
+                f"{channel_key}.{_fact_key(str(value_name))}",
+                [],
+            ).append(float(value))
 
 
 def _rounded(value: float | None) -> float | None:

@@ -173,6 +173,12 @@ def test_profile_records_summarizes_multimodal_cohort():
         "mean": 110.0,
         "min": 110.0,
     }
+    assert profile.time_series_numeric_summaries["heart_rate.value"] == {
+        "count": 4,
+        "max": 105.0,
+        "mean": 102.5,
+        "min": 100.0,
+    }
     assert profile.procedure_name_counts == {"Central venous catheter placement": 2}
     assert profile.medication_route_counts == {"IV": 2}
     assert profile.medication_status_counts == {"active": 2}
@@ -368,6 +374,43 @@ def test_dataset_benchmark_compares_imaging_finding_labels():
     assert label_metric.details["reference_only"] == ["pleural effusion"]
     assert distribution_metric.score == 0.0
     assert any("imaging_label_overlap" in warning for warning in report.warnings)
+
+
+def test_dataset_benchmark_compares_time_series_value_summaries():
+    generated = [_record("rec-1", "ds-gen")]
+    reference = [
+        _record("ref-1", "ds-ref").model_copy(
+            update={
+                "time_series": [
+                    TimeSeriesChannel(
+                        name="heart_rate",
+                        unit="/min",
+                        generation_backend="reference",
+                        points=[
+                            TimeSeriesPoint(
+                                timestamp="2026-01-01T00:00:00",
+                                values={"value": 150},
+                            ),
+                            TimeSeriesPoint(
+                                timestamp="2026-01-01T06:00:00",
+                                values={"value": 155},
+                            ),
+                        ],
+                    )
+                ]
+            }
+        )
+    ]
+
+    report = DatasetBenchmark(min_metric_score=0.5).compare(generated, reference)
+    metric = next(
+        item for item in report.metrics if item.name == "time_series_value_mean:heart_rate.value"
+    )
+
+    assert metric.score == 0.0
+    assert metric.generated_value == 102.5
+    assert metric.reference_value == 152.5
+    assert "time_series_value_mean:heart_rate.value" in report.failing_metrics
 
 
 def test_dataset_benchmark_compares_imaging_generation_backends():
