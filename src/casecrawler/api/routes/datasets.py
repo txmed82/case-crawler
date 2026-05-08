@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from casecrawler.config import get_config
 from casecrawler.export.cards import build_dataset_card, build_model_card
 from casecrawler.capabilities import (
+    clinical_text_model_capabilities,
     image_validator_capabilities,
     reference_dataset_capabilities,
     release_coverage_requirements,
@@ -90,6 +91,7 @@ class ReleasePackageRequest(BaseModel):
     test_ratio: float = Field(default=0.1, ge=0.0)
     seed: str = "casecrawler"
     clinical_text_backend: Literal["deterministic", "llm", "external"] | None = None
+    clinical_text_model_profile: str | None = Field(default=None, min_length=1)
     clinical_text_command: list[str] | None = Field(default=None, min_length=1)
     imaging_backend: Literal["placeholder", "diffusers", "external"] = "placeholder"
     imaging_model_profile: str | None = Field(default=None, min_length=1)
@@ -157,6 +159,7 @@ async def generate_release_package(req: ReleasePackageRequest):
             recipe=req.recipe,
             export_formats=[req.export_format],
             clinical_text_backend=req.clinical_text_backend,
+            clinical_text_model_profile=req.clinical_text_model_profile,
             clinical_text_command=req.clinical_text_command,
             imaging_backend=req.imaging_backend,
             imaging_model_profile=req.imaging_model_profile,
@@ -487,6 +490,7 @@ def list_dataset_capabilities():
         ],
         "release_coverage_requirements": release_coverage_requirements(),
         "reference_datasets": reference_dataset_capabilities(),
+        "clinical_text_model_profiles": clinical_text_model_capabilities(),
         "imaging_model_profiles": [
             {
                 "name": profile.name,

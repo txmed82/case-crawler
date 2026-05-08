@@ -72,6 +72,40 @@ def test_generate_dataset_api_accepts_external_clinical_text_backend(
     ]
 
 
+def test_generate_dataset_api_accepts_clinical_text_model_profile(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    class FakePipeline:
+        async def generate(self, req):
+            captured.append(req)
+            return {
+                "dataset_id": "ds-test",
+                "generated": 0,
+                "approved": 0,
+                "records": [],
+            }
+
+    monkeypatch.setattr(datasets_routes, "SyntheticPipeline", FakePipeline)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/generate",
+        json={
+            "topic": "sepsis",
+            "count": 1,
+            "modalities": ["clinical_text"],
+            "clinical_text_model_profile": "medgemma_4b_it",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured[0].clinical_text_model_profile == "medgemma_4b_it"
+
+
 def test_generate_dataset_api_rejects_unbounded_counts(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     config = AppConfig(synthetic=SyntheticConfig(max_api_generation_count=1))
@@ -1250,6 +1284,33 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert time_series_profiles["mira"]["use_policy"] == (
         "forecasting_backbone_validate_synthetic_rollouts"
     )
+    clinical_text_profiles = {
+        profile["name"]: profile for profile in body["clinical_text_model_profiles"]
+    }
+    assert clinical_text_profiles["medgemma_4b_it"]["model_id"] == (
+        "google/medgemma-4b-it"
+    )
+    assert clinical_text_profiles["medgemma_4b_it"]["license"] == (
+        "health-ai-developer-foundations"
+    )
+    assert clinical_text_profiles["medgemma_4b_it"]["command_template"] == [
+        "hf-note-sample",
+        "--model",
+        "google/medgemma-4b-it",
+    ]
+    assert clinical_text_profiles["medgemma_4b_it"]["input_contract"][
+        "stdin_json"
+    ] == ["record"]
+    assert clinical_text_profiles["medgemma_4b_it"]["output_contract"][
+        "stdout_json"
+    ] == "ClinicalDocument[] or {'documents': ClinicalDocument[]}"
+    assert "privacy_phi_scan" in clinical_text_profiles["medgemma_4b_it"][
+        "validation_requirements"
+    ]
+    assert clinical_text_profiles["meditron_7b"]["model_id"] == (
+        "epfl-llm/meditron-7b"
+    )
+    assert clinical_text_profiles["meditron_7b"]["license"] == "llama2"
     assert "sepsis" in {profile["key"] for profile in body["clinical_profiles"]}
     sepsis = next(profile for profile in body["clinical_profiles"] if profile["key"] == "sepsis")
     assert "Lactate" in sepsis["lab_names"]

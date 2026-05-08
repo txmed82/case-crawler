@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from casecrawler.config import get_config
+from casecrawler.generation.clinical_text_models import (
+    resolve_clinical_text_model_profile,
+)
 from casecrawler.generation.imaging_generator import ImagingGenerator
 from casecrawler.generation.imaging_models import resolve_imaging_model_profile
 from casecrawler.generation.modality_plan import ModalityPlanner
@@ -47,7 +50,8 @@ class SyntheticPipeline:
             config.llm.provider,
             config.llm.model,
             config.llm.ollama_base_url,
-            config.synthetic.clinical_text_command,
+            config.synthetic.clinical_text_command
+            or _clinical_text_profile_command(config.synthetic.clinical_text_model_profile),
         )
         self._time_series_generator = time_series_generator or _time_series_generator_from_config(
             config.synthetic.time_series_backend,
@@ -121,6 +125,7 @@ class SyntheticPipeline:
                             self._config.synthetic.clinical_text_backend,
                             self._config.llm.provider,
                             self._config.llm.model,
+                            self._config.synthetic.clinical_text_model_profile,
                             self._config.synthetic.clinical_text_command,
                         )
                     }
@@ -224,24 +229,30 @@ class SyntheticPipeline:
             or req.llm_provider
             or req.llm_model
             or req.ollama_base_url
+            or req.clinical_text_model_profile
             or req.clinical_text_command
         ):
             return self._text_generator
+        if req.clinical_text_model_profile:
+            resolve_clinical_text_model_profile(req.clinical_text_model_profile)
         backend = req.clinical_text_backend or (
             "llm"
             if (req.llm_provider or req.llm_model)
             else (
                 "external"
-                if req.clinical_text_command
+                if (req.clinical_text_model_profile or req.clinical_text_command)
                 else self._config.synthetic.clinical_text_backend
             )
         )
+        profile_command = _clinical_text_profile_command(req.clinical_text_model_profile)
         return _text_generator_from_config(
             backend,
             req.llm_provider or self._config.llm.provider,
             req.llm_model or self._config.llm.model,
             req.ollama_base_url or self._config.llm.ollama_base_url,
-            req.clinical_text_command or self._config.synthetic.clinical_text_command,
+            req.clinical_text_command
+            or profile_command
+            or self._config.synthetic.clinical_text_command,
         )
 
 
@@ -281,6 +292,13 @@ def _text_generator_from_config(
             )
         return TextGenerator(external_command=command)
     raise ValueError(f"Unknown synthetic clinical text backend: {backend}")
+
+
+def _clinical_text_profile_command(profile_name: str | None) -> list[str] | None:
+    profile = resolve_clinical_text_model_profile(profile_name)
+    if profile is None:
+        return None
+    return profile.command_template
 
 
 def _with_imaging_generation_metadata(
@@ -335,24 +353,39 @@ def _with_clinical_text_generation_metadata(
     configured_backend: str,
     configured_provider: str,
     configured_model: str,
+    configured_profile: str | None,
     configured_command: list[str] | None,
 ) -> dict:
     backend = req.clinical_text_backend or (
         "llm"
         if (req.llm_provider or req.llm_model)
-        else ("external" if req.clinical_text_command else configured_backend)
+        else (
+            "external"
+            if (req.clinical_text_model_profile or req.clinical_text_command)
+            else configured_backend
+        )
     )
     if backend not in {"llm", "external"}:
         return metadata
     if backend == "external":
+        profile_name = req.clinical_text_model_profile or configured_profile
+        profile = resolve_clinical_text_model_profile(profile_name)
         return {
             **metadata,
             "clinical_text_model_policy": {
                 "backend": "external",
-                "command": req.clinical_text_command or configured_command,
-                "license": "external_command_terms",
-                "gated": False,
-                "use_policy": "wrap_external_clinical_text_generator_validate_outputs",
+                "profile": profile.name if profile else None,
+                "model_id": profile.model_id if profile else None,
+                "command": req.clinical_text_command
+                or (profile.command_template if profile else None)
+                or configured_command,
+                "license": profile.license if profile else "external_command_terms",
+                "gated": profile.gated if profile else False,
+                "use_policy": (
+                    profile.use_policy
+                    if profile
+                    else "wrap_external_clinical_text_generator_validate_outputs"
+                ),
             },
         }
     provider = req.llm_provider or configured_provider

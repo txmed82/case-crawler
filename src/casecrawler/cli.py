@@ -183,6 +183,31 @@ def timeseries_models() -> None:
         click.echo(f"  {profile.notes}")
 
 
+@cli.command("clinical-text-models")
+def clinical_text_models() -> None:
+    """List built-in clinical text model adapter profiles."""
+    from casecrawler.generation.clinical_text_models import (
+        list_clinical_text_model_profiles,
+    )
+
+    for profile in list_clinical_text_model_profiles():
+        click.echo(
+            f"{profile.name}: adapter={profile.adapter_type} "
+            f"model_id={profile.model_id or 'unspecified'} "
+            f"reference={profile.reference} "
+            f"license={profile.license or 'unspecified'} "
+            f"gated={profile.gated} use_policy={profile.use_policy}"
+        )
+        if profile.command_template:
+            click.echo(f"  command={' '.join(profile.command_template)}")
+        if profile.output_contract:
+            click.echo(
+                "  stdout="
+                f"{profile.output_contract.get('stdout_json', 'unspecified')}"
+            )
+        click.echo(f"  {profile.notes}")
+
+
 @cli.command("reference-datasets")
 def reference_datasets() -> None:
     """List configured reference datasets for benchmarking."""
@@ -582,6 +607,11 @@ def serve() -> None:
     help="Comma-separated external clinical text command for this request",
 )
 @click.option(
+    "--clinical-text-model-profile",
+    default=None,
+    help="Built-in clinical text model profile, for example medgemma_4b_it",
+)
+@click.option(
     "--imaging-backend",
     default=None,
     type=click.Choice(["placeholder", "diffusers", "external"]),
@@ -640,6 +670,7 @@ def generate_dataset(
     llm_model: str | None,
     ollama_base_url: str | None,
     clinical_text_command: str | None,
+    clinical_text_model_profile: str | None,
     imaging_backend: str | None,
     imaging_model_profile: str | None,
     diffusers_model_id: str | None,
@@ -707,6 +738,7 @@ def generate_dataset(
             llm_provider=llm_provider,
             llm_model=llm_model,
             ollama_base_url=ollama_base_url,
+            clinical_text_model_profile=clinical_text_model_profile,
             clinical_text_command=parsed_clinical_text_command,
             imaging_backend=imaging_backend,
             imaging_model_profile=imaging_model_profile,
@@ -794,6 +826,11 @@ def generate_dataset(
     help="Comma-separated external clinical text command for release package generation.",
 )
 @click.option(
+    "--clinical-text-model-profile",
+    default=None,
+    help="Built-in clinical text model profile, for example medgemma_4b_it.",
+)
+@click.option(
     "--fixture-limit",
     default=1,
     type=click.IntRange(1),
@@ -827,6 +864,7 @@ def generate_release_package(
     imaging_command: str | None,
     clinical_text_backend: str | None,
     clinical_text_command: str | None,
+    clinical_text_model_profile: str | None,
     fixture_limit: int,
     min_overall_score: float,
     min_metric_score: float,
@@ -876,6 +914,7 @@ def generate_release_package(
             recipe=recipe,
             export_formats=[ExportFormat(export_format)],
             clinical_text_backend=clinical_text_backend,
+            clinical_text_model_profile=clinical_text_model_profile,
             clinical_text_command=parsed_clinical_text_command,
             imaging_backend=imaging_backend,
             imaging_model_profile=imaging_model_profile,
@@ -1192,6 +1231,7 @@ def datasets_quality(dataset_id: str) -> None:
 def datasets_capabilities() -> None:
     """Show dataset generation and strict release capabilities."""
     from casecrawler.capabilities import (
+        clinical_text_model_capabilities,
         image_validator_capabilities,
         reference_dataset_capabilities,
         release_coverage_requirements,
@@ -1223,6 +1263,7 @@ def datasets_capabilities() -> None:
         ],
         "release_coverage_requirements": release_coverage_requirements(),
         "reference_datasets": reference_dataset_capabilities(),
+        "clinical_text_model_profiles": clinical_text_model_capabilities(),
         "imaging_model_profiles": [
             {
                 "name": profile.name,

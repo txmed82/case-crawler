@@ -158,3 +158,28 @@ def image_validator_capabilities() -> list[dict[str, object]]:
         }
         for profile in list_image_validator_profiles()
     ]
+
+
+def clinical_text_model_capabilities() -> list[dict[str, object]]:
+    """Return configured clinical text generation adapter profiles."""
+    from casecrawler.generation.clinical_text_models import (
+        list_clinical_text_model_profiles,
+    )
+
+    return [
+        {
+            "name": profile.name,
+            "adapter_type": profile.adapter_type,
+            "reference": profile.reference,
+            "model_id": profile.model_id,
+            "license": profile.license,
+            "gated": profile.gated,
+            "use_policy": profile.use_policy,
+            "command_template": profile.command_template,
+            "input_contract": profile.input_contract,
+            "output_contract": profile.output_contract,
+            "validation_requirements": profile.validation_requirements,
+            "notes": profile.notes,
+        }
+        for profile in list_clinical_text_model_profiles()
+    ]
