@@ -69,6 +69,14 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     assert "Bundle" in (tmp_path / "synthetic.fhir.ndjson").read_text()
 
 
+def test_dataset_cli_lists_generation_recipes():
+    result = CliRunner().invoke(cli, ["generation-recipes"])
+
+    assert result.exit_code == 0
+    assert "full_multimodal_acute_care" in result.output
+    assert "icu_timeseries_notes" in result.output
+
+
 def test_dataset_cli_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

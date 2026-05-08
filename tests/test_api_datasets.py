@@ -453,6 +453,9 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     body = response.json()
     assert "clinical_text" in body["modalities"]
     assert "sft_jsonl" in body["export_formats"]
+    assert "full_multimodal_acute_care" in {
+        recipe["name"] for recipe in body["generation_recipes"]
+    }
     assert "topic_mix" in body["cohort_constraints"]
     assert "topic_mix_weights" in body["cohort_constraints"]
     assert "cxr_pneumonia_dreambooth" in {

@@ -6,6 +6,7 @@ from uuid import uuid4
 from casecrawler.config import get_config
 from casecrawler.generation.imaging_generator import ImagingGenerator
 from casecrawler.generation.modality_plan import ModalityPlanner
+from casecrawler.generation.recipes import apply_generation_recipe
 from casecrawler.generation.structured_generator import StructuredGenerator
 from casecrawler.generation.text_generator import TextGenerator
 from casecrawler.generation.timeseries_generator import TimeSeriesGenerator
@@ -58,6 +59,7 @@ class SyntheticPipeline:
         self._image_backend = image_backend or config.synthetic.imaging_backend
 
     async def generate(self, req: GenerationRequest) -> dict:
+        req = apply_generation_recipe(req)
         dataset_id = f"ds-{uuid4()}"
         plan = self._modality_planner.build(req)
         text_generator = self._text_generator_for(req)

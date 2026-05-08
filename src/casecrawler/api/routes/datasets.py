@@ -105,6 +105,7 @@ def list_reference_catalog():
 @router.get("/datasets/capabilities")
 def list_dataset_capabilities():
     from casecrawler.generation.imaging_models import list_imaging_model_profiles
+    from casecrawler.generation.recipes import list_generation_recipes
     from casecrawler.generation.structured_generator import list_clinical_profile_catalog
     from casecrawler.generation.timeseries_models import list_time_series_model_profiles
 
@@ -112,6 +113,20 @@ def list_dataset_capabilities():
         "modalities": [modality.value for modality in Modality],
         "complexity_profiles": [profile.value for profile in ComplexityProfile],
         "export_formats": [export_format.value for export_format in ExportFormat],
+        "generation_recipes": [
+            {
+                "name": recipe.name,
+                "description": recipe.description,
+                "complexity": recipe.complexity.value,
+                "modalities": [modality.value for modality in recipe.modalities],
+                "export_formats": [
+                    export_format.value for export_format in recipe.export_formats
+                ],
+                "cohort_constraints": recipe.cohort_constraints,
+                "validation_threshold": recipe.validation_threshold,
+            }
+            for recipe in list_generation_recipes()
+        ],
         "cohort_constraints": [
             "age_min",
             "age_max",
