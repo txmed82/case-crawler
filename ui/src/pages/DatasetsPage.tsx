@@ -25,6 +25,7 @@ import type {
   BenchmarkSuiteReport,
   DatasetQualityReport,
   HumanReviewStatus,
+  ObjectiveCoverageAudit,
   ReviewQueueItem,
   SyntheticRecordPreview,
 } from "../api/client";
@@ -810,6 +811,9 @@ function ExportAuditPanel({
   isLoading: boolean;
   error: unknown;
 }) {
+  const objectiveAudits = exports
+    .map((item) => item.metadata.objective_coverage)
+    .filter(isObjectiveCoverageAudit);
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -833,41 +837,107 @@ function ExportAuditPanel({
         </p>
       )}
       {exports.length > 0 && (
-        <div className="mt-4 overflow-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead>
-              <tr className="text-left text-xs font-medium uppercase text-gray-500">
-                <th className="py-2 pr-4">Format</th>
-                <th className="py-2 pr-4">Records</th>
-                <th className="py-2 pr-4">Gate</th>
-                <th className="py-2 pr-4">Reference</th>
-                <th className="py-2 pr-4">Created</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {exports.map((item) => (
-                <tr key={`${item.created_at}-${item.export_format}-${item.file_path}`}>
-                  <td className="py-2 pr-4 font-medium text-gray-900">
-                    {item.export_format.replace("_", " ")}
-                  </td>
-                  <td className="py-2 pr-4 text-gray-600">{item.record_count}</td>
-                  <td className="py-2 pr-4">
-                    <span className={exportGateClass(item.metadata.benchmark_passed)}>
-                      {formatExportGate(item.metadata.benchmark_passed)}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4 text-gray-600">
-                    {formatMetadataValue(item.metadata.benchmark_reference_dataset_id)}
-                  </td>
-                  <td className="py-2 pr-4 text-gray-600">
-                    {formatTimestamp(item.created_at)}
-                  </td>
+        <>
+          <div className="mt-4 overflow-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead>
+                <tr className="text-left text-xs font-medium uppercase text-gray-500">
+                  <th className="py-2 pr-4">Format</th>
+                  <th className="py-2 pr-4">Records</th>
+                  <th className="py-2 pr-4">Gate</th>
+                  <th className="py-2 pr-4">Objective</th>
+                  <th className="py-2 pr-4">Reference</th>
+                  <th className="py-2 pr-4">Created</th>
                 </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {exports.map((item) => {
+                  const objectiveCoverage = item.metadata.objective_coverage;
+                  return (
+                    <tr key={`${item.created_at}-${item.export_format}-${item.file_path}`}>
+                      <td className="py-2 pr-4 font-medium text-gray-900">
+                        {item.export_format.replace("_", " ")}
+                      </td>
+                      <td className="py-2 pr-4 text-gray-600">{item.record_count}</td>
+                      <td className="py-2 pr-4">
+                        <span className={exportGateClass(item.metadata.benchmark_passed)}>
+                          {formatExportGate(item.metadata.benchmark_passed)}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4">
+                        <span
+                          className={objectiveCoverageClass(
+                            isObjectiveCoverageAudit(objectiveCoverage)
+                              ? objectiveCoverage.complete
+                              : null
+                          )}
+                        >
+                          {formatObjectiveCoverageGate(objectiveCoverage)}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4 text-gray-600">
+                        {formatMetadataValue(item.metadata.benchmark_reference_dataset_id)}
+                      </td>
+                      <td className="py-2 pr-4 text-gray-600">
+                        {formatTimestamp(item.created_at)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {objectiveAudits.length > 0 && (
+            <div className="mt-4 space-y-3">
+              {objectiveAudits.slice(0, 2).map((audit, index) => (
+                <ObjectiveCoveragePanel
+                  key={`${audit.objective}-${index}`}
+                  audit={audit}
+                />
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          )}
+        </>
       )}
+    </div>
+  );
+}
+
+function ObjectiveCoveragePanel({ audit }: { audit: ObjectiveCoverageAudit }) {
+  const criteria = Object.entries(audit.criteria);
+  return (
+    <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase text-gray-500">
+            Objective coverage
+          </p>
+          <p className="mt-1 text-sm text-gray-700">{audit.objective}</p>
+        </div>
+        <span className={objectiveCoverageClass(audit.complete)}>
+          {audit.complete ? "complete" : "missing"}
+        </span>
+      </div>
+      {audit.missing.length > 0 && (
+        <p className="mt-2 text-xs text-red-700">
+          Missing: {audit.missing.join(", ")}
+        </p>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {criteria.map(([key, criterion]) => (
+          <span
+            key={key}
+            title={criterion.requirement}
+            className={`rounded-md px-2 py-1 text-xs font-medium ${
+              criterion.satisfied
+                ? "bg-green-50 text-green-700"
+                : "bg-red-50 text-red-700"
+            }`}
+          >
+            {key.replaceAll("_", " ")}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1445,6 +1515,23 @@ function formatExportGate(value: unknown) {
   return "not run";
 }
 
+function isObjectiveCoverageAudit(value: unknown): value is ObjectiveCoverageAudit {
+  if (!value || typeof value !== "object") return false;
+  const audit = value as Partial<ObjectiveCoverageAudit>;
+  return (
+    typeof audit.objective === "string" &&
+    typeof audit.complete === "boolean" &&
+    Array.isArray(audit.missing) &&
+    Boolean(audit.criteria) &&
+    typeof audit.criteria === "object"
+  );
+}
+
+function formatObjectiveCoverageGate(value: unknown) {
+  if (!isObjectiveCoverageAudit(value)) return "not recorded";
+  return value.complete ? "complete" : "missing";
+}
+
 const exportProfilePriority = [
   "sft_jsonl",
   "note_fact_sft_jsonl",
@@ -1469,6 +1556,13 @@ function formatExportProfile(value: string) {
 }
 
 function exportGateClass(value: unknown) {
+  const base = "rounded-md px-2 py-1 text-xs font-medium";
+  if (value === true) return `${base} bg-green-50 text-green-700`;
+  if (value === false) return `${base} bg-red-50 text-red-700`;
+  return `${base} bg-gray-100 text-gray-700`;
+}
+
+function objectiveCoverageClass(value: boolean | null) {
   const base = "rounded-md px-2 py-1 text-xs font-medium";
   if (value === true) return `${base} bg-green-50 text-green-700`;
   if (value === false) return `${base} bg-red-50 text-red-700`;

@@ -370,12 +370,28 @@ export interface ExportManifest {
   file_path: string;
   record_count: number;
   created_at: string;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown> & {
+    objective_coverage?: ObjectiveCoverageAudit;
+  };
 }
 
 export interface ExportManifestResponse {
   dataset_id: string;
   exports: ExportManifest[];
+}
+
+export interface ObjectiveCoverageCriterion {
+  requirement: string;
+  satisfied: boolean;
+  artifacts: string[];
+  evidence: Record<string, unknown>;
+}
+
+export interface ObjectiveCoverageAudit {
+  objective: string;
+  criteria: Record<string, ObjectiveCoverageCriterion>;
+  complete: boolean;
+  missing: string[];
 }
 
 export type HumanReviewStatus =

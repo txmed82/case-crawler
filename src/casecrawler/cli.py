@@ -995,6 +995,7 @@ def generate_release_package(
             "benchmark_suite_reference_count": benchmark_suite["reference_count"],
             "benchmark_failing_metrics": benchmark_report.failing_metrics,
             "benchmark_thresholds": benchmark_report.thresholds,
+            "objective_coverage": objective_coverage,
             "splits": {
                 name: {
                     "file_path": data["file_path"],

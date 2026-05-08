@@ -408,6 +408,7 @@ async def generate_release_package(req: ReleasePackageRequest):
             "benchmark_suite_reference_count": benchmark_suite["reference_count"],
             "benchmark_failing_metrics": benchmark_report.failing_metrics,
             "benchmark_thresholds": benchmark_report.thresholds,
+            "objective_coverage": objective_coverage,
             "splits": {
                 name: {
                     "record_count": data["record_count"],
