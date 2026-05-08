@@ -83,6 +83,38 @@ def test_dataset_api_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     assert json.loads(first_line)["dataset_id"] == dataset_id
 
 
+def test_dataset_api_lists_export_manifests(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    reference = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    dataset_id = generated.json()["dataset_id"]
+    reference_dataset_id = reference.json()["dataset_id"]
+
+    exported = client.get(
+        f"/api/datasets/{dataset_id}/export",
+        params={
+            "export_format": "sft_jsonl",
+            "reference_dataset_id": reference_dataset_id,
+            "min_overall_score": 0.0,
+            "min_metric_score": 0.0,
+        },
+    )
+    listed = client.get(f"/api/datasets/{dataset_id}/exports")
+
+    assert exported.status_code == 200
+    assert listed.status_code == 200
+    body = listed.json()
+    assert body["dataset_id"] == dataset_id
+    assert body["exports"][0]["export_format"] == "sft_jsonl"
+    assert body["exports"][0]["metadata"]["transport"] == "api"
+    assert body["exports"][0]["metadata"]["benchmark_passed"] is True
+    assert (
+        body["exports"][0]["metadata"]["benchmark_reference_dataset_id"]
+        == reference_dataset_id
+    )
+
+
 def test_dataset_api_export_blocks_failed_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

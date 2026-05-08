@@ -313,6 +313,26 @@ def get_dataset_quality(dataset_id: str):
     ).model_dump()
 
 
+@router.get("/datasets/{dataset_id}/exports")
+def list_dataset_exports(
+    dataset_id: str,
+    limit: int = Query(100, ge=1, le=1000),
+):
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return {
+        "dataset_id": dataset_id,
+        "exports": [
+            export_manifest.model_dump()
+            for export_manifest in store.list_export_manifests(
+                dataset_id=dataset_id,
+                limit=limit,
+            )
+        ],
+    }
+
+
 @router.post("/records/{record_id}/review")
 def save_record_review(record_id: str, decision: HumanReviewDecision):
     store = DatasetStore()
