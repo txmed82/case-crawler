@@ -180,6 +180,97 @@ def test_validator_rejects_invalid_medication_history_entries():
     assert any(issue.field == "medication_history.status" for issue in report.issues)
 
 
+def test_validator_rejects_medication_lab_safety_conflicts():
+    bad = _record(
+        labs=[
+            LabObservation(
+                name="eGFR",
+                value=22,
+                unit="mL/min/1.73m2",
+                reference_low=60,
+                reference_high=120,
+                flag="L",
+                effective_time="2026-05-06T08:30:00",
+            ),
+            LabObservation(
+                name="Potassium",
+                value=6.2,
+                unit="mmol/L",
+                reference_low=3.5,
+                reference_high=5.1,
+                flag="H",
+                effective_time="2026-05-06T08:35:00",
+            ),
+            LabObservation(
+                name="INR",
+                value=5.4,
+                unit="ratio",
+                reference_low=0.8,
+                reference_high=1.2,
+                flag="H",
+                effective_time="2026-05-06T08:40:00",
+            ),
+        ],
+        medication_history=[
+            MedicationStatement(
+                name="Metformin",
+                dose="1000 mg",
+                route="oral",
+                status="active",
+                start="2026-05-01",
+            ),
+            MedicationStatement(
+                name="Potassium chloride",
+                dose="20 mEq",
+                route="oral",
+                status="active",
+                start="2026-05-01",
+            ),
+            MedicationStatement(
+                name="Warfarin",
+                dose="5 mg",
+                route="oral",
+                status="active",
+                start="2026-05-01",
+            ),
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "medication_history.metformin_renal" for issue in report.issues)
+    assert any(issue.field == "medication_history.hyperkalemia" for issue in report.issues)
+    assert any(issue.field == "medication_history.warfarin_inr" for issue in report.issues)
+
+
+def test_validator_rejects_medication_vital_safety_conflicts():
+    bad = _record(
+        vitals=[
+            VitalObservation(
+                name="SBP",
+                value=82,
+                unit="mmHg",
+                effective_time="2026-05-06T08:00:00",
+            )
+        ],
+        medication_history=[
+            MedicationStatement(
+                name="Nitroglycerin",
+                dose="0.4 mg",
+                route="sublingual",
+                status="active",
+                start="2026-05-06",
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "medication_history.nitrate_hypotension" for issue in report.issues)
+
+
 def test_validator_rejects_phi_like_text():
     bad = _record(metadata={"free_text": "Call patient at 555-123-4567 tomorrow."})
 
