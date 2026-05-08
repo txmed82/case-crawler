@@ -415,6 +415,15 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
                     generation_backend="diffusers:cxr_pneumonia_dreambooth",
                 )
             ],
+            "metadata": {
+                "imaging_model_policy": {
+                    "profile": "cxr_pneumonia_dreambooth",
+                    "model_id": "chimbiwide/cxr-pneumonia-dreambooth",
+                    "license": "openrail++",
+                    "gated": False,
+                    "use_policy": "openrail_review_outputs_before_release",
+                }
+            },
         }
     )
 
@@ -435,8 +444,38 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
     assert report.imaging_backend_counts == {
         "diffusers:cxr_pneumonia_dreambooth": 1,
     }
+    assert report.imaging_model_policy_counts == {
+        (
+            "profile=cxr_pneumonia_dreambooth|license=openrail++|"
+            "gated=false|use_policy=openrail_review_outputs_before_release"
+        ): 1
+    }
     assert report.export_ready is False
     assert "vitals.missing_artifacts" in report.issue_counts_by_field
+
+
+def test_quality_report_requires_policy_metadata_for_diffusers_images():
+    record = _record("rec-1").model_copy(
+        update={
+            "modalities": [Modality.CLINICAL_TEXT, Modality.IMAGING],
+            "imaging": [
+                ImagingAsset(
+                    image_id="img-1",
+                    modality="XR",
+                    body_region="chest",
+                    prompt="portable chest x-ray pneumonia",
+                    report_text="Pneumonia.",
+                    generation_backend="diffusers:cxr_pneumonia_dreambooth",
+                )
+            ],
+        }
+    )
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.export_ready is False
+    assert report.issue_counts_by_field["imaging.model_policy.missing"] == 1
+    assert any("imaging model policy metadata" in item for item in report.recommendations)
 
 
 def test_quality_report_counts_blocking_issues_and_recommendations():

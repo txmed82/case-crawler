@@ -21,6 +21,7 @@ def build_dataset_quality_report(
     extracted_fact_key_counts: Counter[str] = Counter()
     time_series_backend_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
+    imaging_model_policy_counts: Counter[str] = Counter()
     issue_counts_by_field: Counter[str] = Counter()
     approved_count = 0
     blocking_issue_count = 0
@@ -38,6 +39,7 @@ def build_dataset_quality_report(
             extracted_fact_key_counts,
             time_series_backend_counts,
             imaging_backend_counts,
+            imaging_model_policy_counts,
         )
         blocking_issue_count += _count_missing_declared_artifacts(
             record,
@@ -52,6 +54,10 @@ def build_dataset_quality_report(
             issue_counts_by_field,
         )
         blocking_issue_count += _count_mismatched_document_author_roles(
+            record,
+            issue_counts_by_field,
+        )
+        blocking_issue_count += _count_missing_imaging_model_policy(
             record,
             issue_counts_by_field,
         )
@@ -96,6 +102,7 @@ def build_dataset_quality_report(
         extracted_fact_key_counts=dict(sorted(extracted_fact_key_counts.items())),
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
         imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
+        imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
         blocking_issue_count=blocking_issue_count,
         warning_issue_count=warning_issue_count,
         issue_counts_by_field=dict(sorted(issue_counts_by_field.items())),
@@ -114,6 +121,7 @@ def _count_artifacts(
     extracted_fact_key_counts: Counter[str],
     time_series_backend_counts: Counter[str],
     imaging_backend_counts: Counter[str],
+    imaging_model_policy_counts: Counter[str],
 ) -> None:
     documents = len(record.documents)
     artifact_counts["documents"] += documents
@@ -142,6 +150,9 @@ def _count_artifacts(
     artifact_counts["imaging_assets"] += len(record.imaging)
     for asset in record.imaging:
         imaging_backend_counts[asset.generation_backend or "unknown"] += 1
+    policy_key = _imaging_model_policy_key(record)
+    if policy_key:
+        imaging_model_policy_counts[policy_key] += len(record.imaging)
     artifact_counts["imaging_labels"] += sum(len(asset.labels) for asset in record.imaging)
     for doc in record.documents:
         note_type_counts[doc.note_type] += 1
@@ -248,6 +259,21 @@ def _count_mismatched_document_author_roles(
     return mismatches
 
 
+def _count_missing_imaging_model_policy(
+    record: SyntheticRecord,
+    issue_counts_by_field: Counter[str],
+) -> int:
+    if not any(
+        asset.generation_backend.startswith("diffusers:")
+        for asset in record.imaging
+    ):
+        return 0
+    if _imaging_model_policy_key(record):
+        return 0
+    issue_counts_by_field["imaging.model_policy.missing"] += 1
+    return 1
+
+
 def _is_waveform_channel(name: str, sampling_rate_hz: float | None) -> bool:
     if sampling_rate_hz:
         return True
@@ -266,6 +292,26 @@ def _has_fact_value(value: object) -> bool:
 
 
 def _fact_key(value: str) -> str:
+    return "_".join(value.lower().replace("-", "_").split())
+
+
+def _imaging_model_policy_key(record: SyntheticRecord) -> str | None:
+    policy = record.metadata.get("imaging_model_policy")
+    if not isinstance(policy, dict):
+        return None
+    profile = _policy_value(policy.get("profile"), "unspecified")
+    license_name = _policy_value(policy.get("license"), "unspecified")
+    use_policy = _policy_value(policy.get("use_policy"), "review_license_before_use")
+    gated = str(bool(policy.get("gated"))).lower()
+    return (
+        f"profile={profile}|license={license_name}|"
+        f"gated={gated}|use_policy={use_policy}"
+    )
+
+
+def _policy_value(value: object, fallback: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        return fallback
     return "_".join(value.lower().replace("-", "_").split())
 
 
@@ -295,6 +341,10 @@ def _recommendations(
         recommendations.append("Add expected clinical document types before fine-tuning export.")
     if any(field.startswith("documents.") and field.endswith(".author_role") for field in issue_counts_by_field):
         recommendations.append("Fix expected clinical document author roles before fine-tuning export.")
+    if issue_counts_by_field.get("imaging.model_policy.missing", 0):
+        recommendations.append(
+            "Attach imaging model policy metadata before exporting generated image datasets."
+        )
     if "clinical_text" not in modality_counts:
         recommendations.append("Add clinical text records for supervised fine-tuning tasks.")
     benchmark_summary = _benchmark_summary(benchmark_plan)
