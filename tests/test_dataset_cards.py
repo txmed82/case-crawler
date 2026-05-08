@@ -7,6 +7,8 @@ from casecrawler.models.synthetic import (
     Provenance,
     SyntheticPatient,
     SyntheticRecord,
+    TimeSeriesChannel,
+    TimeSeriesPoint,
     ValidationReport,
 )
 
@@ -42,6 +44,8 @@ def test_build_model_card_documents_generator_and_validation_gates():
     assert "- unit-test-generator: 1" in card
     assert "- unit-test-model: 1" in card
     assert "- imaging_model_profile=cxr_pneumonia_dreambooth: 1" in card
+    assert "## Time-Series Backends" in card
+    assert "- external:timediff-sample: 1" in card
     assert "PHI-like privacy scanning" in card
 
 
@@ -66,6 +70,19 @@ def _record() -> SyntheticRecord:
                     "medications": ["Ceftriaxone"],
                     "empty_target": [],
                 },
+            )
+        ],
+        time_series=[
+            TimeSeriesChannel(
+                name="heart_rate",
+                unit="/min",
+                generation_backend="external:timediff-sample",
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T10:00:00",
+                        values={"value": 110},
+                    )
+                ],
             )
         ],
         provenance=Provenance(
