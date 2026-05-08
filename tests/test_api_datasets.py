@@ -1,4 +1,6 @@
 import json
+import zipfile
+from io import BytesIO
 
 from fastapi.testclient import TestClient
 
@@ -91,6 +93,43 @@ def test_dataset_api_exports_note_fact_sft_examples(tmp_path, monkeypatch):
     assert {line["task"] for line in lines} == {"extract_clinical_facts_from_note"}
     assert all(line["dataset_id"] == dataset_id for line in lines)
     assert all(line["document_id"] for line in lines)
+
+
+def test_dataset_api_exports_split_fine_tuning_package(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 3})
+    dataset_id = generated.json()["dataset_id"]
+
+    exported = client.get(
+        f"/api/datasets/{dataset_id}/export-splits",
+        params={
+            "export_format": "sft_jsonl",
+            "train_ratio": 0.34,
+            "validation_ratio": 0.33,
+            "test_ratio": 0.33,
+            "seed": "unit-test",
+        },
+    )
+    listed = client.get(f"/api/datasets/{dataset_id}/exports")
+
+    assert exported.status_code == 200
+    assert exported.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(BytesIO(exported.content)) as archive:
+        assert sorted(archive.namelist()) == [
+            "manifest.json",
+            "test.jsonl",
+            "train.jsonl",
+            "validation.jsonl",
+        ]
+        manifest = json.loads(archive.read("manifest.json"))
+        assert manifest["record_count"] == 3
+        assert manifest["example_count"] == 3
+        assert manifest["splits"]["train"]["record_count"] == 1
+        assert manifest["splits"]["validation"]["record_count"] == 1
+        assert manifest["splits"]["test"]["record_count"] == 1
+    assert listed.json()["exports"][0]["metadata"]["split_package"] is True
+    assert listed.json()["exports"][0]["metadata"]["transport"] == "api"
 
 
 def test_dataset_api_export_can_require_benchmark_gate(tmp_path, monkeypatch):
