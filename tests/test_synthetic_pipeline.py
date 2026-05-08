@@ -17,6 +17,15 @@ async def test_synthetic_pipeline_generates_valid_records():
     assert len(result["records"]) == 2
     assert result["records"][0].documents
     assert result["records"][0].labs
+    assert {
+        "ed_note",
+        "progress_note",
+        "nursing_note",
+        "discharge_summary",
+        "lab_report",
+        "vital_signs_flowsheet",
+        "medication_administration_record",
+    }.issubset({document.note_type for document in result["records"][0].documents})
 
 
 @pytest.mark.asyncio
