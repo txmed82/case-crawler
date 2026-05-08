@@ -634,12 +634,17 @@ def test_dataset_api_lists_hf_reference_catalog(tmp_path, monkeypatch):
     datasets = response.json()["datasets"]
     assert any(item["key"] == "asclepius" for item in datasets)
     assert any(item["key"] == "rexgradient_160k" for item in datasets)
+    assert any(item["key"] == "synthea_fhir" for item in datasets)
     asclepius = next(item for item in datasets if item["key"] == "asclepius")
     rexgradient = next(item for item in datasets if item["key"] == "rexgradient_160k")
+    synthea = next(item for item in datasets if item["key"] == "synthea_fhir")
     assert asclepius["repo_id"] == "starmpcc/Asclepius-Synthetic-Clinical-Notes"
     assert asclepius["license"]
     assert rexgradient["repo_id"] == "rajpurkarlab/ReXGradient-160K"
     assert rexgradient["license"] == "rexgradient-non-commercial-gated"
+    assert synthea["repo_id"] is None
+    assert synthea["source"] == "synthea"
+    assert synthea["use_policy"] == "local_synthea_import"
     assert rexgradient["gated"] is True
     assert rexgradient["use_policy"] == "non_commercial_research_only"
     assert rexgradient["image_modality"] == "XR"

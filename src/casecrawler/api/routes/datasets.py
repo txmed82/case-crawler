@@ -84,24 +84,46 @@ async def generate_dataset(req: GenerationRequest):
 @router.get("/datasets/reference-catalog")
 def list_reference_catalog():
     from casecrawler.integrations.huggingface import REFERENCE_DATASETS
+    from casecrawler.integrations.synthea import (
+        SYNTHEA_REFERENCE_DESCRIPTION,
+        SYNTHEA_REFERENCE_KEY,
+    )
 
+    datasets = [
+        {
+            "key": SYNTHEA_REFERENCE_KEY,
+            "repo_id": None,
+            "split": None,
+            "license": "synthetic-local",
+            "description": SYNTHEA_REFERENCE_DESCRIPTION,
+            "image_field": None,
+            "image_label_field": None,
+            "image_modality": None,
+            "image_body_region": None,
+            "gated": False,
+            "use_policy": "local_synthea_import",
+            "source": "synthea",
+        }
+    ]
+    datasets.extend(
+        {
+            "key": key,
+            "repo_id": spec.repo_id,
+            "split": spec.split,
+            "license": spec.license,
+            "description": spec.description,
+            "image_field": spec.image_field,
+            "image_label_field": spec.image_label_field,
+            "image_modality": spec.image_modality,
+            "image_body_region": spec.image_body_region,
+            "gated": spec.gated,
+            "use_policy": spec.use_policy,
+            "source": "huggingface",
+        }
+        for key, spec in REFERENCE_DATASETS.items()
+    )
     return {
-        "datasets": [
-            {
-                "key": key,
-                "repo_id": spec.repo_id,
-                "split": spec.split,
-                "license": spec.license,
-                "description": spec.description,
-                "image_field": spec.image_field,
-                "image_label_field": spec.image_label_field,
-                "image_modality": spec.image_modality,
-                "image_body_region": spec.image_body_region,
-                "gated": spec.gated,
-                "use_policy": spec.use_policy,
-            }
-            for key, spec in REFERENCE_DATASETS.items()
-        ]
+        "datasets": datasets
     }
 
 

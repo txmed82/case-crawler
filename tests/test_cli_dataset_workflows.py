@@ -676,6 +676,8 @@ def test_dataset_cli_imports_hf_reference_dataset(tmp_path, monkeypatch):
     store = DatasetStore()
 
     assert listed.exit_code == 0
+    assert "synthea_fhir" in listed.output
+    assert "import-synthea-fhir" in listed.output
     assert "asclepius" in listed.output
     assert "augmented_clinical_notes" in listed.output
     assert "clinical_notes_to_fhir" in listed.output
