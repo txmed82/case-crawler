@@ -122,6 +122,9 @@ def _count_artifacts(
     artifact_counts["diagnoses"] += sum(
         len(encounter.diagnoses) for encounter in record.encounters
     )
+    artifact_counts["procedures"] += sum(
+        len(encounter.procedures) for encounter in record.encounters
+    )
     artifact_counts["labs"] += len(record.labs)
     artifact_counts["vitals"] += len(record.vitals)
     artifact_counts["medications"] += len(record.medication_history)

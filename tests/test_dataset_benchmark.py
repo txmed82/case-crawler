@@ -56,6 +56,13 @@ def _record(
                 diagnoses=[
                     Code(system="synthetic", code=topic, display=topic),
                 ],
+                procedures=[
+                    Code(
+                        system="synthetic",
+                        code="central_line",
+                        display="Central venous catheter placement",
+                    )
+                ],
             )
         ],
         labs=[
@@ -166,6 +173,7 @@ def test_profile_records_summarizes_multimodal_cohort():
         "mean": 110.0,
         "min": 110.0,
     }
+    assert profile.procedure_name_counts == {"Central venous catheter placement": 2}
     assert profile.medication_route_counts == {"IV": 2}
     assert profile.medication_status_counts == {"active": 2}
     assert profile.document_author_role_counts == {"physician": 2}
@@ -185,6 +193,7 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.artifact_counts["documents"] == 2
     assert profile.artifact_counts["encounters"] == 2
     assert profile.artifact_counts["diagnoses"] == 2
+    assert profile.artifact_counts["procedures"] == 2
     assert profile.artifact_counts["messy_documents"] == 2
     assert profile.artifact_counts["labs"] == 2
     assert profile.artifact_counts["vitals"] == 2
@@ -196,6 +205,7 @@ def test_profile_records_summarizes_multimodal_cohort():
         "documents_per_record": 1.0,
         "encounters_per_record": 1.0,
         "diagnoses_per_record": 1.0,
+        "procedures_per_record": 1.0,
         "labs_per_record": 1.0,
         "vitals_per_record": 1.0,
         "medications_per_record": 1.0,
@@ -248,6 +258,8 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "lab_value_mean:wbc",
         "vital_name_overlap",
         "vital_value_mean:hr",
+        "procedure_name_overlap",
+        "procedure_name_distribution",
         "medication_name_overlap",
         "medication_route_distribution",
         "medication_status_distribution",
@@ -263,6 +275,7 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "artifact_density:documents_per_record",
         "artifact_density:encounters_per_record",
         "artifact_density:diagnoses_per_record",
+        "artifact_density:procedures_per_record",
         "artifact_density:labs_per_record",
         "artifact_density:vitals_per_record",
         "artifact_density:medications_per_record",

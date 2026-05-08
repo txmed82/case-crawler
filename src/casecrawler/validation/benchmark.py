@@ -11,6 +11,7 @@ ARTIFACT_DENSITY_KEYS = {
     "documents_per_record": "documents",
     "encounters_per_record": "encounters",
     "diagnoses_per_record": "diagnoses",
+    "procedures_per_record": "procedures",
     "labs_per_record": "labs",
     "vitals_per_record": "vitals",
     "medications_per_record": "medications",
@@ -142,6 +143,16 @@ class DatasetBenchmark:
                 generated_summaries=generated_profile.vital_numeric_summaries,
                 reference_summaries=reference_profile.vital_numeric_summaries,
                 tolerance=25.0,
+            ),
+            _jaccard_metric(
+                "procedure_name_overlap",
+                set(generated_profile.procedure_name_counts),
+                set(reference_profile.procedure_name_counts),
+            ),
+            _distribution_metric(
+                "procedure_name_distribution",
+                generated_profile.procedure_name_counts,
+                reference_profile.procedure_name_counts,
             ),
             _jaccard_metric(
                 "medication_name_overlap",
@@ -280,6 +291,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     lab_name_counts: Counter[str] = Counter()
     lab_flag_counts: Counter[str] = Counter()
     vital_name_counts: Counter[str] = Counter()
+    procedure_name_counts: Counter[str] = Counter()
     medication_name_counts: Counter[str] = Counter()
     medication_route_counts: Counter[str] = Counter()
     medication_status_counts: Counter[str] = Counter()
@@ -330,6 +342,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             vital_numeric_values.setdefault(_metric_key(vital.name), []).append(
                 float(vital.value)
             )
+        for encounter in record.encounters:
+            for procedure in encounter.procedures:
+                procedure_name_counts[procedure.display] += 1
         for medication in record.medication_history:
             medication_name_counts[medication.name] += 1
             if medication.route:
@@ -384,6 +399,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         lab_numeric_summaries=_numeric_summaries(lab_numeric_values),
         vital_name_counts=dict(sorted(vital_name_counts.items())),
         vital_numeric_summaries=_numeric_summaries(vital_numeric_values),
+        procedure_name_counts=dict(sorted(procedure_name_counts.items())),
         medication_name_counts=dict(sorted(medication_name_counts.items())),
         medication_route_counts=dict(sorted(medication_route_counts.items())),
         medication_status_counts=dict(sorted(medication_status_counts.items())),
@@ -408,6 +424,9 @@ def _count_record_artifacts(record: SyntheticRecord, artifact_counts: Counter[st
     artifact_counts["encounters"] += len(record.encounters)
     artifact_counts["diagnoses"] += sum(
         len(encounter.diagnoses) for encounter in record.encounters
+    )
+    artifact_counts["procedures"] += sum(
+        len(encounter.procedures) for encounter in record.encounters
     )
     artifact_counts["labs"] += len(record.labs)
     artifact_counts["vitals"] += len(record.vitals)

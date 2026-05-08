@@ -362,6 +362,24 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
             "medication_history": [
                 MedicationStatement(name="Ceftriaxone", route="IV", status="active")
             ],
+            "encounters": [
+                Encounter(
+                    encounter_id="enc-procedure",
+                    start="2026-01-01T00:00:00",
+                    setting="emergency_department",
+                    reason="sepsis",
+                    diagnoses=[
+                        Code(system="synthetic", code="sepsis", display="sepsis")
+                    ],
+                    procedures=[
+                        Code(
+                            system="synthetic",
+                            code="central_line",
+                            display="Central venous catheter placement",
+                        )
+                    ],
+                )
+            ],
             "time_series": [
                 TimeSeriesChannel(
                     name="heart_rate",
@@ -405,6 +423,7 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
     assert report.artifact_counts["documents"] == 2
     assert report.artifact_counts["messy_documents"] == 1
     assert report.artifact_counts["medications"] == 1
+    assert report.artifact_counts["procedures"] == 1
     assert report.artifact_counts["time_series_waveform_channels"] == 1
     assert report.artifact_counts["imaging_assets"] == 1
     assert report.note_type_counts == {"ed_note": 1, "radiology_report": 1}
