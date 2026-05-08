@@ -446,6 +446,8 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     ].startswith("images/")
     assert exports[0].metadata["benchmark_passed"] is True
     assert exports[0].metadata["benchmark_suite_passed"] is True
+    assert exports[0].metadata["objective_coverage"]["complete"] is True
+    assert exports[0].metadata["objective_coverage"]["missing"] == []
 
 
 def test_dataset_cli_requires_release_audit_artifacts_for_release_verification(

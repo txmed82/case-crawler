@@ -331,6 +331,8 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     ] == image_files[0]
     assert exports[0].metadata["benchmark_passed"] is True
     assert exports[0].metadata["benchmark_suite_passed"] is True
+    assert exports[0].metadata["objective_coverage"]["complete"] is True
+    assert exports[0].metadata["objective_coverage"]["missing"] == []
 
 
 def test_dataset_api_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
