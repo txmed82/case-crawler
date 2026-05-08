@@ -231,6 +231,141 @@ def test_export_jsonl_split_package_copies_file_backed_images(tmp_path):
     assert report["checked_files"][package_path]["exists"] is True
 
 
+def test_export_jsonl_split_package_writes_time_series_artifacts(tmp_path):
+    record = _multimodal_record().model_copy(update={"dataset_id": "ds-split"})
+
+    manifest = export_jsonl_split_package(
+        [record],
+        tmp_path / "package",
+        "time_series_jsonl",
+        dataset_id="ds-split",
+    )
+    artifact_key = "rec-1:heart_rate"
+    artifact = manifest["time_series_artifacts"][artifact_key]
+    package_path = artifact["package_path"]
+    copied_payload = json.loads((tmp_path / "package" / package_path).read_text())
+
+    assert package_path == "time_series/rec-1-heart-rate.json"
+    assert artifact["record_id"] == "rec-1"
+    assert artifact["channel_name"] == "heart_rate"
+    assert artifact["unit"] == "/min"
+    assert artifact["generation_backend"] == "deterministic"
+    assert artifact["point_count"] == 1
+    assert copied_payload["record_id"] == "rec-1"
+    assert copied_payload["channel"]["name"] == "heart_rate"
+    assert copied_payload["channel"]["points"][0]["values"]["heart_rate"] == 118
+    assert package_path in manifest["files"]
+    exported = json.loads((tmp_path / "package" / "train.jsonl").read_text())
+    assert exported["channel"]["package_path"] == package_path
+
+    report = verify_jsonl_split_package(tmp_path / "package")
+    assert report["valid"] is True
+    assert report["checked_files"][package_path]["exists"] is True
+
+
+def test_verify_jsonl_split_package_requires_release_time_series_artifacts(tmp_path):
+    record = _multimodal_record().model_copy(update={"dataset_id": "ds-split"})
+    export_jsonl_split_package(
+        [record],
+        tmp_path / "package",
+        "time_series_jsonl",
+        dataset_id="ds-split",
+        audit_artifacts={
+            "quality_report.json": {
+                "dataset_id": "ds-split",
+                "record_count": 1,
+                "approved_count": 1,
+                "approval_rate": 1.0,
+                "export_ready": True,
+                "core_artifact_coverage": {
+                    key: True for key in REQUIRED_RELEASE_COVERAGE_KEYS
+                },
+                "multimodal_release_ready": True,
+                "multimodal_release_missing": [],
+            }
+        },
+    )
+    manifest_path = tmp_path / "package" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["time_series_artifacts"] = {}
+    manifest_path.write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path / "package")
+
+    assert report["valid"] is False
+    assert any(issue["field"] == "time_series_artifacts" for issue in report["issues"])
+
+
+def test_verify_jsonl_split_package_validates_time_series_artifact_metadata(tmp_path):
+    record = _multimodal_record().model_copy(update={"dataset_id": "ds-split"})
+    export_jsonl_split_package(
+        [record],
+        tmp_path / "package",
+        "time_series_jsonl",
+        dataset_id="ds-split",
+        audit_artifacts={
+            "quality_report.json": {
+                "dataset_id": "ds-split",
+                "record_count": 1,
+                "approved_count": 1,
+                "approval_rate": 1.0,
+                "export_ready": True,
+                "core_artifact_coverage": {
+                    key: True for key in REQUIRED_RELEASE_COVERAGE_KEYS
+                },
+                "multimodal_release_ready": True,
+                "multimodal_release_missing": [],
+            }
+        },
+    )
+    manifest_path = tmp_path / "package" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    artifact = next(iter(manifest["time_series_artifacts"].values()))
+    artifact["record_id"] = "rec-other"
+    artifact["channel_name"] = ""
+    artifact.pop("generation_backend")
+    artifact["point_count"] = 0
+    manifest["files"].pop(artifact["package_path"])
+    manifest_path.write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path / "package")
+    issue_fields = {issue["field"] for issue in report["issues"]}
+
+    assert report["valid"] is False
+    assert any(field.endswith(".record_id") for field in issue_fields)
+    assert any(field.endswith(".channel_name") for field in issue_fields)
+    assert any(field.endswith(".generation_backend") for field in issue_fields)
+    assert any(field.endswith(".point_count") for field in issue_fields)
+    assert any(field.endswith(".package_path") for field in issue_fields)
+
+
+def test_verify_jsonl_split_package_validates_time_series_jsonl_paths(tmp_path):
+    record = _multimodal_record().model_copy(update={"dataset_id": "ds-split"})
+    export_jsonl_split_package(
+        [record],
+        tmp_path / "package",
+        "time_series_jsonl",
+        dataset_id="ds-split",
+    )
+    train_path = tmp_path / "package" / "train.jsonl"
+    payload = json.loads(train_path.read_text())
+    payload["channel"]["package_path"] = "../unsafe.json"
+    train_path.write_text(json.dumps(payload) + "\n")
+    manifest_path = tmp_path / "package" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files"]["train.jsonl"]["byte_size"] = train_path.stat().st_size
+    manifest["files"]["train.jsonl"]["sha256"] = hashlib.sha256(
+        train_path.read_bytes()
+    ).hexdigest()
+    manifest_path.write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path / "package")
+    issue_messages = [issue["message"] for issue in report["issues"]]
+
+    assert report["valid"] is False
+    assert any("not safe" in message for message in issue_messages)
+
+
 def test_verify_jsonl_split_package_requires_release_image_artifacts(tmp_path):
     image_path = tmp_path / "source-cxr.png"
     image_path.write_bytes(_png_bytes(width=32, height=32))

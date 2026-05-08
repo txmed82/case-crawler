@@ -250,7 +250,11 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     with zipfile.ZipFile(BytesIO(response.content)) as archive:
         names = sorted(archive.namelist())
         image_files = [name for name in names if name.startswith("images/")]
+        time_series_files = [
+            name for name in names if name.startswith("time_series/")
+        ]
         assert len(image_files) == 1
+        assert time_series_files
         assert names == [
             "benchmark_profile.json",
             "benchmark_report.json",
@@ -262,6 +266,7 @@ def test_dataset_api_generates_release_package_with_fixture_references(
             "quality_report.json",
             "release_package_summary.json",
             "test.jsonl",
+            *time_series_files,
             "train.jsonl",
             "validation.jsonl",
         ]
@@ -277,6 +282,11 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     assert manifest["record_count"] == 1
     assert next(iter(manifest["image_artifacts"].values()))["package_path"] == image_files[0]
     assert image_files[0] in manifest["files"]
+    assert {
+        artifact["package_path"]
+        for artifact in manifest["time_series_artifacts"].values()
+    } == set(time_series_files)
+    assert set(time_series_files).issubset(manifest["files"])
     assert quality["multimodal_release_ready"] is True
     assert benchmark["passed"] is True
     assert benchmark_suite["passed"] is True
