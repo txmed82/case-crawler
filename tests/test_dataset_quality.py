@@ -491,6 +491,59 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
     assert "vitals.missing_artifacts" in report.issue_counts_by_field
 
 
+def test_quality_report_summarizes_phi_and_diagnosis_code_signals():
+    record = _record("rec-1").model_copy(
+        update={
+            "documents": [
+                ClinicalDocument(
+                    document_id="doc-technetium",
+                    note_type="discharge_summary",
+                    author_role="synthetic_reference",
+                    timestamp="2026-01-01T00:00:00",
+                    clean_text="Synthetic de-identification note.",
+                    extracted_facts={
+                        "phi_annotations": [
+                            {
+                                "entity_type": "NAME",
+                                "text": "Smith",
+                                "start": 1,
+                                "end": 6,
+                            },
+                            {
+                                "entity_type": "AGE",
+                                "text": "72-year-old",
+                                "start": 10,
+                                "end": 21,
+                            },
+                        ],
+                    },
+                )
+            ],
+            "encounters": [
+                Encounter(
+                    encounter_id="enc-icd",
+                    start="2026-01-01T00:00:00",
+                    setting="reference",
+                    reason="clinical_deidentification_icd_coding",
+                    diagnoses=[
+                        Code(system="ICD-9-CM", code="428.0", display="Heart failure"),
+                        Code(system="ICD-9-CM", code="401.9", display="Hypertension"),
+                    ],
+                )
+            ],
+        }
+    )
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.phi_entity_counts == {"AGE": 1, "NAME": 1}
+    assert report.diagnosis_code_system_counts == {"ICD-9-CM": 2}
+    assert report.diagnosis_code_counts == {
+        "ICD-9-CM:401.9": 1,
+        "ICD-9-CM:428.0": 1,
+    }
+
+
 def test_quality_report_requires_policy_metadata_for_diffusers_images():
     record = _record("rec-1").model_copy(
         update={

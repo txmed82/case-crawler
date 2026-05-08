@@ -19,6 +19,9 @@ def build_dataset_quality_report(
     artifact_counts: Counter[str] = Counter()
     note_type_counts: Counter[str] = Counter()
     extracted_fact_key_counts: Counter[str] = Counter()
+    diagnosis_code_system_counts: Counter[str] = Counter()
+    diagnosis_code_counts: Counter[str] = Counter()
+    phi_entity_counts: Counter[str] = Counter()
     time_series_backend_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
     imaging_model_policy_counts: Counter[str] = Counter()
@@ -37,6 +40,9 @@ def build_dataset_quality_report(
             artifact_counts,
             note_type_counts,
             extracted_fact_key_counts,
+            diagnosis_code_system_counts,
+            diagnosis_code_counts,
+            phi_entity_counts,
             time_series_backend_counts,
             imaging_backend_counts,
             imaging_model_policy_counts,
@@ -104,6 +110,9 @@ def build_dataset_quality_report(
         artifact_counts=dict(sorted(artifact_counts.items())),
         note_type_counts=dict(sorted(note_type_counts.items())),
         extracted_fact_key_counts=dict(sorted(extracted_fact_key_counts.items())),
+        diagnosis_code_system_counts=dict(sorted(diagnosis_code_system_counts.items())),
+        diagnosis_code_counts=dict(sorted(diagnosis_code_counts.items())),
+        phi_entity_counts=dict(sorted(phi_entity_counts.items())),
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
         imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
         imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
@@ -123,6 +132,9 @@ def _count_artifacts(
     artifact_counts: Counter[str],
     note_type_counts: Counter[str],
     extracted_fact_key_counts: Counter[str],
+    diagnosis_code_system_counts: Counter[str],
+    diagnosis_code_counts: Counter[str],
+    phi_entity_counts: Counter[str],
     time_series_backend_counts: Counter[str],
     imaging_backend_counts: Counter[str],
     imaging_model_policy_counts: Counter[str],
@@ -134,6 +146,12 @@ def _count_artifacts(
     artifact_counts["diagnoses"] += sum(
         len(encounter.diagnoses) for encounter in record.encounters
     )
+    for encounter in record.encounters:
+        for diagnosis in encounter.diagnoses:
+            if diagnosis.system:
+                diagnosis_code_system_counts[diagnosis.system] += 1
+            if diagnosis.code:
+                diagnosis_code_counts[_diagnosis_code_key(diagnosis)] += 1
     artifact_counts["procedures"] += sum(
         len(encounter.procedures) for encounter in record.encounters
     )
@@ -163,6 +181,7 @@ def _count_artifacts(
         for key, value in doc.extracted_facts.items():
             if _has_fact_value(value):
                 extracted_fact_key_counts[_fact_key(key)] += 1
+        _count_phi_entities(doc.extracted_facts, phi_entity_counts)
 
 
 def _count_missing_declared_artifacts(
@@ -306,6 +325,36 @@ def _has_fact_value(value: object) -> bool:
     if isinstance(value, list | tuple | set | dict):
         return bool(value)
     return True
+
+
+def _count_phi_entities(
+    extracted_facts: dict,
+    phi_entity_counts: Counter[str],
+) -> None:
+    annotations = extracted_facts.get("phi_annotations")
+    if isinstance(annotations, list):
+        for annotation in annotations:
+            if not isinstance(annotation, dict):
+                continue
+            entity_type = str(annotation.get("entity_type") or "").strip()
+            if entity_type:
+                phi_entity_counts[entity_type] += 1
+        return
+    counts = extracted_facts.get("phi_entity_counts")
+    if isinstance(counts, dict):
+        for entity_type, count in counts.items():
+            if not str(entity_type).strip():
+                continue
+            try:
+                phi_entity_counts[str(entity_type)] += int(count)
+            except (TypeError, ValueError):
+                continue
+
+
+def _diagnosis_code_key(diagnosis) -> str:
+    system = diagnosis.system or "unspecified"
+    code = diagnosis.code or "unspecified"
+    return f"{system}:{code}"
 
 
 def _fact_key(value: str) -> str:
