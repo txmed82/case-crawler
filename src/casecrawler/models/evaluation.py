@@ -52,6 +52,8 @@ class CohortProfile(BaseModel):
     imaging_model_policy_counts: dict[str, int] = Field(default_factory=dict)
     imaging_label_counts: dict[str, int] = Field(default_factory=dict)
     imaging_label_pair_counts: dict[str, int] = Field(default_factory=dict)
+    mean_imaging_width: float | None = None
+    mean_imaging_height: float | None = None
     approved_rate: float | None = None
     mean_modality_alignment_score: float | None = None
 
