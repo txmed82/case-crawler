@@ -21,6 +21,7 @@ def test_build_dataset_card_includes_validation_and_use_limits():
     assert "- Mean clinical consistency score: 0.900" in card
     assert "Records are synthetic" in card
     assert "- sft_jsonl" in card
+    assert "- imaging_backend=diffusers: 1" in card
 
 
 def test_build_model_card_documents_generator_and_validation_gates():
@@ -32,6 +33,7 @@ def test_build_model_card_documents_generator_and_validation_gates():
     assert "# Model Card: sepsis-synthetic synthetic generation pipeline" in card
     assert "- unit-test-generator: 1" in card
     assert "- unit-test-model: 1" in card
+    assert "- imaging_model_profile=cxr_pneumonia_dreambooth: 1" in card
     assert "PHI-like privacy scanning" in card
 
 
@@ -56,6 +58,12 @@ def _record() -> SyntheticRecord:
             utility_score=1.0,
             approved=True,
         ),
+        metadata={
+            "generation_overrides": {
+                "imaging_backend": "diffusers",
+                "imaging_model_profile": "cxr_pneumonia_dreambooth",
+            }
+        },
     )
 
 

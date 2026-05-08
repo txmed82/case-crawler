@@ -107,6 +107,7 @@ class StructuredGenerator:
                 "requested_export_formats": [
                     export_format.value for export_format in req.export_formats
                 ],
+                "generation_overrides": _metadata_generation_overrides(req),
             },
         )
 
@@ -207,6 +208,29 @@ def _metadata_cohort_constraints(cohort_constraints: dict) -> dict:
     }
     if "base_time" in metadata:
         metadata["base_time"] = _normalize_base_time(metadata["base_time"])
+    return metadata
+
+
+def _metadata_generation_overrides(req: GenerationRequest) -> dict:
+    optional_fields = [
+        "clinical_text_backend",
+        "llm_provider",
+        "llm_model",
+        "ollama_base_url",
+        "imaging_backend",
+        "imaging_model_profile",
+        "diffusers_model_id",
+        "time_series_backend",
+        "time_series_model_profile",
+        "time_series_command",
+        "validation_threshold",
+    ]
+    metadata = {}
+    for field in optional_fields:
+        value = getattr(req, field)
+        if value is None:
+            continue
+        metadata[field] = value
     return metadata
 
 
