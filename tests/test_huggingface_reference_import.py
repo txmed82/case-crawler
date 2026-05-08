@@ -283,6 +283,102 @@ def test_fhir_reference_row_preserves_bundle_and_validation_fields():
     assert record.metadata["reference_dataset"] == "ai-galileo/clinical-notes-to-fhir"
 
 
+def test_structured_reference_fields_map_labs_vitals_meds_and_time_series():
+    spec = reference_dataset_spec(
+        repo_id="example/structured-icu-reference",
+        split="validation",
+        license="mit",
+        note_field="note",
+        task_field="cohort",
+        patient_id_field="encounter_id",
+        lab_values_field="labs",
+        vital_values_field="vitals",
+        medications_field="medications",
+        time_series_field="time_series",
+        description="Structured ICU reference rows for benchmark imports.",
+    )
+    row = {
+        "encounter_id": "icu-1",
+        "cohort": "sepsis_icu",
+        "note": "Progress note: 67-year-old female treated for septic shock.",
+        "labs": [
+            {
+                "name": "Lactate",
+                "loinc": "2524-7",
+                "value": 3.8,
+                "unit": "mmol/L",
+                "reference_low": 0.5,
+                "reference_high": 2.0,
+                "flag": "H",
+                "effective_time": "2026-01-01T01:00:00",
+                "specimen": "plasma",
+            }
+        ],
+        "vitals": [
+            {
+                "name": "MAP",
+                "value": 62,
+                "unit": "mmHg",
+                "effective_time": "2026-01-01T01:05:00",
+            }
+        ],
+        "medications": [
+            {
+                "name": "Norepinephrine",
+                "dose": "0.08 mcg/kg/min",
+                "route": "IV",
+                "frequency": "continuous",
+                "status": "active",
+                "start": "2026-01-01T01:10:00",
+            }
+        ],
+        "time_series": [
+            {
+                "name": "arterial_pressure",
+                "unit": "mmHg",
+                "generation_backend": "reference:waveform",
+                "sampling_rate_hz": 1.0,
+                "points": [
+                    {
+                        "timestamp": "2026-01-01T01:05:00",
+                        "values": {"systolic": 82, "diastolic": 48, "mean": 62},
+                    }
+                ],
+            }
+        ],
+    }
+
+    record = reference_row_to_record(
+        row,
+        dataset_id="ds-structured",
+        spec=spec,
+        reference_key="structured_icu",
+    )
+
+    assert record.patient.age == 67
+    assert record.patient.sex == "female"
+    assert record.topic == "sepsis_icu"
+    assert record.labs[0].name == "Lactate"
+    assert record.labs[0].loinc == "2524-7"
+    assert record.vitals[0].name == "MAP"
+    assert record.medication_history[0].name == "Norepinephrine"
+    assert record.time_series[0].name == "arterial_pressure"
+    assert record.time_series[0].points[0].values["mean"] == 62.0
+    assert record.documents[0].extracted_facts["lab_values"][0]["specimen"] == "plasma"
+    assert record.documents[0].extracted_facts["vital_values"][0]["name"] == "MAP"
+    assert record.documents[0].extracted_facts["medication_details"][0]["route"] == "IV"
+    assert record.documents[0].extracted_facts["time_series_channels"][0]["name"] == (
+        "arterial_pressure"
+    )
+    assert record.modalities == [
+        Modality.STRUCTURED_EHR,
+        Modality.CLINICAL_TEXT,
+        Modality.LABS,
+        Modality.VITALS,
+        Modality.TIME_SERIES,
+    ]
+
+
 def test_radiology_consistency_reference_row_maps_image_evidence_to_instruction():
     row = {
         "case_id": "rad-1",

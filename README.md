@@ -186,7 +186,8 @@ clinical-note-to-FHIR rows, radiology consistency rows, de-identification and
 ICD-coding references such as Technetium-I, Synthea imports, and image-reference
 datasets such as SynthCheX-75K-v2 and synthetic chest X-ray pneumonia. Custom
 Hugging Face imports can map text fields, FHIR answer fields, PHI annotations,
-diagnosis-code fields, image fields, and image-label fields into the local
+diagnosis-code fields, image fields, image-label fields, explicit lab/vital
+arrays, medication-history arrays, and time-series channel arrays into the local
 `SyntheticRecord` schema.
 
 ## REST API
