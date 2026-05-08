@@ -52,6 +52,41 @@ def test_timeseries_generator_adds_numeric_lab_trajectories():
     assert channels["lab_wbc"].points[-1].values["value"] < channels["lab_wbc"].points[0].values["value"]
 
 
+def test_timeseries_generator_uses_longitudinal_structured_observation_timestamps():
+    req = GenerationRequest(
+        topic="sepsis",
+        modalities=[Modality.TIME_SERIES, Modality.LABS, Modality.VITALS],
+        cohort_constraints={
+            "base_time": "2026-01-01T00:00:00",
+            "encounter_count": 2,
+        },
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0)
+
+    updated = TimeSeriesGenerator().add_time_series(
+        record,
+        channels=["heart_rate", "lab_lactate"],
+    )
+    channels = {channel.name: channel for channel in updated.time_series}
+
+    assert [point.timestamp for point in channels["heart_rate"].points] == [
+        "2026-01-01T00:15:00",
+        "2026-01-02T00:15:00",
+    ]
+    assert [point.values["value"] for point in channels["heart_rate"].points] == [
+        112,
+        115,
+    ]
+    assert [point.timestamp for point in channels["lab_lactate"].points] == [
+        "2026-01-01T01:00:00",
+        "2026-01-02T01:00:00",
+    ]
+    assert [point.values["value"] for point in channels["lab_lactate"].points] == [
+        3.4,
+        3.6,
+    ]
+
+
 def test_timeseries_generator_adds_waveform_like_channels():
     req = GenerationRequest(
         topic="sepsis",
