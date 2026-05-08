@@ -6,6 +6,7 @@ from casecrawler.integrations.huggingface import (
 )
 from casecrawler.integrations.synthea import SyntheaAdapter
 from casecrawler.models.synthetic import SyntheticRecord
+from casecrawler.storage.dataset_store import DatasetStore
 
 
 FIXTURE_REFERENCE_KEYS = [
@@ -45,6 +46,70 @@ def import_reference_fixture(
         limit=limit,
         spec=spec,
     )
+
+
+def seed_recommended_reference_fixtures(
+    store: DatasetStore,
+    *,
+    dataset_id: str,
+    dataset_id_prefix: str | None = None,
+    limit: int | None = None,
+) -> dict:
+    manifest = store.get_manifest(dataset_id)
+    reference_keys = _string_list(manifest.metadata.get("recommended_reference_keys"))
+    imported = []
+    skipped = []
+    unavailable = []
+    prefix = dataset_id_prefix or f"{dataset_id}-fixture"
+    for reference_key in reference_keys:
+        if reference_key not in FIXTURE_REFERENCE_KEYS:
+            unavailable.append(reference_key)
+            continue
+        existing_dataset_id = store.find_reference_dataset_id(
+            [reference_key],
+            exclude_dataset_id=dataset_id,
+        )
+        if existing_dataset_id:
+            skipped.append(
+                {
+                    "reference_key": reference_key,
+                    "dataset_id": existing_dataset_id,
+                    "reason": "already_imported",
+                }
+            )
+            continue
+        fixture_dataset_id = f"{prefix}-{_dataset_id_token(reference_key)}"
+        records = import_reference_fixture(
+            reference_key,
+            dataset_id=fixture_dataset_id,
+            limit=limit,
+        )
+        for record in records:
+            store.save_record(record)
+        imported.append(
+            {
+                "reference_key": reference_key,
+                "dataset_id": fixture_dataset_id,
+                "record_count": len(records),
+            }
+        )
+    return {
+        "dataset_id": dataset_id,
+        "recommended_reference_keys": reference_keys,
+        "imported": imported,
+        "skipped": skipped,
+        "unavailable": unavailable,
+    }
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _dataset_id_token(value: str) -> str:
+    return value.lower().replace("_", "-").replace("/", "-")
 
 
 def _limit_records(

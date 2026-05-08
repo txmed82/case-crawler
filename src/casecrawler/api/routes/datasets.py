@@ -562,6 +562,27 @@ def benchmark_plan(dataset_id: str):
     return build_benchmark_plan_summary(store, dataset_id)
 
 
+@router.post("/datasets/{dataset_id}/reference-fixtures")
+def seed_reference_fixtures(
+    dataset_id: str,
+    dataset_id_prefix: str | None = Query(default=None, min_length=1),
+    limit: int | None = Query(default=None, ge=1),
+):
+    from casecrawler.integrations.reference_fixtures import (
+        seed_recommended_reference_fixtures,
+    )
+
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return seed_recommended_reference_fixtures(
+        store,
+        dataset_id=dataset_id,
+        dataset_id_prefix=dataset_id_prefix,
+        limit=limit,
+    )
+
+
 @router.get("/datasets/{dataset_id}/benchmark-suite")
 def benchmark_suite(dataset_id: str):
     from casecrawler.validation.benchmark_selection import run_recommended_benchmark_suite

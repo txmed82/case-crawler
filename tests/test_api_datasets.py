@@ -383,6 +383,36 @@ def test_dataset_api_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypat
     assert note_fact_readiness["ready"] is False
 
 
+def test_dataset_api_seeds_recipe_reference_fixtures(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post(
+        "/api/datasets/generate",
+        json={"topic": "sepsis", "count": 1, "recipe": "icu_timeseries_notes"},
+    )
+    dataset_id = generated.json()["dataset_id"]
+
+    seeded = client.post(
+        f"/api/datasets/{dataset_id}/reference-fixtures",
+        params={"dataset_id_prefix": "fixture-ref"},
+    )
+    plan = client.get(f"/api/datasets/{dataset_id}/benchmark-plan")
+
+    assert seeded.status_code == 200
+    body = seeded.json()
+    assert body["unavailable"] == []
+    assert {item["reference_key"] for item in body["imported"]} == {
+        "synthea_fhir",
+        "synthclinicalnotes",
+        "augmented_clinical_notes",
+        "medsynth_dialogue_note",
+        "clinical_notes_to_fhir",
+        "technetium_i",
+    }
+    assert plan.json()["ready"] is True
+    assert plan.json()["missing_reference_keys"] == []
+
+
 def test_dataset_api_quality_report_includes_recipe_benchmark_readiness(
     tmp_path,
     monkeypatch,

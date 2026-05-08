@@ -14,8 +14,12 @@ from casecrawler.integrations.huggingface import (
 from casecrawler.integrations.reference_fixtures import (
     FIXTURE_REFERENCE_KEYS,
     import_reference_fixture,
+    seed_recommended_reference_fixtures,
 )
+from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
+from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import Modality
+from casecrawler.storage.dataset_store import DatasetStore
 
 
 def test_reference_dataset_catalog_includes_asclepius_license():
@@ -64,6 +68,37 @@ def test_import_reference_fixture_builds_synthea_reference_records():
     assert record.labs[0].name == "Lactate"
     assert record.vitals[0].name == "Heart rate"
     assert record.medication_history[0].name == "Ceftriaxone"
+
+
+@pytest.mark.asyncio
+async def test_seed_recommended_reference_fixtures_imports_recipe_references(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    pipeline = SyntheticPipeline()
+    result = await pipeline.generate(
+        GenerationRequest(topic="sepsis", count=1, recipe="icu_timeseries_notes")
+    )
+    store = DatasetStore()
+    for record in result["records"]:
+        store.save_record(record)
+
+    seeded = seed_recommended_reference_fixtures(
+        store,
+        dataset_id=result["dataset_id"],
+        dataset_id_prefix="fixture-ref",
+    )
+
+    assert seeded["unavailable"] == []
+    assert {
+        item["reference_key"] for item in seeded["imported"]
+    } == {
+        "synthea_fhir",
+        "synthclinicalnotes",
+        "augmented_clinical_notes",
+        "medsynth_dialogue_note",
+        "clinical_notes_to_fhir",
+        "technetium_i",
+    }
+    assert store.find_reference_dataset_id(["synthea_fhir"], exclude_dataset_id=result["dataset_id"])
 
 
 def test_reference_dataset_catalog_includes_clinical_note_fhir_and_radiology_benchmarks():
