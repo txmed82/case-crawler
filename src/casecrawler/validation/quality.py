@@ -25,6 +25,10 @@ def build_dataset_quality_report(
     diagnosis_code_system_counts: Counter[str] = Counter()
     diagnosis_code_counts: Counter[str] = Counter()
     phi_entity_counts: Counter[str] = Counter()
+    medication_route_counts: Counter[str] = Counter()
+    medication_dose_counts: Counter[str] = Counter()
+    medication_frequency_counts: Counter[str] = Counter()
+    medication_status_counts: Counter[str] = Counter()
     time_series_backend_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
     imaging_model_policy_counts: Counter[str] = Counter()
@@ -63,6 +67,10 @@ def build_dataset_quality_report(
             diagnosis_code_system_counts,
             diagnosis_code_counts,
             phi_entity_counts,
+            medication_route_counts,
+            medication_dose_counts,
+            medication_frequency_counts,
+            medication_status_counts,
             time_series_backend_counts,
             imaging_backend_counts,
             imaging_model_policy_counts,
@@ -158,6 +166,10 @@ def build_dataset_quality_report(
         diagnosis_code_system_counts=dict(sorted(diagnosis_code_system_counts.items())),
         diagnosis_code_counts=dict(sorted(diagnosis_code_counts.items())),
         phi_entity_counts=dict(sorted(phi_entity_counts.items())),
+        medication_route_counts=dict(sorted(medication_route_counts.items())),
+        medication_dose_counts=dict(sorted(medication_dose_counts.items())),
+        medication_frequency_counts=dict(sorted(medication_frequency_counts.items())),
+        medication_status_counts=dict(sorted(medication_status_counts.items())),
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
         time_series_numeric_summaries=_numeric_summaries(time_series_numeric_values),
         imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
@@ -222,6 +234,10 @@ def _count_artifacts(
     diagnosis_code_system_counts: Counter[str],
     diagnosis_code_counts: Counter[str],
     phi_entity_counts: Counter[str],
+    medication_route_counts: Counter[str],
+    medication_dose_counts: Counter[str],
+    medication_frequency_counts: Counter[str],
+    medication_status_counts: Counter[str],
     time_series_backend_counts: Counter[str],
     imaging_backend_counts: Counter[str],
     imaging_model_policy_counts: Counter[str],
@@ -261,6 +277,14 @@ def _count_artifacts(
             float(vital.value)
         )
     artifact_counts["medications"] += len(record.medication_history)
+    for medication in record.medication_history:
+        if medication.route:
+            medication_route_counts[medication.route] += 1
+        if medication.dose:
+            medication_dose_counts[medication.dose] += 1
+        if medication.frequency:
+            medication_frequency_counts[medication.frequency] += 1
+        medication_status_counts[medication.status or "unknown"] += 1
     artifact_counts["time_series_channels"] += len(record.time_series)
     for channel in record.time_series:
         time_series_backend_counts[channel.generation_backend or "unknown"] += 1
