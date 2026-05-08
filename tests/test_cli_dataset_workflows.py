@@ -154,7 +154,11 @@ def test_dataset_cli_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert "Exported split package" in exported.output
     assert manifest["record_count"] == 3
     assert manifest["example_count"] == 3
+    assert manifest["task_coverage"] == {"summarize": 3}
     assert manifest["splits"]["train"]["record_count"] == 1
+    assert manifest["splits"]["train"]["task_coverage"] == {
+        "summarize": 1
+    }
     assert manifest["splits"]["validation"]["record_count"] == 1
     assert manifest["splits"]["test"]["record_count"] == 1
     assert set(manifest["audit_artifacts"]) == {

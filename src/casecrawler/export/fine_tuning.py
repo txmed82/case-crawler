@@ -1171,9 +1171,11 @@ def export_jsonl_split_package(
 
     split_entries = {}
     total_examples = 0
+    total_task_coverage: dict[str, int] = {}
     for split_name, split_items in split_records.items():
         file_path = output_path / f"{split_name}.jsonl"
         example_count = 0
+        split_task_coverage: dict[str, int] = {}
         with file_path.open("w") as f:
             for record in split_items:
                 for payload in export_record_payloads(
@@ -1190,11 +1192,17 @@ def export_jsonl_split_package(
                 ):
                     f.write(json.dumps(payload, sort_keys=True) + "\n")
                     example_count += 1
+                    _merge_task_coverage(
+                        split_task_coverage,
+                        _payload_task_coverage(payload),
+                    )
         total_examples += example_count
+        _merge_task_coverage(total_task_coverage, split_task_coverage)
         split_entries[split_name] = {
             "file_path": str(file_path),
             "record_count": len(split_items),
             "example_count": example_count,
+            "task_coverage": split_task_coverage,
             "record_ids": [record.record_id for record in split_items],
         }
     artifact_entries = _write_audit_artifacts(output_path, audit_artifacts or {})
@@ -1222,6 +1230,7 @@ def export_jsonl_split_package(
         },
         "record_count": len(record_list),
         "example_count": total_examples,
+        "task_coverage": total_task_coverage,
         "splits": split_entries,
         "audit_artifacts": artifact_entries,
         "image_artifacts": image_artifacts,
@@ -1338,6 +1347,7 @@ def _verify_jsonl_split_package_dir(package_path: Path) -> dict[str, Any]:
     _verify_time_series_package_paths(manifest, split_summaries, issues)
     _verify_package_audit_artifacts(package_path, manifest, issues)
     quality_report = _split_package_quality_report_summary(package_path)
+    _verify_package_task_coverage(manifest, split_summaries, quality_report, issues)
     _verify_package_image_artifacts(manifest, quality_report, issues)
     _verify_package_time_series_artifacts(manifest, quality_report, issues)
     return {
@@ -1844,6 +1854,7 @@ def _verify_package_splits(
         if export_format == ExportFormat.FHIR_NDJSON.value:
             _verify_fhir_split_examples(split_name, examples, issues)
         example_count = len(examples)
+        task_coverage = _examples_task_coverage(examples)
         record_ids = [
             record_id
             for example in examples
@@ -1858,6 +1869,7 @@ def _verify_package_splits(
         summaries[split_name] = {
             "examples": examples,
             "example_count": example_count,
+            "task_coverage": task_coverage,
             "record_ids": observed_record_ids,
         }
         expected_example_count = split_metadata.get("example_count")
@@ -1879,6 +1891,17 @@ def _verify_package_splits(
                 {
                     "field": f"splits.{split_name}.example_count",
                     "message": f"Split {split_name} has no integer example_count.",
+                }
+            )
+        expected_task_coverage = split_metadata.get("task_coverage")
+        if expected_task_coverage != task_coverage:
+            issues.append(
+                {
+                    "field": f"splits.{split_name}.task_coverage",
+                    "message": (
+                        f"Split {split_name} task coverage does not match JSONL "
+                        "payloads."
+                    ),
                 }
             )
         expected_record_ids = split_metadata.get("record_ids")
@@ -1932,6 +1955,47 @@ def _verify_package_splits(
             }
         )
     return summaries
+
+
+def _verify_package_task_coverage(
+    manifest: dict[str, Any],
+    split_summaries: dict[str, dict[str, Any]],
+    quality_report: dict[str, Any] | None,
+    issues: list[dict[str, str]],
+) -> None:
+    observed: dict[str, int] = {}
+    for summary in split_summaries.values():
+        coverage = summary.get("task_coverage")
+        if isinstance(coverage, dict):
+            _merge_task_coverage(observed, coverage)
+    if manifest.get("task_coverage") != observed:
+        issues.append(
+            {
+                "field": "task_coverage",
+                "message": "Package task coverage does not match split JSONL payloads.",
+            }
+        )
+    coverage = (
+        quality_report.get("core_artifact_coverage")
+        if isinstance(quality_report, dict)
+        else None
+    )
+    release_ready = (
+        isinstance(quality_report, dict)
+        and quality_report.get("multimodal_release_ready") is True
+    )
+    if (
+        release_ready
+        and isinstance(coverage, dict)
+        and coverage.get("task_reference_coverage") is True
+        and not observed
+    ):
+        issues.append(
+            {
+                "field": "task_coverage",
+                "message": "Release-ready package has no fine-tuning task coverage.",
+            }
+        )
 
 
 def _verify_multimodal_image_package_paths(
@@ -2077,6 +2141,37 @@ def _dict_items(value: object) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _examples_task_coverage(examples: list[dict[str, Any]]) -> dict[str, int]:
+    coverage: dict[str, int] = {}
+    for example in examples:
+        _merge_task_coverage(coverage, _payload_task_coverage(example))
+    return coverage
+
+
+def _payload_task_coverage(payload: dict[str, Any]) -> dict[str, int]:
+    coverage: dict[str, int] = {}
+    task = payload.get("task")
+    if isinstance(task, str) and task.strip():
+        coverage[task.strip()] = coverage.get(task.strip(), 0) + 1
+    for pair in _dict_items(payload.get("image_text_pairs")):
+        task = pair.get("task")
+        if isinstance(task, str) and task.strip():
+            coverage[task.strip()] = coverage.get(task.strip(), 0) + 1
+    for task_payload in _dict_items(payload.get("supervised_tasks")):
+        task = task_payload.get("task")
+        if isinstance(task, str) and task.strip():
+            coverage[task.strip()] = coverage.get(task.strip(), 0) + 1
+    for example in _dict_items(payload.get("examples")):
+        _merge_task_coverage(coverage, _payload_task_coverage(example))
+    return dict(sorted(coverage.items()))
+
+
+def _merge_task_coverage(target: dict[str, int], source: dict[str, int]) -> None:
+    for task, count in source.items():
+        if isinstance(task, str) and isinstance(count, int):
+            target[task] = target.get(task, 0) + count
 
 
 def _verify_fhir_split_examples(
