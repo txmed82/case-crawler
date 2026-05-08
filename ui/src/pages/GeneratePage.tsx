@@ -91,6 +91,9 @@ export default function GeneratePage() {
   const [isGeneratingRelease, setIsGeneratingRelease] = useState(false);
   const [releaseResult, setReleaseResult] = useState<ReleasePackageResponse | null>(null);
   const [releaseError, setReleaseError] = useState<string | null>(null);
+  const [releaseFixtureLimit, setReleaseFixtureLimit] = useState("1");
+  const [releaseMinOverallScore, setReleaseMinOverallScore] = useState("0.7");
+  const [releaseMinMetricScore, setReleaseMinMetricScore] = useState("0.45");
   const [referenceCatalog, setReferenceCatalog] = useState<ReferenceDatasetCatalogItem[]>([]);
   const [referenceImportMode, setReferenceImportMode] =
     useState<ReferenceImportMode>("registered");
@@ -295,6 +298,24 @@ export default function GeneratePage() {
       setReleaseError("Record count must be a positive integer.");
       return;
     }
+    const parsedFixtureLimit = Number(releaseFixtureLimit);
+    const parsedMinOverallScore = Number(releaseMinOverallScore);
+    const parsedMinMetricScore = Number(releaseMinMetricScore);
+    if (!Number.isInteger(parsedFixtureLimit) || parsedFixtureLimit < 1) {
+      setReleaseError("Fixture limit must be a positive integer.");
+      return;
+    }
+    if (
+      Number.isNaN(parsedMinOverallScore) ||
+      parsedMinOverallScore < 0 ||
+      parsedMinOverallScore > 1 ||
+      Number.isNaN(parsedMinMetricScore) ||
+      parsedMinMetricScore < 0 ||
+      parsedMinMetricScore > 1
+    ) {
+      setReleaseError("Benchmark thresholds must be numbers from 0 to 1.");
+      return;
+    }
     setReleaseResult(null);
     setReleaseError(null);
     setIsGeneratingRelease(true);
@@ -315,6 +336,9 @@ export default function GeneratePage() {
         recipe: recipe || "full_multimodal_acute_care",
         export_format: "multimodal_jsonl",
         seed: "casecrawler",
+        fixture_limit: parsedFixtureLimit,
+        min_overall_score: parsedMinOverallScore,
+        min_metric_score: parsedMinMetricScore,
         ...(Object.keys(cohortConstraints).length > 0
           ? { cohort_constraints: cohortConstraints }
           : {}),
@@ -913,6 +937,46 @@ export default function GeneratePage() {
             </label>
           </div>
         )}
+
+        <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,12rem)_minmax(0,12rem)]">
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Fixture limit</span>
+            <input
+              aria-label="Release fixture limit"
+              type="number"
+              value={releaseFixtureLimit}
+              onChange={(event) => setReleaseFixtureLimit(event.target.value)}
+              min={1}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Overall gate</span>
+            <input
+              aria-label="Release minimum overall score"
+              type="number"
+              value={releaseMinOverallScore}
+              onChange={(event) => setReleaseMinOverallScore(event.target.value)}
+              min={0}
+              max={1}
+              step={0.01}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Metric gate</span>
+            <input
+              aria-label="Release minimum metric score"
+              type="number"
+              value={releaseMinMetricScore}
+              onChange={(event) => setReleaseMinMetricScore(event.target.value)}
+              min={0}
+              max={1}
+              step={0.01}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+        </div>
 
         <div>
           <div className="flex flex-wrap gap-3">
