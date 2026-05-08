@@ -214,6 +214,14 @@ export interface SyntheaImportResponse {
   source: string;
 }
 
+export interface ReferenceFixtureSeedResponse {
+  dataset_id: string;
+  recommended_reference_keys: string[];
+  imported: Array<{ reference_key: string; dataset_id: string; record_count: number }>;
+  skipped: Array<{ reference_key: string; dataset_id: string; reason: string }>;
+  unavailable: string[];
+}
+
 export interface DatasetCapabilitiesResponse {
   modalities: SyntheticModality[];
   complexity_profiles: Array<"simple" | "moderate" | "complex" | "rare">;
@@ -587,6 +595,20 @@ export async function importSyntheaFhir(
   return resp.json();
 }
 
+export async function seedReferenceFixtures(
+  datasetId: string,
+  limit = 1
+): Promise<ReferenceFixtureSeedResponse> {
+  const qs = new URLSearchParams({ limit: String(limit) });
+  const resp = await fetch(`${BASE}/datasets/${datasetId}/reference-fixtures?${qs}`, {
+    method: "POST",
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to seed reference fixtures: ${await readApiError(resp)}`);
+  }
+  return resp.json();
+}
+
 export async function fetchDatasetCapabilities(): Promise<DatasetCapabilitiesResponse> {
   const resp = await fetch(`${BASE}/datasets/capabilities`);
   if (!resp.ok) throw new Error(`Failed to fetch dataset capabilities: ${await readApiError(resp)}`);
@@ -721,9 +743,27 @@ export function datasetExportUrl(
 
 export function datasetSplitExportUrl(
   datasetId: string,
-  exportFormat: ExportFormat = "sft_jsonl"
+  exportFormat: ExportFormat = "sft_jsonl",
+  options?: {
+    autoBenchmark?: boolean;
+    requireMultimodalRelease?: boolean;
+    minOverallScore?: number;
+    minMetricScore?: number;
+  }
 ): string {
   const qs = new URLSearchParams({ export_format: exportFormat });
+  if (options?.autoBenchmark) {
+    qs.set("auto_benchmark", "true");
+  }
+  if (options?.requireMultimodalRelease) {
+    qs.set("require_multimodal_release", "true");
+  }
+  if (options?.minOverallScore !== undefined) {
+    qs.set("min_overall_score", String(options.minOverallScore));
+  }
+  if (options?.minMetricScore !== undefined) {
+    qs.set("min_metric_score", String(options.minMetricScore));
+  }
   return `${BASE}/datasets/${datasetId}/export-splits?${qs}`;
 }
 

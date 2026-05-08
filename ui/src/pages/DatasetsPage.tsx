@@ -14,6 +14,7 @@ import {
   fetchDatasets,
   datasetImageUrl,
   saveRecordReview,
+  seedReferenceFixtures,
 } from "../api/client";
 import type {
   DatasetManifest,
@@ -170,6 +171,15 @@ export default function DatasetsPage() {
       queryClient.invalidateQueries({ queryKey: ["datasets"] });
     },
   });
+  const seedFixturesMutation = useMutation({
+    mutationFn: (datasetId: string) => seedReferenceFixtures(datasetId, 1),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dataset-benchmark-plan", activeDatasetId] });
+      queryClient.invalidateQueries({ queryKey: ["dataset-benchmark-suite", activeDatasetId] });
+      queryClient.invalidateQueries({ queryKey: ["dataset-quality", activeDatasetId] });
+      queryClient.invalidateQueries({ queryKey: ["datasets"] });
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -300,8 +310,48 @@ export default function DatasetsPage() {
                       >
                         Export Splits
                       </a>
+                      {hasAutoBenchmarkPlan && (
+                        <button
+                          type="button"
+                          onClick={() => seedFixturesMutation.mutate(detail.manifest.dataset_id)}
+                          disabled={seedFixturesMutation.isPending}
+                          className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          Seed Fixtures
+                        </button>
+                      )}
+                      {benchmarkPlanReadiness?.ready && (
+                        <a
+                          href={datasetSplitExportUrl(
+                            detail.manifest.dataset_id,
+                            "multimodal_jsonl",
+                            {
+                              autoBenchmark: true,
+                              requireMultimodalRelease: true,
+                              minOverallScore: benchmarkMinOverallScore,
+                              minMetricScore: benchmarkMinMetricScore,
+                            }
+                          )}
+                          className="rounded-md border border-green-300 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+                        >
+                          Release Splits
+                        </a>
+                      )}
                     </div>
                   </div>
+                  {seedFixturesMutation.isSuccess && (
+                    <p className="mt-3 text-sm text-green-700">
+                      Seeded {seedFixturesMutation.data.imported.length} fixture set(s), skipped{" "}
+                      {seedFixturesMutation.data.skipped.length}.
+                    </p>
+                  )}
+                  {seedFixturesMutation.error && (
+                    <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      {seedFixturesMutation.error instanceof Error
+                        ? seedFixturesMutation.error.message
+                        : "Failed to seed reference fixtures."}
+                    </p>
+                  )}
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
                     <Metric label="Records" value={detail.manifest.generated_count} />
                     <Metric label="Approved" value={detail.manifest.approved_count} />
