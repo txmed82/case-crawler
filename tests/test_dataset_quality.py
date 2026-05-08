@@ -579,7 +579,9 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
     assert report.artifact_counts["imaging_file_assets"] == 1
     assert report.note_type_counts == {"ed_note": 1, "radiology_report": 1}
     assert report.extracted_fact_key_counts == {"lab_values": 1, "medications": 1}
+    assert report.lab_unit_counts == {"K/uL": 1}
     assert report.lab_numeric_summaries["wbc"]["mean"] == 12.0
+    assert report.vital_unit_counts == {"/min": 1}
     assert report.vital_numeric_summaries["hr"]["mean"] == 112.0
     assert report.time_series_numeric_summaries["heart_rate.value"]["mean"] == 100.0
     assert report.time_series_numeric_summaries["ecg_lead_ii.millivolts"]["mean"] == 0.1
