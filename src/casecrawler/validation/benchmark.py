@@ -281,6 +281,16 @@ class DatasetBenchmark:
                 generated_profile.time_series_backend_counts,
                 reference_profile.time_series_backend_counts,
             ),
+            _jaccard_metric(
+                "time_series_model_policy_overlap",
+                set(generated_profile.time_series_model_policy_counts),
+                set(reference_profile.time_series_model_policy_counts),
+            ),
+            _distribution_metric(
+                "time_series_model_policy_distribution",
+                generated_profile.time_series_model_policy_counts,
+                reference_profile.time_series_model_policy_counts,
+            ),
             _closeness_metric(
                 "mean_time_series_sampling_rate_hz",
                 generated_profile.mean_time_series_sampling_rate_hz,
@@ -749,6 +759,16 @@ def _profile_metrics(
             generated_profile.time_series_backend_counts,
             reference_profile.time_series_backend_counts,
         ),
+        _jaccard_metric(
+            "time_series_model_policy_overlap",
+            set(generated_profile.time_series_model_policy_counts),
+            set(reference_profile.time_series_model_policy_counts),
+        ),
+        _distribution_metric(
+            "time_series_model_policy_distribution",
+            generated_profile.time_series_model_policy_counts,
+            reference_profile.time_series_model_policy_counts,
+        ),
         _closeness_metric(
             "mean_time_series_sampling_rate_hz",
             generated_profile.mean_time_series_sampling_rate_hz,
@@ -905,6 +925,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     time_series_channel_counts: Counter[str] = Counter()
     time_series_unit_counts: Counter[str] = Counter()
     time_series_backend_counts: Counter[str] = Counter()
+    time_series_model_policy_counts: Counter[str] = Counter()
     imaging_modality_counts: Counter[str] = Counter()
     imaging_body_region_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
@@ -1002,6 +1023,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             duration = _channel_duration_hours(channel)
             if duration is not None:
                 time_series_durations.append(duration)
+        time_series_policy_key = _time_series_model_policy_key(record)
+        if time_series_policy_key:
+            time_series_model_policy_counts[time_series_policy_key] += 1
         for asset in record.imaging:
             imaging_modality_counts[asset.modality] += 1
             imaging_body_region_counts[asset.body_region] += 1
@@ -1082,6 +1106,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         time_series_channel_counts=dict(sorted(time_series_channel_counts.items())),
         time_series_unit_counts=dict(sorted(time_series_unit_counts.items())),
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
+        time_series_model_policy_counts=dict(
+            sorted(time_series_model_policy_counts.items())
+        ),
         time_series_numeric_summaries=_numeric_summaries(time_series_numeric_values),
         mean_time_series_sampling_rate_hz=_mean_float(time_series_sampling_rates),
         mean_time_series_points=_mean(time_series_point_counts),
@@ -1497,6 +1524,20 @@ def _imaging_report_has_label_evidence(asset) -> bool:
 
 def _imaging_model_policy_key(record: SyntheticRecord) -> str | None:
     policy = record.metadata.get("imaging_model_policy")
+    if not isinstance(policy, dict):
+        return None
+    profile = _metric_key(str(policy.get("profile") or "unspecified"))
+    license_name = _metric_key(str(policy.get("license") or "unspecified"))
+    use_policy = _metric_key(str(policy.get("use_policy") or "review_license_before_use"))
+    gated = str(bool(policy.get("gated"))).lower()
+    return (
+        f"profile={profile}|license={license_name}|"
+        f"gated={gated}|use_policy={use_policy}"
+    )
+
+
+def _time_series_model_policy_key(record: SyntheticRecord) -> str | None:
+    policy = record.metadata.get("time_series_model_policy")
     if not isinstance(policy, dict):
         return None
     profile = _metric_key(str(policy.get("profile") or "unspecified"))

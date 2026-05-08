@@ -91,6 +91,11 @@ def test_build_model_card_documents_generator_and_validation_gates(tmp_path):
     ) in card
     assert "## Time-Series Backends" in card
     assert "- external:timediff-sample: 1" in card
+    assert "## Time-Series Model Policies" in card
+    assert (
+        "- profile=timediff license=mit gated=False "
+        "use_policy=wrap_external_sampler_validate_outputs: 1"
+    ) in card
     assert "## Time-Series Units" in card
     assert "- /min: 1" in card
     assert "## Imaging Dimensions" in card
@@ -254,6 +259,13 @@ def _record(tmp_path) -> SyntheticRecord:
                 "license": "mit",
                 "gated": False,
                 "use_policy": "open_model_validate_image_text_alignment",
+            },
+            "time_series_model_policy": {
+                "profile": "timediff",
+                "model_id": "MuhangTian/TimeDiff",
+                "license": "mit",
+                "gated": False,
+                "use_policy": "wrap_external_sampler_validate_outputs",
             },
         },
     )

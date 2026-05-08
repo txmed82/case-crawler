@@ -147,6 +147,7 @@ def build_model_card(
         for record in records
         for channel in record.time_series
     )
+    time_series_model_policies = _time_series_model_policy_counts(records)
     time_series_units = Counter(
         channel.unit for record in records for channel in record.time_series
     )
@@ -194,6 +195,10 @@ def build_model_card(
             "## Time-Series Backends",
             "",
             *_counter_lines(time_series_backends or Counter({"none": 1})),
+            "",
+            "## Time-Series Model Policies",
+            "",
+            *_counter_lines(time_series_model_policies or Counter({"none": 1})),
             "",
             "## Time-Series Units",
             "",
@@ -405,6 +410,23 @@ def _image_validator_policy_counts(records: list[SyntheticRecord]) -> Counter[st
         gated = policy.get("gated")
         counter[
             f"profile={profile} backend={backend} license={license_name} "
+            f"gated={gated} use_policy={use_policy}"
+        ] += 1
+    return counter
+
+
+def _time_series_model_policy_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        policy = record.metadata.get("time_series_model_policy", {})
+        if not isinstance(policy, dict):
+            continue
+        profile = policy.get("profile") or "unspecified"
+        use_policy = policy.get("use_policy") or "review_license_before_use"
+        license_name = policy.get("license") or "unspecified"
+        gated = policy.get("gated")
+        counter[
+            f"profile={profile} license={license_name} "
             f"gated={gated} use_policy={use_policy}"
         ] += 1
     return counter
