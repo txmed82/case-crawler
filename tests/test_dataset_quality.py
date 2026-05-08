@@ -124,7 +124,41 @@ def test_quality_report_marks_fully_approved_dataset_export_ready():
     assert report.longitudinal_record_rate == 0
     assert report.mean_encounter_span_hours is None
     assert report.mean_observations_per_encounter == 1
+    assert report.export_profile_readiness["sft_jsonl"]["ready"] is True
+    assert report.export_profile_readiness["clinical_observation_jsonl"]["ready"] is True
+    assert report.export_profile_readiness["medication_reconciliation_jsonl"]["ready"] is True
+    assert report.export_profile_readiness["note_fact_sft_jsonl"]["ready"] is False
+    assert report.export_profile_readiness["multimodal_jsonl"]["ready"] is False
+    assert "imaging_file_assets" in report.export_profile_readiness["multimodal_jsonl"]["missing"]
     assert report.recommendations == []
+
+
+def test_quality_report_marks_task_exports_not_ready_without_artifacts():
+    record = _record("rec-1").model_copy(
+        update={
+            "labs": [],
+            "vitals": [],
+            "medication_history": [],
+            "time_series": [],
+            "imaging": [],
+        }
+    )
+
+    report = build_dataset_quality_report("ds-quality", [record])
+
+    assert report.export_profile_readiness["clinical_observation_jsonl"]["ready"] is False
+    assert report.export_profile_readiness["clinical_observation_jsonl"]["missing"] == [
+        "labs_or_vitals"
+    ]
+    assert report.export_profile_readiness["medication_reconciliation_jsonl"]["ready"] is False
+    assert report.export_profile_readiness["medication_reconciliation_jsonl"]["missing"] == [
+        "medications"
+    ]
+    assert report.export_profile_readiness["time_series_jsonl"]["ready"] is False
+    assert report.export_profile_readiness["time_series_jsonl"]["missing"] == [
+        "time_series_channels",
+        "time_series_points",
+    ]
 
 
 def test_quality_report_summarizes_longitudinal_encounter_depth():
