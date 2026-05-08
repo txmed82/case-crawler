@@ -934,6 +934,15 @@ function QualityPanel({
             <Metric label="Approved" value={quality.approved_count} />
             <Metric label="Approval" value={`${Math.round(quality.approval_rate * 100)}%`} />
             <Metric label="Blockers" value={quality.blocking_issue_count} />
+            <Metric
+              label="Alignment"
+              value={
+                quality.mean_modality_alignment_score === null ||
+                quality.mean_modality_alignment_score === undefined
+                  ? "none"
+                  : quality.mean_modality_alignment_score.toFixed(2)
+              }
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-4">
             <Metric label="Documents" value={quality.artifact_counts.documents ?? 0} />
@@ -957,6 +966,10 @@ function QualityPanel({
             <Metric
               label="Image backends"
               value={Object.keys(quality.imaging_backend_counts).length}
+            />
+            <Metric
+              label="Image policies"
+              value={Object.keys(quality.imaging_model_policy_counts).length}
             />
           </div>
           {quality.recommended_reference_keys.length > 0 && (
