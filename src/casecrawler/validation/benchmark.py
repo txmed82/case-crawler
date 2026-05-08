@@ -283,6 +283,12 @@ class DatasetBenchmark:
                 reference_profile.approved_rate,
                 tolerance=0.5,
             ),
+            _closeness_metric(
+                "mean_modality_alignment_score",
+                generated_profile.mean_modality_alignment_score,
+                reference_profile.mean_modality_alignment_score,
+                tolerance=0.5,
+            ),
         ]
         overall = sum(metric.score for metric in metrics) / len(metrics)
         rounded_overall = round(overall, 4)
@@ -361,6 +367,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     time_series_point_counts: list[int] = []
     time_series_durations: list[float] = []
     approved_values: list[bool] = []
+    modality_alignment_scores: list[float] = []
     modality_declared_counts: Counter[str] = Counter()
     modality_artifact_counts: Counter[str] = Counter()
 
@@ -436,6 +443,8 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             imaging_model_policy_counts[imaging_policy_key] += 1
         if record.validation is not None:
             approved_values.append(record.validation.approved)
+            if record.validation.modality_alignment_score is not None:
+                modality_alignment_scores.append(record.validation.modality_alignment_score)
 
     return CohortProfile(
         dataset_id=records[0].dataset_id,
@@ -481,6 +490,7 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         approved_rate=_mean([int(value) for value in approved_values])
         if approved_values
         else None,
+        mean_modality_alignment_score=_mean_float(modality_alignment_scores),
     )
 
 
