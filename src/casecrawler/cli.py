@@ -160,7 +160,11 @@ def timeseries_models() -> None:
 
     for profile in list_time_series_model_profiles():
         click.echo(
-            f"{profile.name}: adapter={profile.adapter_type} reference={profile.reference}"
+            f"{profile.name}: adapter={profile.adapter_type} "
+            f"model_id={profile.model_id or 'unspecified'} "
+            f"reference={profile.reference} "
+            f"license={profile.license or 'unspecified'} "
+            f"gated={profile.gated} use_policy={profile.use_policy}"
         )
         click.echo(f"  {profile.notes}")
 
@@ -1042,6 +1046,7 @@ def datasets_capabilities() -> None:
         release_coverage_requirements,
     )
     from casecrawler.generation.recipes import list_generation_recipes
+    from casecrawler.generation.timeseries_models import list_time_series_model_profiles
     from casecrawler.models.dataset import ExportFormat
     from casecrawler.models.synthetic import ComplexityProfile, Modality
 
@@ -1066,6 +1071,19 @@ def datasets_capabilities() -> None:
         ],
         "release_coverage_requirements": release_coverage_requirements(),
         "reference_datasets": reference_dataset_capabilities(),
+        "time_series_model_profiles": [
+            {
+                "name": profile.name,
+                "adapter_type": profile.adapter_type,
+                "reference": profile.reference,
+                "model_id": profile.model_id,
+                "license": profile.license,
+                "gated": profile.gated,
+                "use_policy": profile.use_policy,
+                "notes": profile.notes,
+            }
+            for profile in list_time_series_model_profiles()
+        ],
         "validators": image_validator_capabilities(),
     }
     click.echo(json.dumps(payload, indent=2))
