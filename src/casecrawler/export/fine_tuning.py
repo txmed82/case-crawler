@@ -1340,6 +1340,7 @@ def _verify_package_splits(
     total_examples = 0
     all_record_ids: set[str] = set()
     duplicate_record_ids: set[str] = set()
+    export_format = manifest.get("export_format")
     for split_name in ("train", "validation", "test"):
         split_metadata = splits.get(split_name)
         if not isinstance(split_metadata, dict):
@@ -1354,6 +1355,8 @@ def _verify_package_splits(
         examples, parse_issues = _read_jsonl_examples(jsonl_path)
         for message in parse_issues:
             issues.append({"field": f"{split_name}.jsonl", "message": message})
+        if export_format == ExportFormat.FHIR_NDJSON.value:
+            _verify_fhir_split_examples(split_name, examples, issues)
         example_count = len(examples)
         record_ids = [
             record_id
@@ -1442,6 +1445,22 @@ def _verify_package_splits(
             }
         )
     return summaries
+
+
+def _verify_fhir_split_examples(
+    split_name: str,
+    examples: list[dict[str, Any]],
+    issues: list[dict[str, str]],
+) -> None:
+    for index, example in enumerate(examples, start=1):
+        report = verify_fhir_bundle(example)
+        for issue in report["issues"]:
+            issues.append(
+                {
+                    "field": f"{split_name}.jsonl.line.{index}.{issue['field']}",
+                    "message": issue["message"],
+                }
+            )
 
 
 def _read_jsonl_examples(path: Path) -> tuple[list[dict[str, Any]], list[str]]:
