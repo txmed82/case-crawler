@@ -8,6 +8,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+from casecrawler.imaging.file_metadata import image_file_metadata
 from casecrawler.models.dataset import ExportFormat
 from casecrawler.models.synthetic import SyntheticRecord
 
@@ -277,22 +278,10 @@ def _multimodal_image_payload(asset) -> dict[str, Any]:
     if asset.file_path:
         path = Path(asset.file_path)
         if path.exists() and path.is_file():
-            payload["image_base64"] = base64.b64encode(path.read_bytes()).decode("ascii")
-            payload["image_mime_type"] = _image_mime_type(path)
+            image_bytes = path.read_bytes()
+            payload["image_base64"] = base64.b64encode(image_bytes).decode("ascii")
+            payload["image_metadata"] = image_file_metadata(path)
     return payload
-
-
-def _image_mime_type(path: Path) -> str:
-    suffix = path.suffix.lower()
-    if suffix in {".jpg", ".jpeg"}:
-        return "image/jpeg"
-    if suffix == ".png":
-        return "image/png"
-    if suffix in {".tif", ".tiff"}:
-        return "image/tiff"
-    if suffix == ".dcm":
-        return "application/dicom"
-    return "application/octet-stream"
 
 
 def export_tool_call_record(record: SyntheticRecord) -> dict[str, Any]:

@@ -7,6 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from casecrawler.integrations.huggingface import require_package
+from casecrawler.imaging.file_metadata import (
+    SUPPORTED_IMAGE_EXTENSIONS,
+    has_supported_image_signature,
+    raster_dimensions,
+)
 from casecrawler.models.synthetic import ImagingAsset, Modality, ValidationIssue
 
 
@@ -90,7 +95,7 @@ def validate_image_file_asset(asset: ImagingAsset) -> list[ValidationIssue]:
                 message=f"Generated image file is empty: {asset.file_path}.",
             )
         )
-    if path.suffix.lower() not in _SUPPORTED_IMAGE_EXTENSIONS:
+    if path.suffix.lower() not in SUPPORTED_IMAGE_EXTENSIONS:
         issues.append(
             ValidationIssue(
                 severity="error",
@@ -98,11 +103,11 @@ def validate_image_file_asset(asset: ImagingAsset) -> list[ValidationIssue]:
                 field=f"{field_prefix}.file_format",
                 message=(
                     "Generated image file extension must be one of "
-                    f"{', '.join(sorted(_SUPPORTED_IMAGE_EXTENSIONS))}."
+                    f"{', '.join(sorted(SUPPORTED_IMAGE_EXTENSIONS))}."
                 ),
             )
         )
-    elif not _has_supported_image_signature(path):
+    elif not has_supported_image_signature(path):
         issues.append(
             ValidationIssue(
                 severity="error",
@@ -111,7 +116,37 @@ def validate_image_file_asset(asset: ImagingAsset) -> list[ValidationIssue]:
                 message=f"Generated image file signature is invalid: {asset.file_path}.",
             )
         )
+    else:
+        issues.extend(_validate_raster_dimensions(asset, path))
     return issues
+
+
+def _validate_raster_dimensions(asset: ImagingAsset, path: Path) -> list[ValidationIssue]:
+    if path.suffix.lower() == ".dcm":
+        return []
+    width, height = raster_dimensions(path)
+    if width is None or height is None:
+        return [
+            ValidationIssue(
+                severity="error",
+                modality=Modality.IMAGING,
+                field=f"imaging.{asset.image_id}.dimensions",
+                message=f"Generated image dimensions could not be read: {asset.file_path}.",
+            )
+        ]
+    if width < 32 or height < 32:
+        return [
+            ValidationIssue(
+                severity="error",
+                modality=Modality.IMAGING,
+                field=f"imaging.{asset.image_id}.dimensions",
+                message=(
+                    "Generated image dimensions must be at least 32x32 pixels; "
+                    f"got {width}x{height}."
+                ),
+            )
+        ]
+    return []
 
 
 def _label_terms(display: str, code: str) -> set[str]:
@@ -153,28 +188,6 @@ _RADIOLOGY_SYNONYMS: dict[str, set[str]] = {
     "pneumothorax": {"pleural air"},
     "pulmonary edema": {"edema", "interstitial edema"},
 }
-
-_SUPPORTED_IMAGE_EXTENSIONS = {".dcm", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
-
-
-def _has_supported_image_signature(path: Path) -> bool:
-    suffix = path.suffix.lower()
-    if suffix == ".dcm":
-        return True
-    try:
-        signature = path.read_bytes()[:16]
-    except OSError:
-        return False
-    if suffix == ".png":
-        return signature.startswith(b"\x89PNG\r\n\x1a\n")
-    if suffix in {".jpg", ".jpeg"}:
-        return signature.startswith(b"\xff\xd8\xff")
-    if suffix in {".tif", ".tiff"}:
-        return signature.startswith((b"II*\x00", b"MM\x00*"))
-    if suffix == ".webp":
-        return signature.startswith(b"RIFF") and signature[8:12] == b"WEBP"
-    return False
-
 
 class BiomedCLIPImageValidator:
     def __init__(
