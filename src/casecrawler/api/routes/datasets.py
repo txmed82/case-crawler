@@ -24,6 +24,7 @@ from casecrawler.export.fine_tuning import (
     export_record_payloads,
     summarize_export_task_coverage,
 )
+from casecrawler.export.release_audit import build_objective_coverage_audit
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.dataset import (
     ExportFormat,
@@ -250,6 +251,35 @@ async def generate_release_package(req: ReleasePackageRequest):
     manifest_snapshot = store.get_manifest(dataset_id)
     try:
         with TemporaryDirectory() as temp_dir:
+            task_coverage = summarize_export_task_coverage(
+                records,
+                req.export_format,
+            )
+            objective_coverage = build_objective_coverage_audit(
+                quality_report=quality_report,
+                benchmark_suite=benchmark_suite,
+                manifest={
+                    "task_coverage": task_coverage,
+                    "image_artifacts": {
+                        image.image_id: True
+                        for record in records
+                        for image in record.imaging
+                        if image.file_path
+                    },
+                    "audit_artifacts": {
+                        name: True
+                        for name in (
+                            "benchmark_profile.json",
+                            "benchmark_report.json",
+                            "benchmark_suite_report.json",
+                            "dataset_card.md",
+                            "model_card.md",
+                            "quality_report.json",
+                            "release_package_summary.json",
+                        )
+                    },
+                },
+            )
             manifest = export_jsonl_split_package(
                 records,
                 temp_dir,
@@ -273,10 +303,8 @@ async def generate_release_package(req: ReleasePackageRequest):
                         "generated": result["generated"],
                         "approved": result["approved"],
                         "seeded_references": seeded_references,
-                        "task_coverage": summarize_export_task_coverage(
-                            records,
-                            req.export_format,
-                        ),
+                        "task_coverage": task_coverage,
+                        "objective_coverage": objective_coverage,
                         "quality_report": {
                             "export_ready": quality_report.export_ready,
                             "multimodal_release_ready": (
