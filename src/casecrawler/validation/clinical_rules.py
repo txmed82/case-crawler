@@ -605,6 +605,14 @@ def validate_document_extracted_fact_alignment(
         _normalize_name(vital.name): float(vital.value) for vital in record.vitals
     }
     medication_names = {_normalize_name(medication.name) for medication in record.medication_history}
+    imaging_asset_ids = {asset.image_id for asset in record.imaging}
+    imaging_labels = {
+        _normalize_name(term)
+        for asset in record.imaging
+        for label in asset.labels
+        for term in (label.display, label.code)
+        if term
+    }
 
     for document in record.documents:
         facts = document.extracted_facts
@@ -658,6 +666,44 @@ def validate_document_extracted_fact_alignment(
                         f"Document {document.document_id} extracted medication names "
                         f"not present in structured medication history: "
                         f"{', '.join(sorted(unsupported_medications))}."
+                    ),
+                )
+            )
+        extracted_image_ids = {
+            str(item).strip()
+            for item in facts.get("imaging_asset_ids", [])
+            if isinstance(item, str) and item.strip()
+        }
+        unsupported_image_ids = extracted_image_ids - imaging_asset_ids
+        if unsupported_image_ids:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.CLINICAL_TEXT,
+                    field="documents.extracted_facts.imaging_asset_ids",
+                    message=(
+                        f"Document {document.document_id} extracted imaging asset IDs "
+                        f"not present in structured imaging assets: "
+                        f"{', '.join(sorted(unsupported_image_ids))}."
+                    ),
+                )
+            )
+        extracted_imaging_labels = {
+            _normalize_name(str(item))
+            for item in facts.get("imaging_labels", [])
+            if isinstance(item, str)
+        }
+        unsupported_imaging_labels = extracted_imaging_labels - imaging_labels
+        if unsupported_imaging_labels:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.CLINICAL_TEXT,
+                    field="documents.extracted_facts.imaging_labels",
+                    message=(
+                        f"Document {document.document_id} extracted imaging labels "
+                        f"not present in structured imaging labels: "
+                        f"{', '.join(sorted(unsupported_imaging_labels))}."
                     ),
                 )
             )

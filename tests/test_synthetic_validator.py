@@ -411,6 +411,54 @@ def test_validator_rejects_document_extracted_fact_conflicts():
     assert any(issue.field == "documents.extracted_facts.medications" for issue in report.issues)
 
 
+def test_validator_rejects_document_extracted_imaging_fact_conflicts():
+    bad = _record(
+        modalities=[Modality.CLINICAL_TEXT, Modality.IMAGING],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="XR",
+                body_region="chest",
+                prompt="portable chest x-ray with right lower lobe pneumonia",
+                report_text="Right lower lobe pneumonia.",
+                labels=[
+                    Code(
+                        system="synthetic",
+                        code="pneumonia",
+                        display="Pneumonia",
+                    )
+                ],
+                generation_backend="placeholder",
+            )
+        ],
+        documents=[
+            ClinicalDocument(
+                document_id="doc-rad",
+                note_type="radiology_report",
+                author_role="radiologist",
+                timestamp="2026-05-06T09:00:00",
+                clean_text="Radiology report confirms pneumonia.",
+                extracted_facts={
+                    "imaging_asset_ids": ["img-1", "img-missing"],
+                    "imaging_labels": ["Pneumonia", "Appendicitis"],
+                },
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(
+        issue.field == "documents.extracted_facts.imaging_asset_ids"
+        for issue in report.issues
+    )
+    assert any(
+        issue.field == "documents.extracted_facts.imaging_labels"
+        for issue in report.issues
+    )
+
+
 def test_validator_rejects_phi_like_text():
     bad = _record(metadata={"free_text": "Call patient at 555-123-4567 tomorrow."})
 
