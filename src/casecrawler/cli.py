@@ -811,6 +811,14 @@ def generate_dataset(
     ),
 )
 @click.option("--seed", default="casecrawler", show_default=True)
+@click.option("--train-ratio", default=0.8, type=click.FloatRange(0.0), show_default=True)
+@click.option(
+    "--validation-ratio",
+    default=0.1,
+    type=click.FloatRange(0.0),
+    show_default=True,
+)
+@click.option("--test-ratio", default=0.1, type=click.FloatRange(0.0), show_default=True)
 @click.option(
     "--modalities",
     default=None,
@@ -925,6 +933,9 @@ def generate_release_package(
     recipe: str,
     export_format: str,
     seed: str,
+    train_ratio: float,
+    validation_ratio: float,
+    test_ratio: float,
     modalities: str | None,
     complexity: str | None,
     age_min: int | None,
@@ -1150,6 +1161,9 @@ def generate_release_package(
         output_dir,
         export_format,
         dataset_id=dataset_id,
+        train_ratio=train_ratio,
+        validation_ratio=validation_ratio,
+        test_ratio=test_ratio,
         seed=seed,
         audit_artifacts={
             "quality_report.json": quality_report.model_dump(mode="json"),
