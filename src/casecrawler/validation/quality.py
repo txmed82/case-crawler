@@ -40,6 +40,9 @@ def build_dataset_quality_report(
     vital_numeric_values: dict[str, list[float]] = {}
     time_series_numeric_values: dict[str, list[float]] = {}
     time_series_sampling_rates: list[float] = []
+    imaging_prompt_lengths: list[int] = []
+    imaging_report_lengths: list[int] = []
+    imaging_report_label_evidence_values: list[int] = []
     imaging_widths: list[int] = []
     imaging_heights: list[int] = []
     issue_counts_by_field: Counter[str] = Counter()
@@ -86,6 +89,9 @@ def build_dataset_quality_report(
             vital_numeric_values,
             time_series_numeric_values,
             time_series_sampling_rates,
+            imaging_prompt_lengths,
+            imaging_report_lengths,
+            imaging_report_label_evidence_values,
             imaging_widths,
             imaging_heights,
         )
@@ -198,6 +204,11 @@ def build_dataset_quality_report(
         mean_time_series_sampling_rate_hz=_mean_float(time_series_sampling_rates),
         imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
         imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
+        mean_imaging_prompt_chars=_mean_float(imaging_prompt_lengths),
+        mean_imaging_report_chars=_mean_float(imaging_report_lengths),
+        imaging_report_label_evidence_rate=_mean_float(
+            imaging_report_label_evidence_values
+        ),
         mean_imaging_width=_mean_float(imaging_widths),
         mean_imaging_height=_mean_float(imaging_heights),
         mean_modality_alignment_score=mean_modality_alignment_score,
@@ -277,6 +288,9 @@ def _count_artifacts(
     vital_numeric_values: dict[str, list[float]],
     time_series_numeric_values: dict[str, list[float]],
     time_series_sampling_rates: list[float],
+    imaging_prompt_lengths: list[int],
+    imaging_report_lengths: list[int],
+    imaging_report_label_evidence_values: list[int],
     imaging_widths: list[int],
     imaging_heights: list[int],
 ) -> None:
@@ -341,6 +355,14 @@ def _count_artifacts(
     )
     for asset in record.imaging:
         imaging_backend_counts[asset.generation_backend or "unknown"] += 1
+        if asset.prompt:
+            imaging_prompt_lengths.append(len(asset.prompt))
+        if asset.report_text:
+            imaging_report_lengths.append(len(asset.report_text))
+        if asset.labels:
+            imaging_report_label_evidence_values.append(
+                1 if _imaging_report_has_label_evidence(asset) else 0
+            )
         if asset.file_path:
             width, height = raster_dimensions(asset.file_path)
             if width is not None and height is not None:
@@ -577,6 +599,20 @@ def _metric_key(value: str) -> str:
 
 def _fact_key(value: str) -> str:
     return "_".join(value.lower().replace("-", "_").split())
+
+
+def _imaging_report_has_label_evidence(asset) -> bool:
+    report_text = _metric_key(asset.report_text or "")
+    if not report_text:
+        return False
+    for label in asset.labels:
+        display = _metric_key(label.display or "")
+        code = _metric_key((label.code or "").replace("_", " "))
+        if display and display in report_text:
+            return True
+        if code and code in report_text:
+            return True
+    return False
 
 
 def _imaging_model_policy_key(record: SyntheticRecord) -> str | None:
