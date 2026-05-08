@@ -228,6 +228,58 @@ def test_dataset_api_can_require_multimodal_release_for_split_export(
     assert "benchmark_reference" in blocked.json()["detail"]
 
 
+def test_dataset_api_generates_release_package_with_fixture_references(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/release-package",
+        json={
+            "topic": "sepsis",
+            "count": 1,
+            "seed": "unit-test",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "application/zip"
+    dataset_id = response.headers["x-casecrawler-dataset-id"]
+    with zipfile.ZipFile(BytesIO(response.content)) as archive:
+        assert sorted(archive.namelist()) == [
+            "benchmark_profile.json",
+            "benchmark_report.json",
+            "dataset_card.md",
+            "manifest.json",
+            "model_card.md",
+            "quality_report.json",
+            "release_package_summary.json",
+            "test.jsonl",
+            "train.jsonl",
+            "validation.jsonl",
+        ]
+        manifest = json.loads(archive.read("manifest.json"))
+        quality = json.loads(archive.read("quality_report.json"))
+        benchmark = json.loads(archive.read("benchmark_report.json"))
+        summary = json.loads(archive.read("release_package_summary.json"))
+    exports = DatasetStore().list_export_manifests(dataset_id=dataset_id)
+
+    assert manifest["dataset_id"] == dataset_id
+    assert manifest["export_format"] == "multimodal_jsonl"
+    assert manifest["record_count"] == 1
+    assert quality["multimodal_release_ready"] is True
+    assert benchmark["passed"] is True
+    assert summary["dataset_id"] == dataset_id
+    assert summary["quality_report"]["multimodal_release_ready"] is True
+    assert summary["benchmark"]["passed"] is True
+    assert summary["seeded_references"]["imported"]
+    assert exports[0].metadata["release_package"] is True
+    assert exports[0].metadata["multimodal_release_ready"] is True
+    assert exports[0].metadata["benchmark_passed"] is True
+
+
 def test_dataset_api_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)
