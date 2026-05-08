@@ -1190,7 +1190,7 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     ]
     assert (
         time_series_profiles["timediff"]["output_contract"]["stdout_json"]
-        == "TimeSeriesChannel[]"
+        == "TimeSeriesChannel[] or {'channels': TimeSeriesChannel[]}"
     )
     assert (
         "generation_backend"

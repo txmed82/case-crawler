@@ -38,7 +38,7 @@ TIME_SERIES_MODEL_PROFILES: dict[str, TimeSeriesModelProfile] = {
         },
         output_contract={
             "transport": "stdout",
-            "stdout_json": "TimeSeriesChannel[]",
+            "stdout_json": "TimeSeriesChannel[] or {'channels': TimeSeriesChannel[]}",
             "channel_fields": ["name", "unit", "points"],
             "point_fields": ["timestamp", "values"],
             "optional_fields": ["sampling_rate_hz", "generation_backend"],
@@ -72,7 +72,7 @@ TIME_SERIES_MODEL_PROFILES: dict[str, TimeSeriesModelProfile] = {
         },
         output_contract={
             "transport": "stdout",
-            "stdout_json": "TimeSeriesChannel[]",
+            "stdout_json": "TimeSeriesChannel[] or {'channels': TimeSeriesChannel[]}",
             "channel_fields": ["name", "unit", "points"],
             "point_fields": ["timestamp", "values"],
             "optional_fields": ["sampling_rate_hz", "generation_backend"],
@@ -106,7 +106,7 @@ TIME_SERIES_MODEL_PROFILES: dict[str, TimeSeriesModelProfile] = {
         },
         output_contract={
             "transport": "stdout",
-            "stdout_json": "TimeSeriesChannel[]",
+            "stdout_json": "TimeSeriesChannel[] or {'channels': TimeSeriesChannel[]}",
             "channel_fields": ["name", "unit", "points"],
             "point_fields": ["timestamp", "values"],
             "optional_fields": ["sampling_rate_hz", "generation_backend"],
