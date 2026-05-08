@@ -713,6 +713,16 @@ def validate_document_extracted_fact_alignment(
         _normalize_name(vital.name): float(vital.value) for vital in record.vitals
     }
     medication_names = {_normalize_name(medication.name) for medication in record.medication_history}
+    medication_details = {
+        _normalize_name(medication.name): {
+            "route": _normalize_name(medication.route or ""),
+            "status": _normalize_name(medication.status or ""),
+            "dose": _normalize_name(medication.dose or ""),
+            "frequency": _normalize_name(medication.frequency or ""),
+        }
+        for medication in record.medication_history
+        if medication.name
+    }
     diagnosis_names = {
         _normalize_name(diagnosis.display)
         for encounter in record.encounters
@@ -798,6 +808,32 @@ def validate_document_extracted_fact_alignment(
                         f"Document {document.document_id} extracted medication names "
                         f"not present in structured medication history: "
                         f"{', '.join(sorted(unsupported_medications))}."
+                    ),
+                )
+            )
+        unsupported_medication_details = []
+        for item in _fact_list(facts.get("medication_details")):
+            name = _normalize_name(str(item.get("name", "")))
+            if not name:
+                continue
+            expected = medication_details.get(name)
+            if expected is None:
+                unsupported_medication_details.append(name)
+                continue
+            for field in ("route", "status", "dose", "frequency"):
+                extracted = _normalize_name(str(item.get(field, "")))
+                if extracted and expected[field] and extracted != expected[field]:
+                    unsupported_medication_details.append(f"{name}.{field}")
+        if unsupported_medication_details and medication_details:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.CLINICAL_TEXT,
+                    field="documents.extracted_facts.medication_details",
+                    message=(
+                        f"Document {document.document_id} extracted medication details "
+                        f"not present in structured medication history: "
+                        f"{', '.join(sorted(set(unsupported_medication_details)))}."
                     ),
                 )
             )

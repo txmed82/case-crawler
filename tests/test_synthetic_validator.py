@@ -441,6 +441,53 @@ def test_validator_rejects_document_extracted_fact_conflicts():
     assert any(issue.field == "documents.extracted_facts.medications" for issue in report.issues)
 
 
+def test_validator_rejects_document_extracted_medication_detail_conflicts():
+    bad = _record(
+        documents=[
+            ClinicalDocument(
+                document_id="doc-medication-details",
+                note_type="progress_note",
+                author_role="physician",
+                timestamp="2026-05-06T09:00:00",
+                clean_text="Progress note with medication detail facts.",
+                extracted_facts={
+                    "medication_details": [
+                        {
+                            "name": "Ceftriaxone",
+                            "dose": "1 g",
+                            "route": "PO",
+                            "frequency": "daily",
+                            "status": "stopped",
+                        },
+                        {
+                            "name": "Vancomycin",
+                            "route": "IV",
+                            "status": "active",
+                        },
+                    ],
+                },
+            )
+        ],
+        medication_history=[
+            MedicationStatement(
+                name="Ceftriaxone",
+                dose="2 g",
+                route="IV",
+                frequency="daily",
+                status="active",
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(
+        issue.field == "documents.extracted_facts.medication_details"
+        for issue in report.issues
+    )
+
+
 def test_validator_rejects_document_extracted_diagnosis_fact_conflicts():
     bad = _record(
         encounters=[
