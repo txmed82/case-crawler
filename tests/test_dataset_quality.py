@@ -492,7 +492,13 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
                 )
             ],
             "medication_history": [
-                MedicationStatement(name="Ceftriaxone", route="IV", status="active")
+                MedicationStatement(
+                    name="Ceftriaxone",
+                    dose="1 g",
+                    route="IV",
+                    frequency="daily",
+                    status="active",
+                )
             ],
             "encounters": [
                 Encounter(
@@ -583,6 +589,10 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
     assert report.lab_numeric_summaries["wbc"]["mean"] == 12.0
     assert report.vital_unit_counts == {"/min": 1}
     assert report.vital_numeric_summaries["hr"]["mean"] == 112.0
+    assert report.medication_route_counts == {"IV": 1}
+    assert report.medication_dose_counts == {"1 g": 1}
+    assert report.medication_frequency_counts == {"daily": 1}
+    assert report.medication_status_counts == {"active": 1}
     assert report.time_series_numeric_summaries["heart_rate.value"]["mean"] == 100.0
     assert report.time_series_numeric_summaries["ecg_lead_ii.millivolts"]["mean"] == 0.1
     assert report.time_series_backend_counts == {
