@@ -698,6 +698,7 @@ def export_dataset_splits(
     test_ratio: float = Query(0.1, ge=0.0),
     seed: str = "casecrawler",
     allow_blocked: bool = False,
+    require_multimodal_release: bool = False,
     reference_dataset_id: str | None = Query(default=None, min_length=1),
     auto_benchmark: bool = False,
     min_overall_score: float = Query(0.75, ge=0.0, le=1.0),
@@ -751,6 +752,7 @@ def export_dataset_splits(
 
     benchmark_metadata = {}
     benchmark_audit = {}
+    benchmark_plan = None
     if benchmark_gate:
         reference_records = list(
             store.iter_records(dataset_id=benchmark_gate.reference_dataset_id)
@@ -772,6 +774,20 @@ def export_dataset_splits(
             "benchmark_thresholds": benchmark_report.thresholds,
         }
         benchmark_audit["benchmark_report.json"] = benchmark_report.model_dump(mode="json")
+        benchmark_plan = {
+            "recommended_reference_keys": [
+                benchmark_gate.reference_key or benchmark_gate.reference_dataset_id
+            ],
+            "ready": benchmark_report.passed,
+            "resolved_reference_dataset_id": benchmark_gate.reference_dataset_id
+            if benchmark_report.passed
+            else None,
+            "missing_reference_keys": []
+            if benchmark_report.passed
+            else [benchmark_gate.reference_key or benchmark_gate.reference_dataset_id],
+            "thresholds": benchmark_report.thresholds,
+            "task_export_reference_readiness": {},
+        }
         if not benchmark_report.passed and not allow_blocked:
             raise HTTPException(
                 status_code=409,
@@ -782,6 +798,21 @@ def export_dataset_splits(
                     "Set allow_blocked=true to export anyway."
                 ),
             )
+    if benchmark_plan is not None:
+        report = build_dataset_quality_report(
+            dataset_id,
+            records,
+            effective_approved=store.effective_approved,
+            benchmark_plan=benchmark_plan,
+        )
+    if require_multimodal_release and not report.multimodal_release_ready:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Dataset is not ready for multimodal release package export. "
+                f"Missing: {report.multimodal_release_missing}."
+            ),
+        )
     manifest_snapshot = store.get_manifest(dataset_id)
     try:
         with TemporaryDirectory() as temp_dir:

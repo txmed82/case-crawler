@@ -1012,6 +1012,11 @@ def verify_fhir_export(path: str) -> None:
     help="Export even when dataset quality gates report blockers.",
 )
 @click.option(
+    "--require-multimodal-release",
+    is_flag=True,
+    help="Require strict multimodal release readiness before exporting.",
+)
+@click.option(
     "--reference-dataset-id",
     default=None,
     help="Optional reference dataset id required to pass benchmark gate before export",
@@ -1044,6 +1049,7 @@ def export_dataset_splits(
     test_ratio: float,
     seed: str,
     allow_blocked: bool,
+    require_multimodal_release: bool,
     reference_dataset_id: str | None,
     auto_benchmark: bool,
     min_overall_score: float,
@@ -1097,6 +1103,7 @@ def export_dataset_splits(
         raise click.ClickException(str(exc)) from exc
     benchmark_metadata = {}
     benchmark_audit = {}
+    benchmark_plan = None
     if benchmark_gate:
         reference_records = list(
             store.iter_records(dataset_id=benchmark_gate.reference_dataset_id)
@@ -1118,6 +1125,20 @@ def export_dataset_splits(
             "benchmark_thresholds": benchmark_report.thresholds,
         }
         benchmark_audit["benchmark_report.json"] = benchmark_report.model_dump(mode="json")
+        benchmark_plan = {
+            "recommended_reference_keys": [
+                benchmark_gate.reference_key or benchmark_gate.reference_dataset_id
+            ],
+            "ready": benchmark_report.passed,
+            "resolved_reference_dataset_id": benchmark_gate.reference_dataset_id
+            if benchmark_report.passed
+            else None,
+            "missing_reference_keys": []
+            if benchmark_report.passed
+            else [benchmark_gate.reference_key or benchmark_gate.reference_dataset_id],
+            "thresholds": benchmark_report.thresholds,
+            "task_export_reference_readiness": {},
+        }
         if not benchmark_report.passed and not allow_blocked:
             raise click.ClickException(
                 "Dataset failed benchmark gate for split fine-tuning export. "
@@ -1125,6 +1146,18 @@ def export_dataset_splits(
                 f"Failing metrics: {benchmark_report.failing_metrics}. "
                 "Use --allow-blocked to export anyway."
             )
+    if benchmark_plan is not None:
+        report = build_dataset_quality_report(
+            dataset_id,
+            records,
+            effective_approved=store.effective_approved,
+            benchmark_plan=benchmark_plan,
+        )
+    if require_multimodal_release and not report.multimodal_release_ready:
+        raise click.ClickException(
+            "Dataset is not ready for multimodal release package export. "
+            f"Missing: {report.multimodal_release_missing}."
+        )
     manifest_snapshot = store.get_manifest(dataset_id)
     try:
         manifest = export_jsonl_split_package(
