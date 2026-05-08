@@ -294,6 +294,20 @@ export interface DatasetDetailResponse {
   records: SyntheticRecordPreview[];
 }
 
+export interface ExportManifest {
+  dataset_id: string;
+  export_format: ExportFormat;
+  file_path: string;
+  record_count: number;
+  created_at: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface ExportManifestResponse {
+  dataset_id: string;
+  exports: ExportManifest[];
+}
+
 export type HumanReviewStatus =
   | "pending"
   | "approved"
@@ -440,6 +454,15 @@ export async function fetchDatasets(limit = 100): Promise<DatasetListResponse> {
 export async function fetchDataset(datasetId: string, limit = 25): Promise<DatasetDetailResponse> {
   const resp = await fetch(`${BASE}/datasets/${datasetId}?limit=${limit}`);
   if (!resp.ok) throw new Error(`Failed to fetch dataset: ${await readApiError(resp)}`);
+  return resp.json();
+}
+
+export async function fetchDatasetExports(
+  datasetId: string,
+  limit = 25
+): Promise<ExportManifestResponse> {
+  const resp = await fetch(`${BASE}/datasets/${datasetId}/exports?limit=${limit}`);
+  if (!resp.ok) throw new Error(`Failed to fetch export audit trail: ${await readApiError(resp)}`);
   return resp.json();
 }
 
