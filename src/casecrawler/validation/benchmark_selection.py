@@ -59,6 +59,9 @@ def resolve_benchmark_gate(
 def build_benchmark_plan_summary(store: DatasetStore, dataset_id: str) -> dict:
     manifest = store.get_manifest(dataset_id)
     reference_keys = _metadata_string_list(manifest.metadata.get("recommended_reference_keys"))
+    task_reference_keys = _metadata_string_list_map(
+        manifest.metadata.get("task_export_reference_keys")
+    )
     thresholds = _metadata_thresholds(manifest.metadata.get("benchmark_thresholds"))
     selected_reference_id = store.find_reference_dataset_id(
         reference_keys,
@@ -80,10 +83,19 @@ def build_benchmark_plan_summary(store: DatasetStore, dataset_id: str) -> dict:
         for reference_key in reference_keys
         if reference_key not in available_reference_keys
     ]
+    task_reference_readiness = {
+        export_format: _task_reference_readiness(
+            store,
+            dataset_id=dataset_id,
+            reference_keys=export_reference_keys,
+        )
+        for export_format, export_reference_keys in task_reference_keys.items()
+    }
     return {
         "dataset_id": dataset_id,
         "primary_recipe": _metadata_string(manifest.metadata.get("primary_recipe")),
         "recommended_reference_keys": reference_keys,
+        "task_export_reference_readiness": task_reference_readiness,
         "resolved_reference_dataset_id": selected_reference_id,
         "resolved_reference_key": resolved_reference_key,
         "ready": selected_reference_id is not None,
@@ -130,10 +142,15 @@ def run_recommended_benchmark_suite(store: DatasetStore, dataset_id: str) -> dic
         raise LookupError(
             "No imported reference dataset matches this dataset's recommended benchmark keys."
         )
+    task_reference_keys = _metadata_string_list_map(
+        manifest.metadata.get("task_export_reference_keys")
+    )
+    task_export_results = _task_export_results(task_reference_keys, results)
     return {
         "dataset_id": dataset_id,
         "primary_recipe": _metadata_string(manifest.metadata.get("primary_recipe")),
         "recommended_reference_keys": reference_keys,
+        "task_export_results": task_export_results,
         "reference_count": len(results),
         "passed": all(result["passed"] for result in results),
         "mean_overall_score": round(
@@ -159,6 +176,100 @@ def _metadata_string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _metadata_string_list_map(value: object) -> dict[str, list[str]]:
+    if not isinstance(value, dict):
+        return {}
+    mapping: dict[str, list[str]] = {}
+    for key, items in value.items():
+        if not isinstance(key, str):
+            continue
+        cleaned_key = key.strip()
+        if not cleaned_key:
+            continue
+        reference_keys = _metadata_string_list(items)
+        if reference_keys:
+            mapping[cleaned_key] = reference_keys
+    return mapping
+
+
+def _task_reference_readiness(
+    store: DatasetStore,
+    *,
+    dataset_id: str,
+    reference_keys: list[str],
+) -> dict:
+    available_reference_keys: list[str] = []
+    resolved_reference_dataset_id = None
+    resolved_reference_key = None
+    for reference_key in reference_keys:
+        reference_dataset_id = store.find_reference_dataset_id(
+            [reference_key],
+            exclude_dataset_id=dataset_id,
+        )
+        if not reference_dataset_id:
+            continue
+        available_reference_keys.append(reference_key)
+        if resolved_reference_dataset_id is None:
+            reference_manifest = store.get_manifest(reference_dataset_id)
+            resolved_reference_dataset_id = reference_dataset_id
+            resolved_reference_key = _metadata_string(
+                reference_manifest.metadata.get("primary_reference_key")
+            )
+    missing_reference_keys = [
+        reference_key
+        for reference_key in reference_keys
+        if reference_key not in available_reference_keys
+    ]
+    return {
+        "recommended_reference_keys": reference_keys,
+        "available_reference_keys": available_reference_keys,
+        "missing_reference_keys": missing_reference_keys,
+        "resolved_reference_dataset_id": resolved_reference_dataset_id,
+        "resolved_reference_key": resolved_reference_key,
+        "ready": not missing_reference_keys,
+    }
+
+
+def _task_export_results(
+    task_reference_keys: dict[str, list[str]],
+    results: list[dict],
+) -> dict[str, dict]:
+    grouped_results: dict[str, dict] = {}
+    for export_format, reference_keys in task_reference_keys.items():
+        profile_results = [
+            result
+            for result in results
+            if result.get("reference_key") in reference_keys
+        ]
+        matched_reference_keys = {
+            result.get("reference_key")
+            for result in profile_results
+            if isinstance(result.get("reference_key"), str)
+        }
+        missing_reference_keys = [
+            reference_key
+            for reference_key in reference_keys
+            if reference_key not in matched_reference_keys
+        ]
+        grouped_results[export_format] = {
+            "recommended_reference_keys": reference_keys,
+            "reference_count": len(profile_results),
+            "missing_reference_keys": missing_reference_keys,
+            "passed": bool(profile_results)
+            and not missing_reference_keys
+            and all(result["passed"] for result in profile_results),
+            "mean_overall_score": round(
+                sum(float(result["overall_score"]) for result in profile_results)
+                / len(profile_results),
+                4,
+            )
+            if profile_results
+            else None,
+            "results": profile_results,
+        }
+    return grouped_results
 
 
 def _metadata_thresholds(value: object) -> tuple[float, float] | None:

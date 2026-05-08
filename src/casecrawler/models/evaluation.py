@@ -82,6 +82,7 @@ class DatasetQualityReport(BaseModel):
     resolved_reference_dataset_id: str | None = None
     missing_reference_keys: list[str] = Field(default_factory=list)
     benchmark_thresholds: dict[str, float] = Field(default_factory=dict)
+    task_export_reference_readiness: dict[str, dict[str, Any]] = Field(default_factory=dict)
     modality_counts: dict[str, int] = Field(default_factory=dict)
     artifact_counts: dict[str, int] = Field(default_factory=dict)
     export_profile_readiness: dict[str, dict[str, Any]] = Field(default_factory=dict)
