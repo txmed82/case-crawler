@@ -301,6 +301,48 @@ def test_verify_jsonl_split_package_validates_image_artifact_manifest_files(tmp_
     )
 
 
+def test_verify_jsonl_split_package_validates_multimodal_jsonl_image_paths(tmp_path):
+    image_path = tmp_path / "source-cxr.png"
+    image_path.write_bytes(_png_bytes(width=32, height=32))
+    record = _multimodal_record().model_copy(
+        update={
+            "dataset_id": "ds-split",
+            "imaging": [
+                _multimodal_record().imaging[0].model_copy(
+                    update={"file_path": str(image_path)}
+                )
+            ],
+        }
+    )
+    export_jsonl_split_package(
+        [record],
+        tmp_path / "package",
+        "multimodal_jsonl",
+        dataset_id="ds-split",
+    )
+    train_path = tmp_path / "package" / "train.jsonl"
+    payload = json.loads(train_path.read_text())
+    payload["images"][0]["package_path"] = "images/not-declared.png"
+    payload["image_text_pairs"][0]["package_path"] = "../unsafe.png"
+    payload["supervised_tasks"][0]["input"]["package_path"] = "images/not-declared.png"
+    train_path.write_text(json.dumps(payload) + "\n")
+    manifest_path = tmp_path / "package" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files"]["train.jsonl"]["byte_size"] = train_path.stat().st_size
+    manifest["files"]["train.jsonl"]["sha256"] = hashlib.sha256(
+        train_path.read_bytes()
+    ).hexdigest()
+    manifest_path.write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path / "package")
+    issue_messages = [issue["message"] for issue in report["issues"]]
+
+    assert report["valid"] is False
+    assert any("not declared in manifest image_artifacts" in message for message in issue_messages)
+    assert any("not safe" in message for message in issue_messages)
+    assert any("missing from manifest files" in message for message in issue_messages)
+
+
 def test_verify_jsonl_split_package_accepts_valid_moved_package(tmp_path):
     records = [
         _multimodal_record().model_copy(
