@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 from statistics import mean
 
+from casecrawler.imaging.file_metadata import raster_dimensions
 from casecrawler.models.dataset import DatasetManifest
 from casecrawler.models.synthetic import SyntheticRecord
 
@@ -19,6 +21,8 @@ def build_dataset_card(
     generation_overrides = _generation_override_counts(records)
     extracted_fact_counts = _extracted_fact_counts(records)
     procedure_counts = _procedure_counts(records)
+    clinical_unit_counts = _clinical_unit_counts(records)
+    medication_regimen_counts = _medication_regimen_counts(records)
     diagnosis_code_system_counts = _diagnosis_code_system_counts(records)
     diagnosis_code_counts = _diagnosis_code_counts(records)
     phi_entity_counts = _phi_entity_counts(records)
@@ -57,6 +61,14 @@ def build_dataset_card(
             "## Procedures",
             "",
             *_counter_lines(procedure_counts or Counter({"none": 1})),
+            "",
+            "## Clinical Units",
+            "",
+            *_counter_lines(clinical_unit_counts or Counter({"none": 1})),
+            "",
+            "## Medication Regimens",
+            "",
+            *_counter_lines(medication_regimen_counts or Counter({"none": 1})),
             "",
             "## Diagnosis Coding Signals",
             "",
@@ -131,6 +143,10 @@ def build_model_card(
         for record in records
         for channel in record.time_series
     )
+    time_series_units = Counter(
+        channel.unit for record in records for channel in record.time_series
+    )
+    imaging_dimension_summary = _imaging_dimension_summary(records)
     procedure_counts = _procedure_counts(records)
     generation_overrides = _generation_override_counts(records)
     imaging_model_policies = _imaging_model_policy_counts(records)
@@ -168,6 +184,14 @@ def build_model_card(
             "## Time-Series Backends",
             "",
             *_counter_lines(time_series_backends or Counter({"none": 1})),
+            "",
+            "## Time-Series Units",
+            "",
+            *_counter_lines(time_series_units or Counter({"none": 1})),
+            "",
+            "## Imaging Dimensions",
+            "",
+            *_imaging_dimension_lines(imaging_dimension_summary),
             "",
             "## Procedure Coverage",
             "",
@@ -291,6 +315,30 @@ def _procedure_counts(records: list[SyntheticRecord]) -> Counter[str]:
     return counter
 
 
+def _clinical_unit_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        for lab in record.labs:
+            counter[f"lab:{lab.unit}"] += 1
+        for vital in record.vitals:
+            counter[f"vital:{vital.unit}"] += 1
+    return counter
+
+
+def _medication_regimen_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        for medication in record.medication_history:
+            if medication.dose:
+                counter[f"dose={medication.dose}"] += 1
+            if medication.frequency:
+                counter[f"frequency={medication.frequency}"] += 1
+            if medication.route:
+                counter[f"route={medication.route}"] += 1
+            counter[f"status={medication.status or 'unknown'}"] += 1
+    return counter
+
+
 def _diagnosis_code_system_counts(records: list[SyntheticRecord]) -> Counter[str]:
     counter: Counter[str] = Counter()
     for record in records:
@@ -309,6 +357,34 @@ def _diagnosis_code_counts(records: list[SyntheticRecord]) -> Counter[str]:
                 if diagnosis.code:
                     counter[_diagnosis_code_key(diagnosis)] += 1
     return counter
+
+
+def _imaging_dimension_summary(records: list[SyntheticRecord]) -> dict[str, float]:
+    widths: list[int] = []
+    heights: list[int] = []
+    for record in records:
+        for asset in record.imaging:
+            if not asset.file_path or not Path(asset.file_path).is_file():
+                continue
+            width, height = raster_dimensions(asset.file_path)
+            if width is not None and height is not None:
+                widths.append(width)
+                heights.append(height)
+    summary: dict[str, float] = {}
+    if widths:
+        summary["mean_width"] = round(mean(widths), 1)
+    if heights:
+        summary["mean_height"] = round(mean(heights), 1)
+    return summary
+
+
+def _imaging_dimension_lines(summary: dict[str, float]) -> list[str]:
+    if not summary:
+        return ["- No readable image dimensions"]
+    return [
+        f"- Mean width: {summary['mean_width']:.1f} px",
+        f"- Mean height: {summary['mean_height']:.1f} px",
+    ]
 
 
 def _phi_entity_counts(records: list[SyntheticRecord]) -> Counter[str]:
