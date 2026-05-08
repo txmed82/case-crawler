@@ -23,6 +23,15 @@ import type {
   SyntheticRecordPreview,
 } from "../api/client";
 
+type RecipeBenchmarkPlan = {
+  recipeName: string | null;
+  recommendedReferenceKeys: string[];
+  thresholds: {
+    minOverallScore: number;
+    minMetricScore: number;
+  } | null;
+};
+
 export default function DatasetsPage() {
   const [topicFilter, setTopicFilter] = useState("");
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
@@ -58,6 +67,7 @@ export default function DatasetsPage() {
   const effectiveExportFormat = exportFormats.includes(exportFormat)
     ? exportFormat
     : (exportFormats[0] ?? "sft_jsonl");
+  const benchmarkPlan = parseRecipeBenchmarkPlan(detail?.manifest.metadata);
   const {
     data: reviewQueue,
     isLoading: isReviewLoading,
@@ -299,6 +309,7 @@ export default function DatasetsPage() {
                   activeDatasetId={detail.manifest.dataset_id}
                   referenceDatasetId={referenceDatasetId}
                   onReferenceDatasetChange={setReferenceDatasetId}
+                  recipeBenchmarkPlan={benchmarkPlan}
                   benchmark={benchmark ?? null}
                   isLoading={isBenchmarkLoading}
                   error={benchmarkError}
@@ -338,6 +349,7 @@ function BenchmarkPanel({
   activeDatasetId,
   referenceDatasetId,
   onReferenceDatasetChange,
+  recipeBenchmarkPlan,
   benchmark,
   isLoading,
   error,
@@ -350,6 +362,7 @@ function BenchmarkPanel({
   activeDatasetId: string;
   referenceDatasetId: string;
   onReferenceDatasetChange: (datasetId: string) => void;
+  recipeBenchmarkPlan: RecipeBenchmarkPlan;
   benchmark: BenchmarkReport | null;
   isLoading: boolean;
   error: unknown;
@@ -362,6 +375,14 @@ function BenchmarkPanel({
     (dataset) => dataset.dataset_id !== activeDatasetId
   );
   const topMetrics = benchmark?.metrics.slice(0, 6) ?? [];
+  const hasRecipeBenchmarkPlan =
+    recipeBenchmarkPlan.recommendedReferenceKeys.length > 0 ||
+    recipeBenchmarkPlan.thresholds !== null;
+  const applyRecipeThresholds = () => {
+    if (!recipeBenchmarkPlan.thresholds) return;
+    onMinOverallScoreChange(recipeBenchmarkPlan.thresholds.minOverallScore);
+    onMinMetricScoreChange(recipeBenchmarkPlan.thresholds.minMetricScore);
+  };
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -412,6 +433,43 @@ function BenchmarkPanel({
           </label>
         </div>
       </div>
+      {hasRecipeBenchmarkPlan && (
+        <div className="mt-3 rounded-md border border-blue-100 bg-blue-50 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase text-blue-800">
+                Recipe benchmark plan
+              </p>
+              <p className="mt-1 text-sm text-blue-950">
+                {recipeBenchmarkPlan.recipeName
+                  ? recipeBenchmarkPlan.recipeName.replaceAll("_", " ")
+                  : "Manifest recommendation"}
+              </p>
+              {recipeBenchmarkPlan.recommendedReferenceKeys.length > 0 && (
+                <p className="mt-1 break-words text-xs text-blue-800">
+                  References: {recipeBenchmarkPlan.recommendedReferenceKeys.join(", ")}
+                </p>
+              )}
+              {recipeBenchmarkPlan.thresholds && (
+                <p className="mt-1 text-xs text-blue-800">
+                  Thresholds: overall{" "}
+                  {formatMetricValue(recipeBenchmarkPlan.thresholds.minOverallScore)}, metric{" "}
+                  {formatMetricValue(recipeBenchmarkPlan.thresholds.minMetricScore)}
+                </p>
+              )}
+            </div>
+            {recipeBenchmarkPlan.thresholds && (
+              <button
+                type="button"
+                onClick={applyRecipeThresholds}
+                className="shrink-0 rounded-md border border-blue-300 bg-white px-3 py-2 text-xs font-medium text-blue-800 hover:bg-blue-100"
+              >
+                Apply thresholds
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {referenceOptions.length === 0 && (
         <p className="mt-3 rounded-md bg-gray-50 p-3 text-sm text-gray-500">
           Import or generate another dataset to use as a benchmark reference.
@@ -545,6 +603,53 @@ function ExportAuditPanel({
 function clampScore(value: number): number {
   if (Number.isNaN(value)) return 0;
   return Math.max(0, Math.min(1, value));
+}
+
+function parseRecipeBenchmarkPlan(
+  metadata: Record<string, unknown> | undefined
+): RecipeBenchmarkPlan {
+  if (!metadata) {
+    return {
+      recipeName: null,
+      recommendedReferenceKeys: [],
+      thresholds: null,
+    };
+  }
+  return {
+    recipeName: stringFromMetadata(metadata.primary_recipe),
+    recommendedReferenceKeys: stringListFromMetadata(metadata.recommended_reference_keys),
+    thresholds: benchmarkThresholdsFromMetadata(metadata.benchmark_thresholds),
+  };
+}
+
+function stringFromMetadata(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function stringListFromMetadata(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function benchmarkThresholdsFromMetadata(
+  value: unknown
+): RecipeBenchmarkPlan["thresholds"] {
+  if (!value || typeof value !== "object") return null;
+  const thresholds = value as Record<string, unknown>;
+  const minOverallScore = scoreFromMetadata(thresholds.min_overall_score);
+  const minMetricScore = scoreFromMetadata(thresholds.min_metric_score);
+  if (minOverallScore === null || minMetricScore === null) return null;
+  return { minOverallScore, minMetricScore };
+}
+
+function scoreFromMetadata(value: unknown): number | null {
+  if (typeof value !== "number" || Number.isNaN(value)) return null;
+  return clampScore(value);
 }
 
 function QualityPanel({
