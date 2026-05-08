@@ -207,6 +207,44 @@ def test_validator_rejects_inconsistent_derived_anion_gap():
     assert any(issue.field == "labs.derived.anion_gap" for issue in report.issues)
 
 
+def test_validator_rejects_inconsistent_abg_ph_derivation():
+    bad = _record(
+        labs=[
+            LabObservation(
+                name="pH",
+                value=7.55,
+                unit="",
+                reference_low=7.35,
+                reference_high=7.45,
+                flag="H",
+                effective_time="2026-05-06T08:30:00",
+            ),
+            LabObservation(
+                name="pCO2",
+                value=60,
+                unit="mmHg",
+                reference_low=35,
+                reference_high=45,
+                flag="H",
+                effective_time="2026-05-06T08:30:00",
+            ),
+            LabObservation(
+                name="HCO3",
+                value=24,
+                unit="mEq/L",
+                reference_low=22,
+                reference_high=26,
+                effective_time="2026-05-06T08:30:00",
+            ),
+        ]
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "labs.derived.abg_ph" for issue in report.issues)
+
+
 def test_validator_rejects_known_lab_and_vital_unit_conflicts():
     bad = _record(
         labs=[
