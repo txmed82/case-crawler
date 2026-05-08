@@ -214,6 +214,85 @@ def test_export_jsonl_split_package_copies_file_backed_images(tmp_path):
     assert report["checked_files"][package_path]["exists"] is True
 
 
+def test_verify_jsonl_split_package_requires_release_image_artifacts(tmp_path):
+    image_path = tmp_path / "source-cxr.png"
+    image_path.write_bytes(_png_bytes(width=32, height=32))
+    record = _multimodal_record().model_copy(
+        update={
+            "dataset_id": "ds-split",
+            "imaging": [
+                _multimodal_record().imaging[0].model_copy(
+                    update={"file_path": str(image_path)}
+                )
+            ],
+        }
+    )
+    export_jsonl_split_package(
+        [record],
+        tmp_path / "package",
+        "multimodal_jsonl",
+        dataset_id="ds-split",
+        audit_artifacts={
+            "quality_report.json": {
+                "dataset_id": "ds-split",
+                "record_count": 1,
+                "approved_count": 1,
+                "approval_rate": 1.0,
+                "export_ready": True,
+                "core_artifact_coverage": {
+                    key: True for key in REQUIRED_RELEASE_COVERAGE_KEYS
+                },
+                "multimodal_release_ready": True,
+                "multimodal_release_missing": [],
+            }
+        },
+    )
+    manifest_path = tmp_path / "package" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["image_artifacts"] = {}
+    manifest_path.write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path / "package")
+
+    assert report["valid"] is False
+    assert any(issue["field"] == "image_artifacts" for issue in report["issues"])
+
+
+def test_verify_jsonl_split_package_validates_image_artifact_manifest_files(tmp_path):
+    image_path = tmp_path / "source-cxr.png"
+    image_path.write_bytes(_png_bytes(width=32, height=32))
+    record = _multimodal_record().model_copy(
+        update={
+            "dataset_id": "ds-split",
+            "imaging": [
+                _multimodal_record().imaging[0].model_copy(
+                    update={"file_path": str(image_path)}
+                )
+            ],
+        }
+    )
+    export_jsonl_split_package(
+        [record],
+        tmp_path / "package",
+        "multimodal_jsonl",
+        dataset_id="ds-split",
+    )
+    manifest_path = tmp_path / "package" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    image_artifact = next(iter(manifest["image_artifacts"].values()))
+    manifest["files"].pop(image_artifact["package_path"])
+    manifest_path.write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path / "package")
+
+    assert report["valid"] is False
+    assert any(
+        issue["field"].endswith(".package_path")
+        and "missing from manifest files" in issue["message"]
+        for issue in report["issues"]
+    )
+
+
 def test_verify_jsonl_split_package_accepts_valid_moved_package(tmp_path):
     records = [
         _multimodal_record().model_copy(
