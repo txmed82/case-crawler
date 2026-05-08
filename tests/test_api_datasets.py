@@ -60,6 +60,65 @@ def test_dataset_api_lists_and_exports_records(tmp_path, monkeypatch):
     assert json.loads(first_line)["dataset_id"] == dataset_id
 
 
+def test_dataset_api_export_can_require_benchmark_gate(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    reference = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    dataset_id = generated.json()["dataset_id"]
+    reference_dataset_id = reference.json()["dataset_id"]
+
+    exported = client.get(
+        f"/api/datasets/{dataset_id}/export",
+        params={
+            "export_format": "sft_jsonl",
+            "reference_dataset_id": reference_dataset_id,
+            "min_overall_score": 0.0,
+            "min_metric_score": 0.0,
+        },
+    )
+
+    assert exported.status_code == 200
+    first_line = exported.text.strip().splitlines()[0]
+    assert json.loads(first_line)["dataset_id"] == dataset_id
+
+
+def test_dataset_api_export_blocks_failed_benchmark_gate(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    reference = client.post(
+        "/api/datasets/generate",
+        json={"topic": "heart failure", "count": 1},
+    )
+    dataset_id = generated.json()["dataset_id"]
+    reference_dataset_id = reference.json()["dataset_id"]
+
+    blocked = client.get(
+        f"/api/datasets/{dataset_id}/export",
+        params={
+            "export_format": "sft_jsonl",
+            "reference_dataset_id": reference_dataset_id,
+            "min_overall_score": 1.0,
+            "min_metric_score": 1.0,
+        },
+    )
+    allowed = client.get(
+        f"/api/datasets/{dataset_id}/export",
+        params={
+            "export_format": "sft_jsonl",
+            "reference_dataset_id": reference_dataset_id,
+            "min_overall_score": 1.0,
+            "min_metric_score": 1.0,
+            "allow_blocked": "true",
+        },
+    )
+
+    assert blocked.status_code == 409
+    assert "failed benchmark gate" in blocked.json()["detail"]
+    assert allowed.status_code == 200
+
+
 def test_dataset_api_exports_parquet_payload(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

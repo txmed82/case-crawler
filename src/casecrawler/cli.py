@@ -699,21 +699,48 @@ def reviews_mark(
     is_flag=True,
     help="Export even when dataset quality gates report blockers.",
 )
+@click.option(
+    "--reference-dataset-id",
+    default=None,
+    help="Optional reference dataset id required to pass benchmark gate before export",
+)
+@click.option(
+    "--min-overall-score",
+    default=0.75,
+    type=click.FloatRange(0.0, 1.0),
+    show_default=True,
+    help="Minimum benchmark overall score when --reference-dataset-id is set.",
+)
+@click.option(
+    "--min-metric-score",
+    default=0.5,
+    type=click.FloatRange(0.0, 1.0),
+    show_default=True,
+    help="Minimum benchmark metric score when --reference-dataset-id is set.",
+)
 def export_dataset(
     output: str,
     export_format: str,
     dataset_id: str | None,
     allow_blocked: bool,
+    reference_dataset_id: str | None,
+    min_overall_score: float,
+    min_metric_score: float,
 ) -> None:
     """Export synthetic datasets to fine-tuning files."""
     from casecrawler.export.fine_tuning import export_parquet_dataset, export_record
     from casecrawler.models.dataset import ExportFormat
     from casecrawler.storage.dataset_store import DatasetStore
+    from casecrawler.validation.benchmark import DatasetBenchmark
     from casecrawler.validation.quality import build_dataset_quality_report
 
     store = DatasetStore()
     if dataset_id and not store.dataset_exists(dataset_id):
         raise click.ClickException(f"Dataset {dataset_id} not found.")
+    if reference_dataset_id and not dataset_id:
+        raise click.ClickException("--reference-dataset-id requires --dataset-id.")
+    if reference_dataset_id and not store.dataset_exists(reference_dataset_id):
+        raise click.ClickException(f"Reference dataset {reference_dataset_id} not found.")
     records = list(store.iter_records(dataset_id=dataset_id))
     if dataset_id and not allow_blocked:
         report = build_dataset_quality_report(
@@ -725,6 +752,30 @@ def export_dataset(
             raise click.ClickException(
                 "Dataset is not ready for fine-tuning export. "
                 f"Blockers: {report.issue_counts_by_field}. "
+                "Use --allow-blocked to export anyway."
+            )
+    benchmark_metadata = {}
+    if dataset_id and reference_dataset_id:
+        reference_records = list(store.iter_records(dataset_id=reference_dataset_id))
+        try:
+            benchmark_report = DatasetBenchmark(
+                min_overall_score=min_overall_score,
+                min_metric_score=min_metric_score,
+            ).compare(records, reference_records)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
+        benchmark_metadata = {
+            "benchmark_reference_dataset_id": reference_dataset_id,
+            "benchmark_overall_score": benchmark_report.overall_score,
+            "benchmark_passed": benchmark_report.passed,
+            "benchmark_failing_metrics": benchmark_report.failing_metrics,
+            "benchmark_thresholds": benchmark_report.thresholds,
+        }
+        if not benchmark_report.passed and not allow_blocked:
+            raise click.ClickException(
+                "Dataset failed benchmark gate for fine-tuning export. "
+                f"Overall score: {benchmark_report.overall_score}. "
+                f"Failing metrics: {benchmark_report.failing_metrics}. "
                 "Use --allow-blocked to export anyway."
             )
     if ExportFormat(export_format) == ExportFormat.PARQUET:
@@ -744,6 +795,7 @@ def export_dataset(
             export_format=export_format,
             file_path=output,
             record_count=record_count,
+            metadata=benchmark_metadata,
         )
     click.echo(f"Exported {record_count} record(s) to {output}")
 

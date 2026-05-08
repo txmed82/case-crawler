@@ -498,8 +498,18 @@ export async function fetchDatasetQuality(datasetId: string): Promise<DatasetQua
 
 export function datasetExportUrl(
   datasetId: string,
-  exportFormat: ExportFormat = "sft_jsonl"
+  exportFormat: ExportFormat = "sft_jsonl",
+  benchmarkGate?: {
+    referenceDatasetId: string;
+    minOverallScore: number;
+    minMetricScore: number;
+  }
 ): string {
   const qs = new URLSearchParams({ export_format: exportFormat });
+  if (benchmarkGate?.referenceDatasetId) {
+    qs.set("reference_dataset_id", benchmarkGate.referenceDatasetId);
+    qs.set("min_overall_score", String(benchmarkGate.minOverallScore));
+    qs.set("min_metric_score", String(benchmarkGate.minMetricScore));
+  }
   return `${BASE}/datasets/${datasetId}/export?${qs}`;
 }

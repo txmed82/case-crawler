@@ -69,6 +69,86 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     assert "Bundle" in (tmp_path / "synthetic.fhir.ndjson").read_text()
 
 
+def test_dataset_cli_export_can_require_benchmark_gate(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generated = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    reference = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output).group(1)
+    reference_dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", reference.output).group(1)
+
+    exported = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--reference-dataset-id",
+            reference_dataset_id,
+            "--min-overall-score",
+            "0",
+            "--min-metric-score",
+            "0",
+            "--output",
+            "benchmark-gated.jsonl",
+        ],
+    )
+
+    assert exported.exit_code == 0
+    assert "Exported" in exported.output
+    assert (tmp_path / "benchmark-gated.jsonl").exists()
+
+
+def test_dataset_cli_export_blocks_failed_benchmark_gate(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generated = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    reference = runner.invoke(cli, ["generate-dataset", "heart failure", "--count", "1"])
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output).group(1)
+    reference_dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", reference.output).group(1)
+
+    blocked = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--reference-dataset-id",
+            reference_dataset_id,
+            "--min-overall-score",
+            "1",
+            "--min-metric-score",
+            "1",
+            "--output",
+            "blocked.jsonl",
+        ],
+    )
+    allowed = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--reference-dataset-id",
+            reference_dataset_id,
+            "--min-overall-score",
+            "1",
+            "--min-metric-score",
+            "1",
+            "--allow-blocked",
+            "--output",
+            "allowed.jsonl",
+        ],
+    )
+
+    assert blocked.exit_code != 0
+    assert "failed benchmark gate" in blocked.output
+    assert allowed.exit_code == 0
+    assert (tmp_path / "allowed.jsonl").exists()
+
+
 def test_dataset_cli_passes_imaging_model_options(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     captured = []
