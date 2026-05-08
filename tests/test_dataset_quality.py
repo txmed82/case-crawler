@@ -196,6 +196,14 @@ def test_quality_report_counts_clinical_text_model_policy():
     }
 
 
+def test_quality_report_release_coverage_requires_clinical_text_model_policy():
+    report = build_dataset_quality_report("ds-quality", [_record("rec-1")])
+
+    assert report.export_ready is True
+    assert report.core_artifact_coverage["clinical_text_model_policy"] is False
+    assert "clinical_text_model_policy" in report.multimodal_release_missing
+
+
 def test_quality_report_marks_multimodal_release_ready_with_core_artifacts(tmp_path):
     image_path = tmp_path / "cxr.png"
     image_path.write_bytes(_png_bytes(width=96, height=96))
@@ -262,6 +270,14 @@ def test_quality_report_marks_multimodal_release_ready_with_core_artifacts(tmp_p
                 )
             ],
             "metadata": {
+                "clinical_text_model_policy": {
+                    "backend": "deterministic",
+                    "provider": "casecrawler",
+                    "model_id": "casecrawler-template-clinical-documents",
+                    "license": "casecrawler",
+                    "gated": False,
+                    "use_policy": "deterministic_synthetic_templates_validate_outputs",
+                },
                 "time_series_model_policy": {
                     "profile": "timediff",
                     "model_id": "MuhangTian/TimeDiff",
@@ -392,6 +408,14 @@ def test_quality_report_blocks_release_when_task_reference_coverage_is_missing(
                 )
             ],
             "metadata": {
+                "clinical_text_model_policy": {
+                    "backend": "deterministic",
+                    "provider": "casecrawler",
+                    "model_id": "casecrawler-template-clinical-documents",
+                    "license": "casecrawler",
+                    "gated": False,
+                    "use_policy": "deterministic_synthetic_templates_validate_outputs",
+                },
                 "time_series_model_policy": {
                     "profile": "timediff",
                     "model_id": "MuhangTian/TimeDiff",
@@ -528,6 +552,14 @@ def test_quality_report_blocks_release_without_expected_clinical_document_famili
                 )
             ],
             "metadata": {
+                "clinical_text_model_policy": {
+                    "backend": "deterministic",
+                    "provider": "casecrawler",
+                    "model_id": "casecrawler-template-clinical-documents",
+                    "license": "casecrawler",
+                    "gated": False,
+                    "use_policy": "deterministic_synthetic_templates_validate_outputs",
+                },
                 "time_series_model_policy": {
                     "profile": "timediff",
                     "model_id": "MuhangTian/TimeDiff",
@@ -1026,6 +1058,14 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
                 )
             ],
             "metadata": {
+                "clinical_text_model_policy": {
+                    "backend": "deterministic",
+                    "provider": "casecrawler",
+                    "model_id": "casecrawler-template-clinical-documents",
+                    "license": "casecrawler",
+                    "gated": False,
+                    "use_policy": "deterministic_synthetic_templates_validate_outputs",
+                },
                 "time_series_model_policy": {
                     "profile": "timediff",
                     "model_id": "MuhangTian/TimeDiff",

@@ -22,6 +22,7 @@ REQUIRED_RELEASE_COVERAGE_KEYS = frozenset(
     {
         "approved_records",
         "benchmark_reference",
+        "clinical_text_model_policy",
         "discharge_summaries",
         "imaging_model_policy",
         "lab_reports",
