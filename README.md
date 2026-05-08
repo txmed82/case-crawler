@@ -82,7 +82,7 @@ Topic + GenerationRequest
       |
 [4. DatasetStore]          -> SQLite synthetic_records
       |
-[5. Exporters]             -> SFT/chat/multimodal/RL/FHIR/parquet profiles
+[5. Exporters]             -> SFT/note-fact/chat/multimodal/RL/FHIR/parquet profiles
 ```
 
 Optional backends are intentionally lazy:
@@ -157,6 +157,7 @@ casecrawler export-dataset \
   --min-metric-score 0.5 \
   --format sft_jsonl \
   --output train.jsonl
+casecrawler export-dataset --dataset-id <dataset_id> --format note_fact_sft_jsonl --output note_facts.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format tool_call_jsonl --output tools.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format dpo_jsonl --output preference.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format rl_jsonl --output episodes.jsonl
@@ -167,7 +168,8 @@ casecrawler export-dataset --dataset-id <dataset_id> --format parquet --output r
 Benchmark reports compare generated cohorts to stored reference datasets and
 return explicit pass/fail gates plus failing metric names. They compare across
 demographics, note types, artifact density, declared-modality artifact coverage,
-labs, vitals, medication history, time-series channels, imaging findings, and
+extracted clinical fact targets, labs, vitals, medication history, time-series
+channels and backend provenance, imaging findings and backend provenance, and
 approval rates. Export commands and API downloads can require the same benchmark
 gate by passing a reference dataset id and thresholds, which prevents unbenchmarked
 or underperforming synthetic data from silently becoming fine-tuning input.
@@ -258,12 +260,16 @@ synthetic:
   # It can also override time_series_backend, time_series_model_profile,
   # and time_series_command for external EHR time-series adapters.
   export_formats:
+    - raw_jsonl
     - sft_jsonl
+    - note_fact_sft_jsonl
     - chat_jsonl
     - tool_call_jsonl
     - multimodal_jsonl
     - dpo_jsonl
     - rl_jsonl
+    - fhir_ndjson
+    - parquet
 
 api:
   host: "0.0.0.0"

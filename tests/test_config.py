@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from casecrawler.config import load_config
+from casecrawler.models.dataset import ExportFormat
 from casecrawler.models.config import AppConfig
 
 
@@ -13,6 +16,7 @@ def test_load_default_config():
     assert config.synthetic.imaging_model_profile is None
     assert config.synthetic.diffusers_model_id == "stabilityai/stable-diffusion-2-1"
     assert config.synthetic.time_series_backend == "deterministic"
+    assert config.synthetic.export_formats == list(ExportFormat)
     assert not hasattr(config, "generation")
 
 
@@ -60,3 +64,13 @@ def test_load_synthetic_config_from_yaml(tmp_path):
     assert config.synthetic.image_output_dir == str(image_output_dir)
     assert config.synthetic.max_api_generation_count == 10
     assert config.synthetic.max_api_returned_records == 3
+
+
+def test_example_config_exposes_all_export_profiles():
+    config_path = Path(__file__).resolve().parents[1] / "config.example.yaml"
+    config = load_config(config_path=str(config_path))
+
+    assert config.synthetic.export_formats == list(ExportFormat)
+    assert ExportFormat.NOTE_FACT_SFT_JSONL in config.synthetic.export_formats
+    assert ExportFormat.FHIR_NDJSON in config.synthetic.export_formats
+    assert ExportFormat.PARQUET in config.synthetic.export_formats

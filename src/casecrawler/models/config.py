@@ -61,7 +61,20 @@ class SyntheticConfig(BaseModel):
     time_series_command: list[str] | None = None
     synthea_executable: str | None = None
     image_output_dir: str = "./data/images"
-    export_formats: list[ExportFormat] = [ExportFormat.SFT_JSONL]
+    export_formats: list[ExportFormat] = Field(
+        default_factory=lambda: [
+            ExportFormat.RAW_JSONL,
+            ExportFormat.SFT_JSONL,
+            ExportFormat.NOTE_FACT_SFT_JSONL,
+            ExportFormat.CHAT_JSONL,
+            ExportFormat.TOOL_CALL_JSONL,
+            ExportFormat.MULTIMODAL_JSONL,
+            ExportFormat.DPO_JSONL,
+            ExportFormat.RL_JSONL,
+            ExportFormat.FHIR_NDJSON,
+            ExportFormat.PARQUET,
+        ]
+    )
     max_api_generation_count: int = Field(default=100, ge=1)
     max_api_returned_records: int = Field(default=25, ge=0)
 
