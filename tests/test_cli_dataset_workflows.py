@@ -75,6 +75,7 @@ def test_dataset_cli_lists_generation_recipes():
     assert result.exit_code == 0
     assert "full_multimodal_acute_care" in result.output
     assert "icu_timeseries_notes" in result.output
+    assert "references=" in result.output
 
 
 def test_dataset_cli_reports_unknown_generation_recipe(tmp_path, monkeypatch):

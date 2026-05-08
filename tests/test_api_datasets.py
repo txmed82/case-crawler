@@ -469,6 +469,13 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert "full_multimodal_acute_care" in {
         recipe["name"] for recipe in body["generation_recipes"]
     }
+    radiology_recipe = next(
+        recipe
+        for recipe in body["generation_recipes"]
+        if recipe["name"] == "radiology_cxr_report"
+    )
+    assert "synthchex_75k" in radiology_recipe["recommended_reference_keys"]
+    assert radiology_recipe["benchmark_thresholds"]["min_overall_score"] == 0.7
     assert "topic_mix" in body["cohort_constraints"]
     assert "topic_mix_weights" in body["cohort_constraints"]
     assert "cxr_pneumonia_dreambooth" in {

@@ -190,6 +190,13 @@ def generation_recipes() -> None:
             f"{recipe.name}: complexity={recipe.complexity.value} "
             f"modalities={modalities} exports={formats}"
         )
+        if recipe.recommended_reference_keys:
+            click.echo(
+                "  references="
+                f"{','.join(recipe.recommended_reference_keys)} "
+                f"benchmark>={recipe.benchmark_min_overall_score}/"
+                f"{recipe.benchmark_min_metric_score}"
+            )
         click.echo(f"  {recipe.description}")
 
 

@@ -16,6 +16,9 @@ def test_generation_recipe_catalog_includes_multimodal_training_profiles():
     assert Modality.TIME_SERIES in recipes["full_multimodal_acute_care"].modalities
     assert ExportFormat.MULTIMODAL_JSONL in recipes["radiology_cxr_report"].export_formats
     assert recipes["icu_timeseries_notes"].cohort_constraints["topic_mix"]
+    assert "synthchex_75k" in recipes["radiology_cxr_report"].recommended_reference_keys
+    assert "rexgradient_160k" in recipes["radiology_cxr_report"].recommended_reference_keys
+    assert recipes["full_multimodal_acute_care"].benchmark_min_overall_score == 0.7
 
 
 def test_apply_generation_recipe_fills_default_request_fields():
