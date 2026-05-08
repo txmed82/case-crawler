@@ -194,6 +194,7 @@ def test_export_fhir_record_contains_training_bundle_resources():
     assert "Encounter" in resource_types
     assert "Observation" in resource_types
     assert "Condition" in resource_types
+    assert "Procedure" in resource_types
     assert "MedicationStatement" in resource_types
     assert "DocumentReference" in resource_types
     assert "DiagnosticReport" in resource_types
@@ -215,6 +216,11 @@ def test_export_fhir_record_contains_training_bundle_resources():
     assert encounter["diagnosis"][0]["condition"]["reference"] == (
         f"Condition/{conditions[0]['id']}"
     )
+    procedures = [
+        resource for resource in resources if resource["resourceType"] == "Procedure"
+    ]
+    assert procedures[0]["code"]["coding"][0]["display"] == "Central venous catheter placement"
+    assert procedures[0]["encounter"]["reference"] == "Encounter/enc-1"
 
 
 def test_export_parquet_record_flattens_modalities_for_tabular_storage():
@@ -313,6 +319,13 @@ def _multimodal_record() -> SyntheticRecord:
                         system="http://snomed.info/sct",
                         code="91302008",
                         display="Sepsis",
+                    )
+                ],
+                procedures=[
+                    Code(
+                        system="http://snomed.info/sct",
+                        code="232717009",
+                        display="Central venous catheter placement",
                     )
                 ],
             )

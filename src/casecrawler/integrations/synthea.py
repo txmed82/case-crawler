@@ -73,6 +73,7 @@ class SyntheaAdapter:
         patient_resource = _first_resource(resources, "Patient")
         encounter_resources = _resources(resources, "Encounter")
         condition_resources = _resources(resources, "Condition")
+        procedure_resources = _resources(resources, "Procedure")
         diagnostic_report_resources = _resources(resources, "DiagnosticReport")
         observation_resources = _resources(resources, "Observation")
         medication_resources = _resources(resources, "MedicationStatement")
@@ -92,6 +93,11 @@ class SyntheaAdapter:
             for diagnosis in (_condition_to_code(resource) for resource in condition_resources)
             if diagnosis is not None
         ]
+        procedures = [
+            procedure
+            for procedure in (_procedure_to_code(resource) for resource in procedure_resources)
+            if procedure is not None
+        ]
         encounters = []
         for index, resource in enumerate(encounter_resources):
             raw_period = resource.get("period") or {}
@@ -104,6 +110,7 @@ class SyntheaAdapter:
                     setting="synthea",
                     reason=_reason(resource) or topic,
                     diagnoses=diagnoses if index == 0 else [],
+                    procedures=procedures if index == 0 else [],
                 )
             )
         labs: list[LabObservation] = []
@@ -165,6 +172,13 @@ def _run_synthea_command(command: list[str]) -> None:
 
 
 def _condition_to_code(resource: dict) -> Code | None:
+    codeable = resource.get("code")
+    if not isinstance(codeable, Mapping):
+        return None
+    return _codeable_concept_to_code(codeable, fallback_code=resource.get("id"))
+
+
+def _procedure_to_code(resource: dict) -> Code | None:
     codeable = resource.get("code")
     if not isinstance(codeable, Mapping):
         return None
