@@ -166,6 +166,10 @@ casecrawler export-dataset --dataset-id <dataset_id> --format dpo_jsonl --output
 casecrawler export-dataset --dataset-id <dataset_id> --format rl_jsonl --output episodes.jsonl
 casecrawler export-dataset --dataset-id <dataset_id> --format fhir_ndjson --output fhir.ndjson
 casecrawler export-dataset --dataset-id <dataset_id> --format parquet --output records.parquet
+casecrawler export-dataset-splits \
+  --dataset-id <dataset_id> \
+  --format clinical_observation_jsonl \
+  --output-dir finetune-package
 ```
 
 Datasets generated with `--require-human-review` are blocked from export until

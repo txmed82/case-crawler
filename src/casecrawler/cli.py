@@ -955,6 +955,115 @@ def export_dataset(
     click.echo(f"Exported {record_count} record(s) to {output}")
 
 
+@cli.command("export-dataset-splits")
+@click.option("--dataset-id", required=True, help="Dataset id to export")
+@click.option("--output-dir", required=True, help="Output directory for split JSONL files")
+@click.option(
+    "--format",
+    "export_format",
+    type=click.Choice(
+        [
+            "raw_jsonl",
+            "sft_jsonl",
+            "note_fact_sft_jsonl",
+            "clinical_observation_jsonl",
+            "medication_reconciliation_jsonl",
+            "chat_jsonl",
+            "tool_call_jsonl",
+            "multimodal_jsonl",
+            "time_series_jsonl",
+            "dpo_jsonl",
+            "rl_jsonl",
+            "fhir_ndjson",
+        ]
+    ),
+    default="sft_jsonl",
+    show_default=True,
+)
+@click.option("--train-ratio", default=0.8, type=click.FloatRange(0.0), show_default=True)
+@click.option(
+    "--validation-ratio",
+    default=0.1,
+    type=click.FloatRange(0.0),
+    show_default=True,
+)
+@click.option("--test-ratio", default=0.1, type=click.FloatRange(0.0), show_default=True)
+@click.option("--seed", default="casecrawler", show_default=True)
+@click.option(
+    "--allow-blocked",
+    is_flag=True,
+    help="Export even when dataset quality gates report blockers.",
+)
+def export_dataset_splits(
+    dataset_id: str,
+    output_dir: str,
+    export_format: str,
+    train_ratio: float,
+    validation_ratio: float,
+    test_ratio: float,
+    seed: str,
+    allow_blocked: bool,
+) -> None:
+    """Export deterministic train/validation/test JSONL files and a manifest."""
+    from casecrawler.export.fine_tuning import export_jsonl_split_package
+    from casecrawler.storage.dataset_store import DatasetStore
+    from casecrawler.validation.quality import build_dataset_quality_report
+
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise click.ClickException(f"Dataset {dataset_id} not found.")
+    records = list(store.iter_records(dataset_id=dataset_id))
+    if not allow_blocked:
+        report = build_dataset_quality_report(
+            dataset_id,
+            records,
+            effective_approved=store.effective_approved,
+        )
+        if not report.export_ready:
+            raise click.ClickException(
+                "Dataset is not ready for split fine-tuning export. "
+                f"Blockers: {report.issue_counts_by_field}. "
+                "Use --allow-blocked to export anyway."
+            )
+    try:
+        manifest = export_jsonl_split_package(
+            records,
+            output_dir,
+            export_format,
+            dataset_id=dataset_id,
+            train_ratio=train_ratio,
+            validation_ratio=validation_ratio,
+            test_ratio=test_ratio,
+            seed=seed,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    store.save_export_manifest(
+        dataset_id=dataset_id,
+        export_format=export_format,
+        file_path=manifest["manifest_path"],
+        record_count=manifest["example_count"],
+        metadata={
+            "split_package": True,
+            "seed": manifest["seed"],
+            "ratios": manifest["ratios"],
+            "splits": {
+                name: {
+                    "file_path": data["file_path"],
+                    "record_count": data["record_count"],
+                    "example_count": data["example_count"],
+                }
+                for name, data in manifest["splits"].items()
+            },
+        },
+    )
+    click.echo(
+        "Exported split package "
+        f"records={manifest['record_count']} examples={manifest['example_count']} "
+        f"manifest={manifest['manifest_path']}"
+    )
+
+
 @cli.command("benchmark-dataset")
 @click.option("--dataset-id", required=True, help="Generated dataset id")
 @click.option("--reference-dataset-id", required=True, help="Reference dataset id")
