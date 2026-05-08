@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from casecrawler.config import get_config
 from casecrawler.export.cards import build_dataset_card, build_model_card
 from casecrawler.capabilities import (
+    image_validator_capabilities,
     reference_dataset_capabilities,
     release_coverage_requirements,
 )
@@ -471,23 +472,7 @@ def list_dataset_capabilities():
             }
             for profile in list_clinical_profile_catalog()
         ],
-        "validators": [
-            {
-                "key": "lexical",
-                "requires": [],
-                "description": "No-key prompt/report token overlap validator.",
-            },
-            {
-                "key": "biomedclip",
-                "requires": ["casecrawler[imaging]"],
-                "description": "Optional BiomedCLIP image-text alignment scorer.",
-            },
-            {
-                "key": "medgemma",
-                "requires": ["casecrawler[hf]", "casecrawler[imaging]", "accepted model terms"],
-                "description": "Optional gated MedGemma image/report reasoning validator.",
-            },
-        ],
+        "validators": image_validator_capabilities(),
     }
 
 

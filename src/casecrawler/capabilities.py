@@ -103,3 +103,23 @@ def reference_dataset_capabilities() -> list[dict[str, object]]:
         for key, spec in REFERENCE_DATASETS.items()
     )
     return datasets
+
+
+def image_validator_capabilities() -> list[dict[str, object]]:
+    """Return configured image-text validator backends for clients."""
+    from casecrawler.validation.image_alignment import list_image_validator_profiles
+
+    return [
+        {
+            "key": profile.key,
+            "backend": profile.backend,
+            "description": profile.description,
+            "requires": profile.requires,
+            "model_id": profile.model_id,
+            "license": profile.license,
+            "gated": profile.gated,
+            "use_policy": profile.use_policy,
+            "notes": profile.notes,
+        }
+        for profile in list_image_validator_profiles()
+    ]

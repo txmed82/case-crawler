@@ -1112,8 +1112,14 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     sepsis = next(profile for profile in body["clinical_profiles"] if profile["key"] == "sepsis")
     assert "Lactate" in sepsis["lab_names"]
     assert "Ceftriaxone" in sepsis["medication_names"]
-    assert "biomedclip" in {validator["key"] for validator in body["validators"]}
-    assert "medgemma" in {validator["key"] for validator in body["validators"]}
+    validators = {validator["key"]: validator for validator in body["validators"]}
+    assert validators["biomedclip"]["model_id"] == (
+        "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+    )
+    assert validators["biomedclip"]["license"] == "mit"
+    assert validators["medgemma"]["model_id"] == "google/medgemma-4b-it"
+    assert validators["medgemma"]["gated"] is True
+    assert "accepted model terms" in validators["medgemma"]["requires"]
 
 
 def test_dataset_api_imports_hf_reference_dataset(tmp_path, monkeypatch):
