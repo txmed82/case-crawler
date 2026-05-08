@@ -392,6 +392,76 @@ def test_verify_jsonl_split_package_validates_benchmark_report_artifact(tmp_path
     )
 
 
+def test_verify_jsonl_split_package_validates_benchmark_suite_artifact(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    reference_records = [
+        record.model_copy(update={"record_id": f"ref-{index}", "dataset_id": "ds-ref"})
+        for index, record in enumerate(records)
+    ]
+    benchmark_report = DatasetBenchmark(
+        min_overall_score=0.0,
+        min_metric_score=0.0,
+    ).compare(records, reference_records)
+    benchmark_suite = {
+        "dataset_id": "ds-split",
+        "primary_recipe": "full_multimodal_acute_care",
+        "recommended_reference_keys": ["synthchex_75k"],
+        "task_export_results": {},
+        "reference_count": 1,
+        "passed": True,
+        "mean_overall_score": benchmark_report.overall_score,
+        "thresholds": benchmark_report.thresholds,
+        "results": [
+            {
+                "reference_key": "synthchex_75k",
+                "reference_dataset_id": "ds-ref",
+                "passed": True,
+                "overall_score": benchmark_report.overall_score,
+                "failing_metrics": [],
+                "report": benchmark_report.model_dump(mode="json"),
+            }
+        ],
+    }
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+        audit_artifacts={"benchmark_suite_report.json": benchmark_suite},
+    )
+    suite_payload = json.loads((tmp_path / "benchmark_suite_report.json").read_text())
+    suite_payload["dataset_id"] = "ds-other"
+    suite_payload["results"][0]["report"]["generated_dataset_id"] = "ds-other"
+    (tmp_path / "benchmark_suite_report.json").write_text(json.dumps(suite_payload))
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    manifest["files"]["benchmark_suite_report.json"]["byte_size"] = (
+        tmp_path / "benchmark_suite_report.json"
+    ).stat().st_size
+    manifest["files"]["benchmark_suite_report.json"]["sha256"] = hashlib.sha256(
+        (tmp_path / "benchmark_suite_report.json").read_bytes()
+    ).hexdigest()
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path)
+    issue_fields = {issue["field"] for issue in report["issues"]}
+
+    assert report["valid"] is False
+    assert "audit_artifacts.benchmark_suite_report.json.dataset_id" in issue_fields
+    assert (
+        "audit_artifacts.benchmark_suite_report.json."
+        "results.0.report.generated_dataset_id"
+    ) in issue_fields
+
+
 def test_verify_jsonl_split_package_validates_quality_report_dataset_id(tmp_path):
     records = [
         _multimodal_record().model_copy(
