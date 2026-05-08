@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from casecrawler.generation.imaging_generator import ImagingGenerator
@@ -130,3 +132,38 @@ def test_diffusers_backend_rejects_incompatible_imaging_model_profile(tmp_path):
             modality="CT",
             body_region="abdomen",
         )
+
+
+def test_external_imaging_backend_accepts_asset_envelope(tmp_path):
+    calls = []
+
+    def fake_runner(command, payload):
+        calls.append((command, payload))
+        return (
+            '{"asset":{"image_id":"img-external","modality":"XR",'
+            '"body_region":"chest","prompt":"generated prompt",'
+            '"file_path":"external.png","report_text":"Right lower lobe pneumonia.",'
+            '"labels":[{"system":"external","code":"pneumonia",'
+            '"display":"Pneumonia"}]}}'
+        )
+
+    asset = ImagingGenerator(
+        external_command=["hf-image-sample"],
+        external_runner=fake_runner,
+    ).generate_external(
+        str(tmp_path),
+        "portable chest x-ray with pneumonia",
+    )
+
+    payload = json.loads(calls[0][1])
+    assert calls[0][0] == ["hf-image-sample"]
+    assert payload["output_dir"] == str(tmp_path)
+    assert payload["modality"] == "XR"
+    assert asset.image_id == "img-external"
+    assert asset.generation_backend == "external:hf-image-sample"
+    assert asset.labels[0].display == "Pneumonia"
+
+
+def test_external_imaging_backend_rejects_empty_command():
+    with pytest.raises(ValueError, match="external_command must not be empty"):
+        ImagingGenerator(external_command=[])

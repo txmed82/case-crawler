@@ -26,14 +26,16 @@ def test_generation_request_accepts_imaging_model_overrides():
     req = GenerationRequest(
         topic="pneumonia",
         modalities=[Modality.IMAGING],
-        imaging_backend="diffusers",
+        imaging_backend="external",
         imaging_model_profile="cxr_pneumonia_dreambooth",
         diffusers_model_id="hf/test-cxr",
+        imaging_command=["hf-image-sample"],
     )
 
-    assert req.imaging_backend == "diffusers"
+    assert req.imaging_backend == "external"
     assert req.imaging_model_profile == "cxr_pneumonia_dreambooth"
     assert req.diffusers_model_id == "hf/test-cxr"
+    assert req.imaging_command == ["hf-image-sample"]
 
 
 def test_generation_request_accepts_clinical_text_model_overrides():

@@ -956,6 +956,8 @@ def test_dataset_cli_passes_imaging_model_options(tmp_path, monkeypatch):
             "cxr_pneumonia_dreambooth",
             "--diffusers-model-id",
             "hf/test-cxr",
+            "--imaging-command",
+            "hf-image-sample,--profile,cxr",
         ],
     )
 
@@ -964,6 +966,7 @@ def test_dataset_cli_passes_imaging_model_options(tmp_path, monkeypatch):
     assert captured[0].imaging_backend == "diffusers"
     assert captured[0].imaging_model_profile == "cxr_pneumonia_dreambooth"
     assert captured[0].diffusers_model_id == "hf/test-cxr"
+    assert captured[0].imaging_command == ["hf-image-sample", "--profile", "cxr"]
 
 
 def test_dataset_cli_passes_time_series_model_options(tmp_path, monkeypatch):

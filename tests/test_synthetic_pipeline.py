@@ -231,6 +231,7 @@ async def test_synthetic_pipeline_rejects_invalid_topic_mix_weight():
 class FakeImagingGenerator:
     def __init__(self):
         self.diffusers_calls = []
+        self.external_calls = []
 
     def generate_diffusers(
         self,
@@ -266,6 +267,31 @@ class FakeImagingGenerator:
         body_region: str = "chest",
     ):
         raise AssertionError("Expected diffusers backend.")
+
+    def generate_external(
+        self,
+        output_dir: str,
+        prompt: str,
+        modality: str = "XR",
+        body_region: str = "chest",
+    ):
+        self.external_calls.append((output_dir, prompt, modality, body_region))
+        return ImagingAsset(
+            image_id="img-external-test",
+            modality=modality,
+            body_region=body_region,
+            prompt=prompt,
+            file_path="external.png",
+            report_text=f"External synthetic {modality} image for {prompt}",
+            labels=[
+                Code(
+                    system="external",
+                    code="pneumonia",
+                    display="Pneumonia",
+                )
+            ],
+            generation_backend="external:hf-image-sample",
+        )
 
 
 class FakeTimeSeriesGenerator:
@@ -337,7 +363,12 @@ async def test_synthetic_pipeline_uses_request_imaging_model_profile(monkeypatch
     created = []
 
     class RequestScopedImagingGenerator(FakeImagingGenerator):
-        def __init__(self, diffusers_model_id: str, imaging_model_profile: str):
+        def __init__(
+            self,
+            diffusers_model_id: str,
+            imaging_model_profile: str,
+            **_kwargs,
+        ):
             super().__init__()
             created.append((diffusers_model_id, imaging_model_profile))
 
@@ -372,6 +403,64 @@ async def test_synthetic_pipeline_uses_request_imaging_model_profile(monkeypatch
         "gated": False,
         "use_policy": "openrail_review_outputs_before_release",
     }
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_allows_request_external_imaging_backend(
+    monkeypatch,
+    tmp_path,
+):
+    created = []
+
+    class RequestScopedImagingGenerator(FakeImagingGenerator):
+        def __init__(self, **kwargs):
+            super().__init__()
+            created.append(kwargs.get("external_command"))
+
+    monkeypatch.setattr(
+        "casecrawler.generation.synthetic_pipeline.ImagingGenerator",
+        RequestScopedImagingGenerator,
+    )
+    pipeline = SyntheticPipeline(
+        imaging_generator=FakeImagingGenerator(),
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="pneumonia",
+            count=1,
+            modalities=[Modality.IMAGING],
+            imaging_backend="external",
+            imaging_command=["hf-image-sample"],
+        )
+    )
+
+    assert created == [["hf-image-sample"]]
+    assert result["records"][0].imaging[0].generation_backend == (
+        "external:hf-image-sample"
+    )
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_rejects_external_imaging_without_command(tmp_path):
+    pipeline = SyntheticPipeline(
+        validator=SyntheticValidator(),
+        image_output_dir=str(tmp_path),
+        image_backend="placeholder",
+    )
+
+    with pytest.raises(ValueError, match="requires imaging_command"):
+        await pipeline.generate(
+            GenerationRequest(
+                topic="pneumonia",
+                count=1,
+                modalities=[Modality.IMAGING],
+                imaging_backend="external",
+            )
+        )
 
 
 @pytest.mark.asyncio

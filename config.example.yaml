@@ -38,15 +38,21 @@ synthetic:
   # Per-request cohort_constraints can include:
   # age_min, age_max, sexes, sex_cycle, and base_time.
   # GenerationRequest can override imaging_backend, imaging_model_profile,
-  # and diffusers_model_id for a single dataset generation run.
-  imaging_backend: "placeholder" # placeholder or diffusers
+  # diffusers_model_id, and imaging_command for a single dataset generation run.
+  imaging_backend: "placeholder" # placeholder, diffusers, or external
   imaging_model_profile: null # e.g. cxr_pneumonia_dreambooth
   diffusers_model_id: "stabilityai/stable-diffusion-2-1"
+  imaging_command: null # e.g. ["hf-image-sample", "--model", "local-cxr"]
+  # External imaging commands receive stdin JSON with output_dir, prompt,
+  # modality, and body_region. They must print an ImagingAsset JSON object
+  # or {"asset": ImagingAsset} to stdout.
   # GenerationRequest can override time_series_backend,
   # time_series_model_profile, and time_series_command per run.
   time_series_backend: "deterministic" # deterministic or external
   time_series_model_profile: null # e.g. timediff or rawmed
   time_series_command: null # e.g. ["timediff-sample", "--checkpoint", "local.pt"]
+  # External time-series commands may print TimeSeriesChannel[] or
+  # {"channels": [TimeSeriesChannel, ...]} to stdout.
   synthea_executable: null
   image_output_dir: "./data/images"
   export_formats:

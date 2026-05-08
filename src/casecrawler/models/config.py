@@ -56,6 +56,7 @@ class SyntheticConfig(BaseModel):
     imaging_backend: str = "placeholder"
     imaging_model_profile: str | None = None
     diffusers_model_id: str = "stabilityai/stable-diffusion-2-1"
+    imaging_command: list[str] | None = None
     time_series_backend: str = "deterministic"
     time_series_model_profile: str | None = None
     time_series_command: list[str] | None = None

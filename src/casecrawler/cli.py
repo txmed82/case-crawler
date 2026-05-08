@@ -579,7 +579,7 @@ def serve() -> None:
 @click.option(
     "--imaging-backend",
     default=None,
-    type=click.Choice(["placeholder", "diffusers"]),
+    type=click.Choice(["placeholder", "diffusers", "external"]),
     help="Override synthetic imaging backend for this generation request",
 )
 @click.option(
@@ -591,6 +591,11 @@ def serve() -> None:
     "--diffusers-model-id",
     default=None,
     help="Override Hugging Face diffusers model id for this generation request",
+)
+@click.option(
+    "--imaging-command",
+    default=None,
+    help="Comma-separated external imaging command for this request",
 )
 @click.option(
     "--time-series-backend",
@@ -632,6 +637,7 @@ def generate_dataset(
     imaging_backend: str | None,
     imaging_model_profile: str | None,
     diffusers_model_id: str | None,
+    imaging_command: str | None,
     time_series_backend: str | None,
     time_series_model_profile: str | None,
     time_series_command: str | None,
@@ -666,6 +672,11 @@ def generate_dataset(
         if time_series_command
         else None
     )
+    parsed_imaging_command = (
+        [value.strip() for value in imaging_command.split(",") if value.strip()]
+        if imaging_command
+        else None
+    )
     try:
         selected_modalities = (
             [Modality(value.strip()) for value in modalities.split(",") if value.strip()]
@@ -688,6 +699,7 @@ def generate_dataset(
             imaging_backend=imaging_backend,
             imaging_model_profile=imaging_model_profile,
             diffusers_model_id=diffusers_model_id,
+            imaging_command=parsed_imaging_command,
             time_series_backend=time_series_backend,
             time_series_model_profile=time_series_model_profile,
             time_series_command=parsed_time_series_command,
@@ -744,7 +756,7 @@ def generate_dataset(
     "--imaging-backend",
     default="placeholder",
     show_default=True,
-    type=click.Choice(["placeholder", "diffusers"]),
+    type=click.Choice(["placeholder", "diffusers", "external"]),
     help="Synthetic imaging backend for generated assets.",
 )
 @click.option(
@@ -753,6 +765,11 @@ def generate_dataset(
     help="Built-in imaging model profile, for example prompt2medimage.",
 )
 @click.option("--diffusers-model-id", default=None, help="Hugging Face diffusers model id.")
+@click.option(
+    "--imaging-command",
+    default=None,
+    help="Comma-separated external imaging command for release package generation.",
+)
 @click.option(
     "--fixture-limit",
     default=1,
@@ -784,6 +801,7 @@ def generate_release_package(
     imaging_backend: str,
     imaging_model_profile: str | None,
     diffusers_model_id: str | None,
+    imaging_command: str | None,
     fixture_limit: int,
     min_overall_score: float,
     min_metric_score: float,
@@ -817,6 +835,11 @@ def generate_release_package(
     )
 
     try:
+        parsed_imaging_command = (
+            [value.strip() for value in imaging_command.split(",") if value.strip()]
+            if imaging_command
+            else None
+        )
         req = GenerationRequest(
             topic=topic,
             count=count,
@@ -825,6 +848,7 @@ def generate_release_package(
             imaging_backend=imaging_backend,
             imaging_model_profile=imaging_model_profile,
             diffusers_model_id=diffusers_model_id,
+            imaging_command=parsed_imaging_command,
         )
         result = asyncio.run(SyntheticPipeline().generate(req))
     except ValueError as exc:

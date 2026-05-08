@@ -73,9 +73,10 @@ class GenerationRequest(BaseModel):
     llm_provider: str | None = Field(default=None, min_length=1)
     llm_model: str | None = Field(default=None, min_length=1)
     ollama_base_url: str | None = Field(default=None, min_length=1)
-    imaging_backend: Literal["placeholder", "diffusers"] | None = None
+    imaging_backend: Literal["placeholder", "diffusers", "external"] | None = None
     imaging_model_profile: str | None = Field(default=None, min_length=1)
     diffusers_model_id: str | None = Field(default=None, min_length=1)
+    imaging_command: list[str] | None = Field(default=None, min_length=1)
     time_series_backend: Literal["deterministic", "external"] | None = None
     time_series_model_profile: str | None = Field(default=None, min_length=1)
     time_series_command: list[str] | None = Field(default=None, min_length=1)

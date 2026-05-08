@@ -55,6 +55,7 @@ class SyntheticPipeline:
         self._imaging_generator = imaging_generator or ImagingGenerator(
             diffusers_model_id=config.synthetic.diffusers_model_id,
             imaging_model_profile=config.synthetic.imaging_model_profile,
+            external_command=config.synthetic.imaging_command,
         )
         self._modality_planner = modality_planner or ModalityPlanner()
         self._validator = validator
@@ -171,10 +172,21 @@ class SyntheticPipeline:
                 modality=request.modality,
                 body_region=request.body_region,
             )
+        if image_backend == "external":
+            if not req.imaging_command:
+                raise ValueError(
+                    "External synthetic imaging backend requires imaging_command."
+                )
+            return imaging_generator.generate_external(
+                output_dir=self._image_output_dir,
+                prompt=request.prompt,
+                modality=request.modality,
+                body_region=request.body_region,
+            )
         raise ValueError(f"Unknown synthetic imaging backend: {image_backend}")
 
     def _imaging_generator_for(self, req: GenerationRequest) -> ImagingGenerator:
-        if not (req.imaging_model_profile or req.diffusers_model_id):
+        if not (req.imaging_model_profile or req.diffusers_model_id or req.imaging_command):
             return self._imaging_generator
         return ImagingGenerator(
             diffusers_model_id=(
@@ -184,6 +196,7 @@ class SyntheticPipeline:
                 req.imaging_model_profile
                 or self._config.synthetic.imaging_model_profile
             ),
+            external_command=req.imaging_command or self._config.synthetic.imaging_command,
         )
 
     def _time_series_generator_for(self, req: GenerationRequest) -> TimeSeriesGenerator:

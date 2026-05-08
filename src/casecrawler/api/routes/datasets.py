@@ -89,9 +89,10 @@ class ReleasePackageRequest(BaseModel):
     validation_ratio: float = Field(default=0.1, ge=0.0)
     test_ratio: float = Field(default=0.1, ge=0.0)
     seed: str = "casecrawler"
-    imaging_backend: Literal["placeholder", "diffusers"] = "placeholder"
+    imaging_backend: Literal["placeholder", "diffusers", "external"] = "placeholder"
     imaging_model_profile: str | None = Field(default=None, min_length=1)
     diffusers_model_id: str | None = Field(default=None, min_length=1)
+    imaging_command: list[str] | None = Field(default=None, min_length=1)
     fixture_limit: int = Field(default=1, ge=1)
     min_overall_score: float = Field(default=0.0, ge=0.0, le=1.0)
     min_metric_score: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -156,6 +157,7 @@ async def generate_release_package(req: ReleasePackageRequest):
             imaging_backend=req.imaging_backend,
             imaging_model_profile=req.imaging_model_profile,
             diffusers_model_id=req.diffusers_model_id,
+            imaging_command=req.imaging_command,
         )
         result = await SyntheticPipeline().generate(generation_request)
     except ValueError as err:
