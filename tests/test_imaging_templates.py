@@ -47,6 +47,26 @@ def test_infer_imaging_labels_from_prompt_synonyms():
     assert [label.display for label in labels] == ["Opacity", "Pleural effusion"]
 
 
+def test_infer_imaging_labels_ignores_negated_findings():
+    labels = infer_imaging_labels(
+        "portable chest x-ray with no pneumothorax or pleural effusion",
+        modality="XR",
+    )
+
+    assert [label.display for label in labels] == [
+        "No acute cardiopulmonary abnormality"
+    ]
+
+
+def test_infer_imaging_labels_keeps_explicit_absence_labels():
+    labels = infer_imaging_labels(
+        "Noncontrast head CT with no acute intracranial hemorrhage",
+        modality="CT",
+    )
+
+    assert [label.display for label in labels] == ["No acute intracranial hemorrhage"]
+
+
 def test_infer_imaging_labels_for_abdominal_and_neuro_prompts():
     labels = infer_imaging_labels(
         "CT abdomen with dilated appendix, appendiceal wall thickening, fat stranding",
