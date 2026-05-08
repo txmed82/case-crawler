@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 from collections.abc import Iterable
 from datetime import datetime, timezone
@@ -850,6 +851,117 @@ def export_record_payloads(
     if resolved_format == ExportFormat.TIME_SERIES_JSONL:
         return export_time_series_records(record)
     return [export_record(record, resolved_format)]
+
+
+def export_jsonl_split_package(
+    records: Iterable[SyntheticRecord],
+    output_dir: str | Path,
+    export_format: str | ExportFormat,
+    *,
+    dataset_id: str | None = None,
+    train_ratio: float = 0.8,
+    validation_ratio: float = 0.1,
+    test_ratio: float = 0.1,
+    seed: str = "casecrawler",
+) -> dict[str, Any]:
+    """Write deterministic train/validation/test JSONL files plus a manifest."""
+    resolved_format = ExportFormat(export_format)
+    if resolved_format == ExportFormat.PARQUET:
+        raise ValueError("Split package export writes JSONL profiles, not parquet.")
+    record_list = list(records)
+    ratios = _normalized_split_ratios(train_ratio, validation_ratio, test_ratio)
+    split_records = _split_records(record_list, ratios=ratios, seed=seed)
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    split_entries = {}
+    total_examples = 0
+    for split_name, split_items in split_records.items():
+        file_path = output_path / f"{split_name}.jsonl"
+        example_count = 0
+        with file_path.open("w") as f:
+            for record in split_items:
+                for payload in export_record_payloads(record, resolved_format):
+                    f.write(json.dumps(payload, sort_keys=True) + "\n")
+                    example_count += 1
+        total_examples += example_count
+        split_entries[split_name] = {
+            "file_path": str(file_path),
+            "record_count": len(split_items),
+            "example_count": example_count,
+            "record_ids": [record.record_id for record in split_items],
+        }
+
+    manifest = {
+        "dataset_id": dataset_id or _dataset_id(record_list),
+        "export_format": resolved_format.value,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "seed": seed,
+        "ratios": {
+            "train": ratios[0],
+            "validation": ratios[1],
+            "test": ratios[2],
+        },
+        "record_count": len(record_list),
+        "example_count": total_examples,
+        "splits": split_entries,
+        "synthetic": True,
+    }
+    manifest_path = output_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    manifest["manifest_path"] = str(manifest_path)
+    return manifest
+
+
+def _split_records(
+    records: list[SyntheticRecord],
+    *,
+    ratios: tuple[float, float, float],
+    seed: str,
+) -> dict[str, list[SyntheticRecord]]:
+    ordered = sorted(
+        records,
+        key=lambda record: _split_sort_key(record.record_id, seed),
+    )
+    record_count = len(ordered)
+    train_count = int(record_count * ratios[0])
+    validation_count = int(record_count * ratios[1])
+    if record_count > 0 and train_count == 0:
+        train_count = 1
+    if record_count >= 3 and validation_count == 0 and ratios[1] > 0:
+        validation_count = 1
+    if train_count + validation_count > record_count:
+        validation_count = max(0, record_count - train_count)
+    return {
+        "train": ordered[:train_count],
+        "validation": ordered[train_count : train_count + validation_count],
+        "test": ordered[train_count + validation_count :],
+    }
+
+
+def _split_sort_key(record_id: str, seed: str) -> str:
+    return hashlib.sha256(f"{seed}:{record_id}".encode("utf-8")).hexdigest()
+
+
+def _normalized_split_ratios(
+    train_ratio: float,
+    validation_ratio: float,
+    test_ratio: float,
+) -> tuple[float, float, float]:
+    ratios = (float(train_ratio), float(validation_ratio), float(test_ratio))
+    if any(ratio < 0 for ratio in ratios):
+        raise ValueError("Split ratios must be non-negative.")
+    total = sum(ratios)
+    if total <= 0:
+        raise ValueError("At least one split ratio must be greater than zero.")
+    return tuple(ratio / total for ratio in ratios)
+
+
+def _dataset_id(records: list[SyntheticRecord]) -> str | None:
+    dataset_ids = {record.dataset_id for record in records}
+    if len(dataset_ids) == 1:
+        return next(iter(dataset_ids))
+    return None
 
 
 def _clinical_context(record: SyntheticRecord) -> dict[str, Any]:

@@ -89,6 +89,48 @@ def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):
     assert {line["task"] for line in note_fact_lines} == {"extract_clinical_facts_from_note"}
 
 
+def test_dataset_cli_exports_split_fine_tuning_package(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generate = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "3"])
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generate.output).group(1)
+    exported = runner.invoke(
+        cli,
+        [
+            "export-dataset-splits",
+            "--dataset-id",
+            dataset_id,
+            "--output-dir",
+            "split-package",
+            "--format",
+            "sft_jsonl",
+            "--train-ratio",
+            "0.34",
+            "--validation-ratio",
+            "0.33",
+            "--test-ratio",
+            "0.33",
+            "--seed",
+            "unit-test",
+        ],
+    )
+
+    manifest = json.loads((tmp_path / "split-package" / "manifest.json").read_text())
+    exports = DatasetStore().list_export_manifests(dataset_id=dataset_id)
+
+    assert exported.exit_code == 0
+    assert "Exported split package" in exported.output
+    assert manifest["record_count"] == 3
+    assert manifest["example_count"] == 3
+    assert manifest["splits"]["train"]["record_count"] == 1
+    assert manifest["splits"]["validation"]["record_count"] == 1
+    assert manifest["splits"]["test"]["record_count"] == 1
+    assert (tmp_path / "split-package" / "train.jsonl").exists()
+    assert exports[0].metadata["split_package"] is True
+    assert exports[0].metadata["seed"] == "unit-test"
+
+
 def test_dataset_cli_blocks_export_until_required_human_review(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

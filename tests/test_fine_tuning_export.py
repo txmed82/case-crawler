@@ -7,6 +7,7 @@ from casecrawler.export.fine_tuning import (
     export_dpo_record,
     export_chat_record,
     export_fhir_record,
+    export_jsonl_split_package,
     export_medication_reconciliation_records,
     export_multimodal_record,
     export_note_fact_sft_records,
@@ -100,6 +101,52 @@ def test_export_sft_extract_record_targets_full_structured_context():
     assert assistant_payload["imaging"][0]["image_id"] == "img-1"
     assert assistant_payload["provenance"]["generator"] == "unit-test"
     assert assistant_payload["synthetic"] is True
+
+
+def test_export_jsonl_split_package_writes_manifest_and_stable_splits(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(5)
+    ]
+
+    manifest = export_jsonl_split_package(
+        records,
+        tmp_path,
+        "clinical_observation_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.6,
+        validation_ratio=0.2,
+        test_ratio=0.2,
+        seed="unit-test",
+    )
+    repeated = export_jsonl_split_package(
+        records,
+        tmp_path / "repeat",
+        "clinical_observation_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.6,
+        validation_ratio=0.2,
+        test_ratio=0.2,
+        seed="unit-test",
+    )
+
+    assert manifest["dataset_id"] == "ds-split"
+    assert manifest["export_format"] == "clinical_observation_jsonl"
+    assert manifest["record_count"] == 5
+    assert manifest["splits"]["train"]["record_count"] == 3
+    assert manifest["splits"]["validation"]["record_count"] == 1
+    assert manifest["splits"]["test"]["record_count"] == 1
+    assert manifest["splits"]["train"]["example_count"] == 6
+    assert manifest["splits"]["train"]["record_ids"] == repeated["splits"]["train"]["record_ids"]
+    assert (tmp_path / "manifest.json").exists()
+    assert (tmp_path / "train.jsonl").read_text().count("\n") == 6
+    first_payload = json.loads((tmp_path / "train.jsonl").read_text().splitlines()[0])
+    assert first_payload["task"] in {
+        "clinical_lab_observation_interpretation",
+        "clinical_vital_observation_interpretation",
+    }
 
 
 def test_export_note_fact_sft_records_creates_document_level_examples():
