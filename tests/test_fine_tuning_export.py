@@ -19,6 +19,7 @@ from casecrawler.export.fine_tuning import (
     export_sft_record,
     export_time_series_records,
     export_tool_call_record,
+    verify_jsonl_split_package,
 )
 from casecrawler.models.synthetic import (
     ClinicalDocument,
@@ -169,6 +170,67 @@ def test_export_jsonl_split_package_writes_manifest_and_stable_splits(tmp_path):
         "clinical_lab_observation_interpretation",
         "clinical_vital_observation_interpretation",
     }
+
+
+def test_verify_jsonl_split_package_accepts_valid_moved_package(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(4)
+    ]
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.5,
+        validation_ratio=0.25,
+        test_ratio=0.25,
+        seed="unit-test",
+        audit_artifacts={"quality_report.json": {"export_ready": True}},
+    )
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    for file_metadata in manifest["files"].values():
+        file_metadata["path"] = "/moved/package/location"
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest, sort_keys=True))
+
+    report = verify_jsonl_split_package(tmp_path)
+
+    assert report["valid"] is True
+    assert report["dataset_id"] == "ds-split"
+    assert report["checked_files"]["train.jsonl"]["exists"] is True
+    assert report["splits"]["train"]["example_count"] == 2
+
+
+def test_verify_jsonl_split_package_rejects_tampered_checksum_and_counts(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+    )
+    with (tmp_path / "train.jsonl").open("a") as f:
+        f.write('{"record_id": "rec-extra"}\n')
+
+    report = verify_jsonl_split_package(tmp_path)
+
+    assert report["valid"] is False
+    issue_fields = {issue["field"] for issue in report["issues"]}
+    assert "files.train.jsonl.byte_size" in issue_fields
+    assert "files.train.jsonl.sha256" in issue_fields
+    assert "splits.train.example_count" in issue_fields
+    assert "splits.train.record_ids" in issue_fields
 
 
 def test_export_note_fact_sft_records_creates_document_level_examples():

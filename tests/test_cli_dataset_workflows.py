@@ -139,6 +139,11 @@ def test_dataset_cli_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert exports[0].metadata["split_package"] is True
     assert exports[0].metadata["seed"] == "unit-test"
     assert "quality_report.json" in exports[0].metadata["audit_artifacts"]
+    verified = runner.invoke(cli, ["verify-split-package", "split-package"])
+    assert verified.exit_code == 0
+    verify_report = json.loads(verified.output)
+    assert verify_report["valid"] is True
+    assert verify_report["splits"]["train"]["example_count"] == 1
 
 
 def test_dataset_cli_blocks_profile_specific_export_when_artifacts_missing(tmp_path, monkeypatch):
