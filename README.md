@@ -169,6 +169,9 @@ casecrawler export-dataset --dataset-id <dataset_id> --format parquet --output r
 casecrawler export-dataset-splits \
   --dataset-id <dataset_id> \
   --format clinical_observation_jsonl \
+  --reference-dataset-id ds-asclepius-ref \
+  --min-overall-score 0.8 \
+  --min-metric-score 0.5 \
   --output-dir finetune-package
 ```
 
