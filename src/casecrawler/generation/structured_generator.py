@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import NamedTuple
 from uuid import NAMESPACE_URL, uuid5
 
@@ -59,20 +59,18 @@ class StructuredGenerator:
             demographics=_patient_demographics(req.cohort_constraints, age, sex, index),
             social_history=_social_history_for_index(req.cohort_constraints, index),
         )
-        encounter = Encounter(
-            encounter_id=f"enc-{uuid5(NAMESPACE_URL, f'{stable_prefix}:encounter')}",
-            start=now,
-            setting="emergency_department",
-            reason=req.topic,
-            diagnoses=[
-                Code(
-                    system="synthetic",
-                    code=profile.diagnosis_code,
-                    display=profile.diagnosis_display,
-                ),
-                *_complexity_diagnoses(req.complexity, req.topic),
-            ],
+        encounters = _encounter_timeline(
+            stable_prefix=stable_prefix,
+            base_time=now,
+            topic=req.topic,
+            primary_diagnosis=Code(
+                system="synthetic",
+                code=profile.diagnosis_code,
+                display=profile.diagnosis_display,
+            ),
+            complexity_diagnoses=_complexity_diagnoses(req.complexity, req.topic),
             procedures=_complexity_procedures(req.complexity, req.topic),
+            encounter_count=_encounter_count(req.cohort_constraints),
         )
         include_labs = _includes_modality(req, "labs")
         include_vitals = _includes_modality(req, "vitals")
@@ -84,7 +82,7 @@ class StructuredGenerator:
             complexity=req.complexity,
             modalities=req.modalities,
             patient=patient,
-            encounters=[encounter],
+            encounters=encounters,
             labs=[
                 _lab_observation(lab, now, index)
                 for lab in [*profile.labs, *_complexity_labs(req.complexity, req.topic)]
@@ -141,6 +139,45 @@ def _normalize_base_time(value) -> str:
         "cohort_constraints.base_time must be a datetime or ISO-8601 string, "
         f"got {value!r}"
     )
+
+
+def _encounter_count(cohort_constraints: dict) -> int:
+    count = _coerce_int(cohort_constraints.get("encounter_count", 1), "encounter_count")
+    if count < 1:
+        raise ValueError("cohort_constraints.encounter_count must be at least 1.")
+    if count > 30:
+        raise ValueError("cohort_constraints.encounter_count must be <= 30.")
+    return count
+
+
+def _encounter_timeline(
+    *,
+    stable_prefix: str,
+    base_time: str,
+    topic: str,
+    primary_diagnosis: Code,
+    complexity_diagnoses: list[Code],
+    procedures: list[Code],
+    encounter_count: int,
+) -> list[Encounter]:
+    start = datetime.fromisoformat(base_time)
+    encounters = []
+    diagnoses = [primary_diagnosis, *complexity_diagnoses]
+    for index in range(encounter_count):
+        encounter_start = start + timedelta(days=index)
+        encounter_end = encounter_start + timedelta(hours=6)
+        encounters.append(
+            Encounter(
+                encounter_id=f"enc-{uuid5(NAMESPACE_URL, f'{stable_prefix}:encounter:{index}')}",
+                start=encounter_start.isoformat(),
+                end=encounter_end.isoformat(),
+                setting="emergency_department" if index == 0 else "outpatient_follow_up",
+                reason=topic if index == 0 else f"{topic} follow-up {index + 1}",
+                diagnoses=diagnoses,
+                procedures=procedures if index == 0 else [],
+            )
+        )
+    return encounters
 
 
 def _stable_record_seed(dataset_id: str, req: GenerationRequest, index: int) -> str:
@@ -294,6 +331,7 @@ def _metadata_cohort_constraints(cohort_constraints: dict) -> dict:
         "base_time",
         "topic_mix",
         "topic_mix_weights",
+        "encounter_count",
     ]
     metadata = {
         key: cohort_constraints[key]
