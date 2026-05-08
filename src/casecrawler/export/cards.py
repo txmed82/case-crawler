@@ -19,6 +19,9 @@ def build_dataset_card(
     generation_overrides = _generation_override_counts(records)
     extracted_fact_counts = _extracted_fact_counts(records)
     procedure_counts = _procedure_counts(records)
+    diagnosis_code_system_counts = _diagnosis_code_system_counts(records)
+    diagnosis_code_counts = _diagnosis_code_counts(records)
+    phi_entity_counts = _phi_entity_counts(records)
     review_counts = Counter(
         record.metadata.get("human_review", {}).get("status", "unreviewed")
         for record in records
@@ -53,6 +56,20 @@ def build_dataset_card(
             "## Procedures",
             "",
             *_counter_lines(procedure_counts or Counter({"none": 1})),
+            "",
+            "## Diagnosis Coding Signals",
+            "",
+            "### Code Systems",
+            "",
+            *_counter_lines(diagnosis_code_system_counts or Counter({"none": 1})),
+            "",
+            "### Diagnosis Codes",
+            "",
+            *_counter_lines(diagnosis_code_counts or Counter({"none": 1})),
+            "",
+            "## PHI Annotation Signals",
+            "",
+            *_counter_lines(phi_entity_counts or Counter({"none": 1})),
             "",
             "## Human Review",
             "",
@@ -116,6 +133,9 @@ def build_model_card(
     procedure_counts = _procedure_counts(records)
     generation_overrides = _generation_override_counts(records)
     imaging_model_policies = _imaging_model_policy_counts(records)
+    diagnosis_code_system_counts = _diagnosis_code_system_counts(records)
+    diagnosis_code_counts = _diagnosis_code_counts(records)
+    phi_entity_counts = _phi_entity_counts(records)
     return "\n".join(
         [
             f"# Model Card: {manifest.name} synthetic generation pipeline",
@@ -151,6 +171,20 @@ def build_model_card(
             "## Procedure Coverage",
             "",
             *_counter_lines(procedure_counts or Counter({"none": 1})),
+            "",
+            "## Diagnosis Coding Signals",
+            "",
+            "### Code Systems",
+            "",
+            *_counter_lines(diagnosis_code_system_counts or Counter({"none": 1})),
+            "",
+            "### Diagnosis Codes",
+            "",
+            *_counter_lines(diagnosis_code_counts or Counter({"none": 1})),
+            "",
+            "## PHI Annotation Signals",
+            "",
+            *_counter_lines(phi_entity_counts or Counter({"none": 1})),
             "",
             "## Request-Scoped Overrides",
             "",
@@ -252,6 +286,64 @@ def _procedure_counts(records: list[SyntheticRecord]) -> Counter[str]:
             for procedure in encounter.procedures:
                 counter[procedure.display] += 1
     return counter
+
+
+def _diagnosis_code_system_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        for encounter in record.encounters:
+            for diagnosis in encounter.diagnoses:
+                if diagnosis.system:
+                    counter[diagnosis.system] += 1
+    return counter
+
+
+def _diagnosis_code_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        for encounter in record.encounters:
+            for diagnosis in encounter.diagnoses:
+                if diagnosis.code:
+                    counter[_diagnosis_code_key(diagnosis)] += 1
+    return counter
+
+
+def _phi_entity_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        for document in record.documents:
+            _count_phi_entities(document.extracted_facts, counter)
+    return counter
+
+
+def _count_phi_entities(
+    extracted_facts: dict,
+    phi_entity_counts: Counter[str],
+) -> None:
+    annotations = extracted_facts.get("phi_annotations")
+    if isinstance(annotations, list):
+        for annotation in annotations:
+            if not isinstance(annotation, dict):
+                continue
+            entity_type = str(annotation.get("entity_type") or "").strip()
+            if entity_type:
+                phi_entity_counts[entity_type] += 1
+        return
+    counts = extracted_facts.get("phi_entity_counts")
+    if isinstance(counts, dict):
+        for entity_type, count in counts.items():
+            if not str(entity_type).strip():
+                continue
+            try:
+                phi_entity_counts[str(entity_type)] += int(count)
+            except (TypeError, ValueError):
+                continue
+
+
+def _diagnosis_code_key(diagnosis) -> str:
+    system = diagnosis.system or "unspecified"
+    code = diagnosis.code or "unspecified"
+    return f"{system}:{code}"
 
 
 def _has_fact_value(value: object) -> bool:
