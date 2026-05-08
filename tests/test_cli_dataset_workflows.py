@@ -498,6 +498,16 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     assert release_summary["quality_report"]["time_series_channel_counts"]
     assert release_summary["quality_report"]["mean_time_series_points"] > 0
     assert release_summary["quality_report"]["mean_time_series_duration_hours"] >= 0
+    assert release_summary["quality_report"]["race_counts"] == {"synthetic_race_a": 1}
+    assert release_summary["quality_report"]["ethnicity_counts"] == {
+        "synthetic_ethnicity_a": 1
+    }
+    assert release_summary["quality_report"]["insurance_counts"] == {
+        "synthetic_plan_a": 1
+    }
+    assert release_summary["quality_report"]["social_history_counts"][
+        "smoking_status"
+    ] == {"former": 1}
     assert release_summary["benchmark_suite"]["passed"] is True
     assert benchmark_suite["reference_count"] >= 1
     assert (
