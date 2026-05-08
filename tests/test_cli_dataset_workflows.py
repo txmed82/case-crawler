@@ -583,6 +583,8 @@ def test_dataset_cli_generates_modalities_and_cohort_constraints(tmp_path, monke
             "pulmonary embolism:2,sepsis:1",
             "--base-time",
             "2026-02-03T04:05:06",
+            "--encounter-count",
+            "2",
         ],
     )
     match = re.search(r"Dataset: (ds-[0-9a-f-]+)", generate.output)
@@ -600,9 +602,37 @@ def test_dataset_cli_generates_modalities_and_cohort_constraints(tmp_path, monke
         "pulmonary embolism:2",
         "sepsis:1",
     ]
+    assert records[0].metadata["cohort_constraints"]["encounter_count"] == 2
+    assert len(records[0].encounters) == 2
     assert Modality.IMAGING in records[0].modalities
     assert {record.imaging[0].modality for record in records} == {"CTA"}
     assert records[0].time_series
+
+
+def test_dataset_cli_accepts_time_series_export_profile(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    generated = runner.invoke(cli, ["generate-dataset", "sepsis", "--count", "1"])
+    assert generated.exit_code == 0
+    match = re.search(r"Dataset: (ds-[0-9a-f-]+)", generated.output)
+    assert match, f"Failed to find dataset id in output: {generated.output}"
+
+    result = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            match.group(1),
+            "--format",
+            "time_series_jsonl",
+            "--output",
+            "time-series.jsonl",
+            "--allow-blocked",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert (tmp_path / "time-series.jsonl").exists()
 
 
 def test_dataset_cli_benchmark_against_reference_dataset(tmp_path, monkeypatch):

@@ -56,6 +56,7 @@ export default function GeneratePage() {
   const [sexes, setSexes] = useState<SexOption[]>([]);
   const [topicMix, setTopicMix] = useState("");
   const [baseTime, setBaseTime] = useState("");
+  const [encounterCount, setEncounterCount] = useState("");
   const [modalities, setModalities] = useState<SyntheticModality[]>([
     "structured_ehr",
     "clinical_text",
@@ -156,11 +157,21 @@ export default function GeneratePage() {
     }
     const parsedAgeMin = ageMin === "" ? undefined : Number(ageMin);
     const parsedAgeMax = ageMax === "" ? undefined : Number(ageMax);
+    const parsedEncounterCount = encounterCount === "" ? undefined : Number(encounterCount);
     if (
       (parsedAgeMin !== undefined && (!Number.isInteger(parsedAgeMin) || parsedAgeMin < 0)) ||
       (parsedAgeMax !== undefined && (!Number.isInteger(parsedAgeMax) || parsedAgeMax < 0))
     ) {
       setError("Age limits must be non-negative whole numbers.");
+      return;
+    }
+    if (
+      parsedEncounterCount !== undefined &&
+      (!Number.isInteger(parsedEncounterCount) ||
+        parsedEncounterCount < 1 ||
+        parsedEncounterCount > 30)
+    ) {
+      setError("Encounter count must be a whole number from 1 to 30.");
       return;
     }
     if (
@@ -181,6 +192,9 @@ export default function GeneratePage() {
       .filter(Boolean);
     if (parsedTopicMix.length > 0) cohortConstraints.topic_mix = parsedTopicMix;
     if (baseTime) cohortConstraints.base_time = baseTime;
+    if (parsedEncounterCount !== undefined) {
+      cohortConstraints.encounter_count = parsedEncounterCount;
+    }
     const includesImaging = modalities.includes("imaging");
     const includesTimeSeries = modalities.includes("time_series");
     const includesClinicalText = modalities.includes("clinical_text");
@@ -463,7 +477,7 @@ export default function GeneratePage() {
           />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-[repeat(2,minmax(0,14rem))_minmax(0,1fr)_minmax(0,18rem)]">
+        <div className="grid gap-4 md:grid-cols-[repeat(3,minmax(0,12rem))_minmax(0,1fr)_minmax(0,18rem)]">
           <label className="space-y-1 text-sm font-medium text-gray-700">
             <span>Minimum age</span>
             <input
@@ -489,6 +503,20 @@ export default function GeneratePage() {
               min={0}
               max={120}
               placeholder="Any"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-gray-700">
+            <span>Encounters</span>
+            <input
+              id="dataset-encounter-count"
+              aria-label="Encounter count"
+              type="number"
+              value={encounterCount}
+              onChange={(e) => setEncounterCount(e.target.value)}
+              min={1}
+              max={30}
+              placeholder="1"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
             />
           </label>
