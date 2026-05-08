@@ -51,6 +51,20 @@ def test_dataset_cli_lists_generation_capabilities(tmp_path, monkeypatch):
     assert validators["medgemma"]["model_id"] == "google/medgemma-4b-it"
     assert validators["medgemma"]["gated"] is True
     assert "accepted model terms" in validators["medgemma"]["requires"]
+    assert body["time_series_model_profiles"][0]["model_id"]
+
+
+def test_dataset_cli_lists_time_series_model_policy_metadata(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["timeseries-models"])
+
+    assert result.exit_code == 0
+    assert "timediff: adapter=external_command" in result.output
+    assert "model_id=MuhangTian/TimeDiff" in result.output
+    assert "license=mit" in result.output
+    assert "use_policy=wrap_external_sampler_validate_outputs" in result.output
 
 
 def test_dataset_cli_list_validate_and_export(tmp_path, monkeypatch):

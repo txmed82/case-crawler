@@ -1105,9 +1105,16 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     )
     assert roentgen["gated"] is True
     assert roentgen["use_policy"] == "credentialed_mimic_cxr_terms_required"
-    assert "timediff" in {
-        profile["name"] for profile in body["time_series_model_profiles"]
+    time_series_profiles = {
+        profile["name"]: profile for profile in body["time_series_model_profiles"]
     }
+    assert time_series_profiles["timediff"]["model_id"] == "MuhangTian/TimeDiff"
+    assert time_series_profiles["timediff"]["license"] == "mit"
+    assert time_series_profiles["timediff"]["gated"] is False
+    assert (
+        time_series_profiles["timediff"]["use_policy"]
+        == "wrap_external_sampler_validate_outputs"
+    )
     assert "sepsis" in {profile["key"] for profile in body["clinical_profiles"]}
     sepsis = next(profile for profile in body["clinical_profiles"] if profile["key"] == "sepsis")
     assert "Lactate" in sepsis["lab_names"]

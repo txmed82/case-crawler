@@ -456,6 +456,10 @@ def list_dataset_capabilities():
                 "name": profile.name,
                 "adapter_type": profile.adapter_type,
                 "reference": profile.reference,
+                "model_id": profile.model_id,
+                "license": profile.license,
+                "gated": profile.gated,
+                "use_policy": profile.use_policy,
                 "notes": profile.notes,
             }
             for profile in list_time_series_model_profiles()
