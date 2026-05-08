@@ -18,6 +18,9 @@ def build_dataset_quality_report(
     modality_counts: Counter[str] = Counter()
     artifact_counts: Counter[str] = Counter()
     note_type_counts: Counter[str] = Counter()
+    extracted_fact_key_counts: Counter[str] = Counter()
+    time_series_backend_counts: Counter[str] = Counter()
+    imaging_backend_counts: Counter[str] = Counter()
     issue_counts_by_field: Counter[str] = Counter()
     approved_count = 0
     blocking_issue_count = 0
@@ -28,7 +31,14 @@ def build_dataset_quality_report(
             approved_count += 1
         for modality in record.modalities:
             modality_counts[modality.value] += 1
-        _count_artifacts(record, artifact_counts, note_type_counts)
+        _count_artifacts(
+            record,
+            artifact_counts,
+            note_type_counts,
+            extracted_fact_key_counts,
+            time_series_backend_counts,
+            imaging_backend_counts,
+        )
         blocking_issue_count += _count_missing_declared_artifacts(
             record,
             issue_counts_by_field,
@@ -83,6 +93,9 @@ def build_dataset_quality_report(
         modality_counts=dict(sorted(modality_counts.items())),
         artifact_counts=dict(sorted(artifact_counts.items())),
         note_type_counts=dict(sorted(note_type_counts.items())),
+        extracted_fact_key_counts=dict(sorted(extracted_fact_key_counts.items())),
+        time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
+        imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
         blocking_issue_count=blocking_issue_count,
         warning_issue_count=warning_issue_count,
         issue_counts_by_field=dict(sorted(issue_counts_by_field.items())),
@@ -98,6 +111,9 @@ def _count_artifacts(
     record: SyntheticRecord,
     artifact_counts: Counter[str],
     note_type_counts: Counter[str],
+    extracted_fact_key_counts: Counter[str],
+    time_series_backend_counts: Counter[str],
+    imaging_backend_counts: Counter[str],
 ) -> None:
     documents = len(record.documents)
     artifact_counts["documents"] += documents
@@ -110,6 +126,8 @@ def _count_artifacts(
     artifact_counts["vitals"] += len(record.vitals)
     artifact_counts["medications"] += len(record.medication_history)
     artifact_counts["time_series_channels"] += len(record.time_series)
+    for channel in record.time_series:
+        time_series_backend_counts[channel.generation_backend or "unknown"] += 1
     artifact_counts["time_series_waveform_channels"] += sum(
         1
         for channel in record.time_series
@@ -119,9 +137,14 @@ def _count_artifacts(
         len(channel.points) for channel in record.time_series
     )
     artifact_counts["imaging_assets"] += len(record.imaging)
+    for asset in record.imaging:
+        imaging_backend_counts[asset.generation_backend or "unknown"] += 1
     artifact_counts["imaging_labels"] += sum(len(asset.labels) for asset in record.imaging)
     for doc in record.documents:
         note_type_counts[doc.note_type] += 1
+        for key, value in doc.extracted_facts.items():
+            if _has_fact_value(value):
+                extracted_fact_key_counts[_fact_key(key)] += 1
 
 
 def _count_missing_declared_artifacts(
@@ -227,6 +250,20 @@ def _is_waveform_channel(name: str, sampling_rate_hz: float | None) -> bool:
         return True
     normalized = name.lower()
     return normalized.startswith("ecg") or normalized in {"pleth", "arterial_waveform"}
+
+
+def _has_fact_value(value: object) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, list | tuple | set | dict):
+        return bool(value)
+    return True
+
+
+def _fact_key(value: str) -> str:
+    return "_".join(value.lower().replace("-", "_").split())
 
 
 def _recommendations(

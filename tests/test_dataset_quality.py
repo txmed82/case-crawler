@@ -334,6 +334,10 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
                     timestamp="2026-01-01T00:00:00",
                     clean_text="ED note.",
                     messy_text="ed note",
+                    extracted_facts={
+                        "lab_values": [{"name": "WBC", "value": 12.0}],
+                        "medications": ["ceftriaxone"],
+                    },
                 ),
                 ClinicalDocument(
                     document_id="doc-rad",
@@ -362,6 +366,7 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
                 TimeSeriesChannel(
                     name="heart_rate",
                     unit="/min",
+                    generation_backend="deterministic",
                     points=[
                         TimeSeriesPoint(
                             timestamp="2026-01-01T00:00:00",
@@ -372,6 +377,7 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
                 TimeSeriesChannel(
                     name="ecg_lead_ii",
                     unit="mV",
+                    generation_backend="external:timediff-sample",
                     sampling_rate_hz=125,
                     points=[
                         TimeSeriesPoint(
@@ -388,7 +394,7 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
                     body_region="chest",
                     prompt="portable chest x-ray pneumonia",
                     report_text="Pneumonia.",
-                    generation_backend="placeholder",
+                    generation_backend="diffusers:cxr_pneumonia_dreambooth",
                 )
             ],
         }
@@ -402,6 +408,14 @@ def test_quality_report_summarizes_multimodal_training_artifacts():
     assert report.artifact_counts["time_series_waveform_channels"] == 1
     assert report.artifact_counts["imaging_assets"] == 1
     assert report.note_type_counts == {"ed_note": 1, "radiology_report": 1}
+    assert report.extracted_fact_key_counts == {"lab_values": 1, "medications": 1}
+    assert report.time_series_backend_counts == {
+        "deterministic": 1,
+        "external:timediff-sample": 1,
+    }
+    assert report.imaging_backend_counts == {
+        "diffusers:cxr_pneumonia_dreambooth": 1,
+    }
     assert report.export_ready is False
     assert "vitals.missing_artifacts" in report.issue_counts_by_field
 

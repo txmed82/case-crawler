@@ -443,6 +443,9 @@ export interface DatasetQualityReport {
   modality_counts: Record<string, number>;
   artifact_counts: Record<string, number>;
   note_type_counts: Record<string, number>;
+  extracted_fact_key_counts: Record<string, number>;
+  time_series_backend_counts: Record<string, number>;
+  imaging_backend_counts: Record<string, number>;
   blocking_issue_count: number;
   warning_issue_count: number;
   issue_counts_by_field: Record<string, number>;
