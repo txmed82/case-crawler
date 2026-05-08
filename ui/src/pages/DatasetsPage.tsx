@@ -941,6 +941,20 @@ function QualityPanel({
             <Metric label="Series" value={quality.artifact_counts.time_series_channels ?? 0} />
             <Metric label="Images" value={quality.artifact_counts.imaging_assets ?? 0} />
           </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Metric
+              label="Fact keys"
+              value={Object.keys(quality.extracted_fact_key_counts).length}
+            />
+            <Metric
+              label="Series backends"
+              value={Object.keys(quality.time_series_backend_counts).length}
+            />
+            <Metric
+              label="Image backends"
+              value={Object.keys(quality.imaging_backend_counts).length}
+            />
+          </div>
           {quality.recommended_reference_keys.length > 0 && (
             <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -986,6 +1000,20 @@ function QualityPanel({
                     className="rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-700"
                   >
                     {noteType.replace("_", " ")}: {count}
+                  </span>
+                ))}
+            </div>
+          )}
+          {Object.keys(quality.extracted_fact_key_counts).length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(quality.extracted_fact_key_counts)
+                .slice(0, 6)
+                .map(([factKey, count]) => (
+                  <span
+                    key={factKey}
+                    className="rounded-md bg-green-50 px-2 py-1 text-xs text-green-700"
+                  >
+                    {factKey.replace("_", " ")}: {count}
                   </span>
                 ))}
             </div>

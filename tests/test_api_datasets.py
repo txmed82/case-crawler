@@ -507,6 +507,9 @@ def test_dataset_api_serves_quality_report(tmp_path, monkeypatch):
     assert body["approved_count"] == 1
     assert body["export_ready"] is True
     assert "clinical_text" in body["modality_counts"]
+    assert "lab_values" in body["extracted_fact_key_counts"]
+    assert body["time_series_backend_counts"] == {}
+    assert body["imaging_backend_counts"] == {}
 
 
 def test_dataset_api_quality_report_handles_missing_dataset(tmp_path, monkeypatch):
