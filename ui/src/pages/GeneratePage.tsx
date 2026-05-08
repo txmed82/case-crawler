@@ -292,6 +292,10 @@ export default function GeneratePage() {
     setReleaseError(null);
     setIsGeneratingRelease(true);
     try {
+      const parsedTimeSeriesCommand = timeSeriesCommand
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
       const resp = await generateReleasePackage({
         topic: topic.trim(),
         count,
@@ -324,6 +328,13 @@ export default function GeneratePage() {
                 .map((value) => value.trim())
                 .filter(Boolean),
             }
+          : {}),
+        time_series_backend: timeSeriesBackend,
+        ...(timeSeriesBackend === "external" && timeSeriesProfile
+          ? { time_series_model_profile: timeSeriesProfile }
+          : {}),
+        ...(timeSeriesBackend === "external" && parsedTimeSeriesCommand.length > 0
+          ? { time_series_command: parsedTimeSeriesCommand }
           : {}),
       });
       setReleaseResult(resp);
@@ -854,7 +865,8 @@ export default function GeneratePage() {
                 aria-label="Time-series model profile"
                 value={timeSeriesProfile}
                 onChange={(event) => setTimeSeriesProfile(event.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+                disabled={timeSeriesBackend !== "external"}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal disabled:opacity-50"
               >
                 <option value="">Config default</option>
                 {(capabilities?.time_series_model_profiles ?? []).map((profile) => (
@@ -871,8 +883,9 @@ export default function GeneratePage() {
                 type="text"
                 value={timeSeriesCommand}
                 onChange={(event) => setTimeSeriesCommand(event.target.value)}
+                disabled={timeSeriesBackend !== "external"}
                 placeholder="timediff-sample,--checkpoint,local.pt"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 font-normal disabled:opacity-50"
               />
             </label>
           </div>

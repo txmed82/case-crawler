@@ -146,6 +146,9 @@ export interface ReleasePackageRequest {
   imaging_model_profile?: string;
   diffusers_model_id?: string;
   imaging_command?: string[];
+  time_series_backend?: "deterministic" | "external";
+  time_series_model_profile?: string;
+  time_series_command?: string[];
   fixture_limit?: number;
   min_overall_score?: number;
   min_metric_score?: number;

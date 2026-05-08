@@ -846,6 +846,22 @@ def generate_dataset(
     help="Built-in clinical text model profile, for example medgemma_4b_it.",
 )
 @click.option(
+    "--time-series-backend",
+    default=None,
+    type=click.Choice(["deterministic", "external"]),
+    help="Override time-series backend for release package generation.",
+)
+@click.option(
+    "--time-series-model-profile",
+    default=None,
+    help="Built-in time-series model profile, for example timediff.",
+)
+@click.option(
+    "--time-series-command",
+    default=None,
+    help="Comma-separated external time-series command for release package generation.",
+)
+@click.option(
     "--fixture-limit",
     default=1,
     type=click.IntRange(1),
@@ -880,6 +896,9 @@ def generate_release_package(
     clinical_text_backend: str | None,
     clinical_text_command: str | None,
     clinical_text_model_profile: str | None,
+    time_series_backend: str | None,
+    time_series_model_profile: str | None,
+    time_series_command: str | None,
     fixture_limit: int,
     min_overall_score: float,
     min_metric_score: float,
@@ -923,6 +942,11 @@ def generate_release_package(
             if clinical_text_command
             else None
         )
+        parsed_time_series_command = (
+            [value.strip() for value in time_series_command.split(",") if value.strip()]
+            if time_series_command
+            else None
+        )
         req = GenerationRequest(
             topic=topic,
             count=count,
@@ -935,6 +959,9 @@ def generate_release_package(
             imaging_model_profile=imaging_model_profile,
             diffusers_model_id=diffusers_model_id,
             imaging_command=parsed_imaging_command,
+            time_series_backend=time_series_backend,
+            time_series_model_profile=time_series_model_profile,
+            time_series_command=parsed_time_series_command,
         )
         result = asyncio.run(SyntheticPipeline().generate(req))
     except ValueError as exc:

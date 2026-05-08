@@ -492,6 +492,31 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     assert exports[0].metadata["objective_coverage"]["missing"] == []
 
 
+def test_dataset_cli_release_package_passes_time_series_backend_options(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        [
+            "generate-release-package",
+            "sepsis",
+            "--count",
+            "1",
+            "--output-dir",
+            "release-package",
+            "--time-series-backend",
+            "external",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "time_series_backend is 'external'" in result.output
+
+
 def test_dataset_cli_requires_release_audit_artifacts_for_release_verification(
     tmp_path,
     monkeypatch,
