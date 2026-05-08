@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable
+from datetime import datetime, timezone
 
 from casecrawler.models.evaluation import DatasetQualityReport
 from casecrawler.models.synthetic import Modality, SyntheticRecord
@@ -29,6 +30,9 @@ def build_dataset_quality_report(
     vital_numeric_values: dict[str, list[float]] = {}
     time_series_numeric_values: dict[str, list[float]] = {}
     issue_counts_by_field: Counter[str] = Counter()
+    longitudinal_values: list[int] = []
+    encounter_spans: list[float] = []
+    observations_per_encounter: list[float] = []
     approved_count = 0
     blocking_issue_count = 0
     warning_issue_count = 0
@@ -37,6 +41,14 @@ def build_dataset_quality_report(
     for record in records:
         if approval_fn(record) is True:
             approved_count += 1
+        longitudinal_values.append(1 if len(record.encounters) > 1 else 0)
+        encounter_span = _encounter_span_hours(record)
+        if encounter_span is not None:
+            encounter_spans.append(encounter_span)
+        if record.encounters:
+            observations_per_encounter.append(
+                (len(record.labs) + len(record.vitals)) / len(record.encounters)
+            )
         for modality in record.modalities:
             modality_counts[modality.value] += 1
         _count_artifacts(
@@ -117,6 +129,9 @@ def build_dataset_quality_report(
         benchmark_thresholds=benchmark_summary["thresholds"],
         modality_counts=dict(sorted(modality_counts.items())),
         artifact_counts=dict(sorted(artifact_counts.items())),
+        longitudinal_record_rate=_mean_float(longitudinal_values),
+        mean_encounter_span_hours=_mean_float(encounter_spans),
+        mean_observations_per_encounter=_mean_float(observations_per_encounter),
         note_type_counts=dict(sorted(note_type_counts.items())),
         extracted_fact_key_counts=dict(sorted(extracted_fact_key_counts.items())),
         lab_numeric_summaries=_numeric_summaries(lab_numeric_values),
@@ -414,6 +429,33 @@ def _collect_time_series_numeric_values(
                 f"{channel_key}.{_fact_key(str(value_name))}",
                 [],
             ).append(float(value))
+
+
+def _encounter_span_hours(record: SyntheticRecord) -> float | None:
+    if len(record.encounters) < 2:
+        return None
+    timestamps: list[datetime] = []
+    for encounter in record.encounters:
+        start = _parse_datetime(encounter.start)
+        if start is not None:
+            timestamps.append(start)
+        if encounter.end:
+            end = _parse_datetime(encounter.end)
+            if end is not None:
+                timestamps.append(end)
+    if len(timestamps) < 2:
+        return None
+    return round((max(timestamps) - min(timestamps)).total_seconds() / 3600, 4)
+
+
+def _parse_datetime(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _metric_key(value: str) -> str:

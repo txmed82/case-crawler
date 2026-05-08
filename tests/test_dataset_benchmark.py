@@ -219,6 +219,9 @@ def test_profile_records_summarizes_multimodal_cohort():
         "time_series_channels_per_record": 1.0,
         "imaging_assets_per_record": 1.0,
     }
+    assert profile.longitudinal_record_rate == 0
+    assert profile.mean_encounter_span_hours is None
+    assert profile.mean_observations_per_encounter == 2
     assert profile.modality_artifact_coverage == {
         "clinical_text": 1.0,
         "imaging": 1.0,
@@ -259,6 +262,84 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
     assert report.passed is True
     assert report.failing_metrics == []
     assert report.thresholds == {"min_overall_score": 0.75, "min_metric_score": 0.5}
+
+
+def test_dataset_benchmark_profiles_longitudinal_encounter_depth():
+    base = _record("rec-long", "ds-gen")
+    longitudinal = base.model_copy(
+        update={
+            "encounters": [
+                *base.encounters,
+                Encounter(
+                    encounter_id="enc-rec-long-follow-up",
+                    start="2026-01-03T00:00:00",
+                    end="2026-01-03T06:00:00",
+                    setting="inpatient",
+                    reason="follow-up sepsis reassessment",
+                    diagnoses=base.encounters[0].diagnoses,
+                ),
+            ],
+            "labs": [
+                *base.labs,
+                LabObservation(
+                    name="WBC",
+                    value=10.0,
+                    unit="K/uL",
+                    reference_low=4.5,
+                    reference_high=11.0,
+                    effective_time="2026-01-03T01:00:00",
+                ),
+            ],
+            "vitals": [
+                *base.vitals,
+                VitalObservation(
+                    name="HR",
+                    value=96,
+                    unit="/min",
+                    effective_time="2026-01-03T00:15:00",
+                ),
+            ],
+        }
+    )
+
+    profile = profile_records([longitudinal])
+
+    assert profile.longitudinal_record_rate == 1
+    assert profile.mean_encounter_span_hours == 54
+    assert profile.mean_observations_per_encounter == 2
+
+
+def test_dataset_benchmark_compares_longitudinal_profiles():
+    generated_base = _record("rec-gen", "ds-gen")
+    reference_base = _record("rec-ref", "ds-ref")
+    generated = generated_base.model_copy(
+        update={
+            "encounters": [
+                *generated_base.encounters,
+                Encounter(
+                    encounter_id="enc-gen-follow-up",
+                    start="2026-01-02T00:00:00",
+                    end="2026-01-02T06:00:00",
+                    setting="inpatient",
+                    reason="follow-up sepsis reassessment",
+                    diagnoses=generated_base.encounters[0].diagnoses,
+                ),
+            ]
+        }
+    )
+
+    report = DatasetBenchmark(min_overall_score=0.0, min_metric_score=0.0).compare(
+        [generated],
+        [reference_base],
+    )
+
+    metrics = {metric.name: metric for metric in report.metrics}
+
+    assert metrics["longitudinal_record_rate"].generated_value == 1
+    assert metrics["longitudinal_record_rate"].reference_value == 0
+    assert metrics["mean_encounter_span_hours"].generated_value == 30
+    assert metrics["mean_encounter_span_hours"].reference_value is None
+    assert report.thresholds == {"min_overall_score": 0.0, "min_metric_score": 0.0}
     assert {metric.name for metric in report.metrics} >= {
         "modality_overlap",
         "mean_age",
@@ -290,6 +371,9 @@ def test_dataset_benchmark_compares_generated_to_reference_records():
         "artifact_density:medications_per_record",
         "artifact_density:time_series_channels_per_record",
         "artifact_density:imaging_assets_per_record",
+        "longitudinal_record_rate",
+        "mean_encounter_span_hours",
+        "mean_observations_per_encounter",
         "modality_artifact_coverage:clinical_text",
         "modality_artifact_coverage:structured_ehr",
         "modality_artifact_coverage:labs",

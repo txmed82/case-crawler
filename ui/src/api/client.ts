@@ -451,6 +451,9 @@ export interface DatasetQualityReport {
   benchmark_thresholds: Record<string, number>;
   modality_counts: Record<string, number>;
   artifact_counts: Record<string, number>;
+  longitudinal_record_rate?: number | null;
+  mean_encounter_span_hours?: number | null;
+  mean_observations_per_encounter?: number | null;
   note_type_counts: Record<string, number>;
   extracted_fact_key_counts: Record<string, number>;
   lab_numeric_summaries: Record<string, Record<string, number>>;
