@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from casecrawler.imaging.file_metadata import image_file_metadata
+from casecrawler.export.release_audit import OBJECTIVE_COVERAGE_KEYS
 from casecrawler.models.dataset import ExportFormat
 from casecrawler.models.synthetic import SyntheticRecord
 
@@ -3289,6 +3290,7 @@ def _verify_release_package_summary_artifact(
         )
     else:
         _verify_release_summary_benchmark_suite(benchmark_suite, issues)
+    _verify_release_summary_objective_coverage(payload, quality, issues)
 
 
 def _verify_release_summary_quality(
@@ -3357,6 +3359,199 @@ def _verify_release_summary_quality(
                 "message": (
                     "Release package summary marks multimodal_release_ready "
                     f"but lists missing requirements: {missing}."
+                ),
+            }
+        )
+
+
+def _verify_release_summary_objective_coverage(
+    payload: dict[str, Any],
+    quality: Any,
+    issues: list[dict[str, str]],
+) -> None:
+    field_prefix = "audit_artifacts.release_package_summary.json.objective_coverage"
+    release_ready = (
+        isinstance(quality, dict)
+        and quality.get("multimodal_release_ready") is True
+    )
+    objective_coverage = payload.get("objective_coverage")
+    if objective_coverage is None:
+        if release_ready:
+            issues.append(
+                {
+                    "field": field_prefix,
+                    "message": (
+                        "Release package summary is missing objective_coverage."
+                    ),
+                }
+            )
+        return
+    if not isinstance(objective_coverage, dict):
+        issues.append(
+            {
+                "field": field_prefix,
+                "message": "Release package summary objective_coverage must be an object.",
+            }
+        )
+        return
+    if not isinstance(objective_coverage.get("objective"), str):
+        issues.append(
+            {
+                "field": f"{field_prefix}.objective",
+                "message": (
+                    "Release package summary objective_coverage.objective "
+                    "must be a string."
+                ),
+            }
+        )
+    complete = objective_coverage.get("complete")
+    if not isinstance(complete, bool):
+        issues.append(
+            {
+                "field": f"{field_prefix}.complete",
+                "message": (
+                    "Release package summary objective_coverage.complete "
+                    "must be a boolean."
+                ),
+            }
+        )
+    elif release_ready and complete is not True:
+        issues.append(
+            {
+                "field": f"{field_prefix}.complete",
+                "message": (
+                    "Release package summary marks multimodal_release_ready "
+                    "but objective_coverage is incomplete."
+                ),
+            }
+        )
+    missing = objective_coverage.get("missing")
+    if not isinstance(missing, list) or not all(
+        isinstance(item, str) for item in missing
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.missing",
+                "message": (
+                    "Release package summary objective_coverage.missing "
+                    "must be a string list."
+                ),
+            }
+        )
+    elif complete is True and missing:
+        issues.append(
+            {
+                "field": f"{field_prefix}.missing",
+                "message": (
+                    "Release package summary marks objective_coverage.complete "
+                    f"but lists missing criteria: {missing}."
+                ),
+            }
+        )
+    criteria = objective_coverage.get("criteria")
+    if not isinstance(criteria, dict):
+        issues.append(
+            {
+                "field": f"{field_prefix}.criteria",
+                "message": (
+                    "Release package summary objective_coverage.criteria "
+                    "must be an object."
+                ),
+            }
+        )
+        return
+    missing_keys = sorted(OBJECTIVE_COVERAGE_KEYS - set(criteria))
+    if complete is True and missing_keys:
+        issues.append(
+            {
+                "field": f"{field_prefix}.criteria",
+                "message": (
+                    "Release package summary marks objective_coverage.complete "
+                    f"but is missing criteria: {missing_keys}."
+                ),
+            }
+        )
+    for key, criterion in criteria.items():
+        if not isinstance(key, str) or not isinstance(criterion, dict):
+            issues.append(
+                {
+                    "field": f"{field_prefix}.criteria",
+                    "message": (
+                        "Release package summary objective_coverage.criteria "
+                        "must be a string-to-object map."
+                    ),
+                }
+            )
+            return
+        _verify_release_summary_objective_criterion(
+            key,
+            criterion,
+            complete is True and key in OBJECTIVE_COVERAGE_KEYS,
+            issues,
+        )
+
+
+def _verify_release_summary_objective_criterion(
+    key: str,
+    criterion: dict[str, Any],
+    require_satisfied: bool,
+    issues: list[dict[str, str]],
+) -> None:
+    field_prefix = (
+        "audit_artifacts.release_package_summary.json.objective_coverage"
+        f".criteria.{key}"
+    )
+    if not isinstance(criterion.get("requirement"), str):
+        issues.append(
+            {
+                "field": f"{field_prefix}.requirement",
+                "message": (
+                    "Release package summary objective criterion requirement "
+                    "must be a string."
+                ),
+            }
+        )
+    satisfied = criterion.get("satisfied")
+    if not isinstance(satisfied, bool):
+        issues.append(
+            {
+                "field": f"{field_prefix}.satisfied",
+                "message": (
+                    "Release package summary objective criterion satisfied "
+                    "must be a boolean."
+                ),
+            }
+        )
+    elif require_satisfied and satisfied is not True:
+        issues.append(
+            {
+                "field": f"{field_prefix}.satisfied",
+                "message": (
+                    "Release package summary marks objective_coverage.complete "
+                    f"but criterion {key!r} is not satisfied."
+                ),
+            }
+        )
+    artifacts = criterion.get("artifacts")
+    if not isinstance(artifacts, list) or not all(
+        isinstance(item, str) for item in artifacts
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.artifacts",
+                "message": (
+                    "Release package summary objective criterion artifacts "
+                    "must be a string list."
+                ),
+            }
+        )
+    if not isinstance(criterion.get("evidence"), dict):
+        issues.append(
+            {
+                "field": f"{field_prefix}.evidence",
+                "message": (
+                    "Release package summary objective criterion evidence "
+                    "must be an object."
                 ),
             }
         )

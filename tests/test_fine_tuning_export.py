@@ -1064,6 +1064,25 @@ def test_verify_jsonl_split_package_validates_release_package_summary_artifact(
             "mean_overall_score": 0.9,
             "task_export_results": [],
         },
+        "objective_coverage": {
+            "objective": "Generate multimodal synthetic healthcare training data.",
+            "complete": True,
+            "missing": ["radiology_images"],
+            "criteria": {
+                "records": {
+                    "requirement": "Synthetic records are generated.",
+                    "satisfied": True,
+                    "artifacts": ["quality_report.json"],
+                    "evidence": {"record_count": 3},
+                },
+                "labs": {
+                    "requirement": "Lab observations are present.",
+                    "satisfied": "yes",
+                    "artifacts": ["quality_report.json"],
+                    "evidence": {},
+                },
+            },
+        },
     }
     release_summary["quality_report"]["core_artifact_coverage"]["radiology_images"] = False
     export_jsonl_split_package(
@@ -1138,6 +1157,18 @@ def test_verify_jsonl_split_package_validates_release_package_summary_artifact(
     assert (
         "audit_artifacts.release_package_summary.json.benchmark_suite."
         "task_export_results"
+    ) in issue_fields
+    assert (
+        "audit_artifacts.release_package_summary.json.objective_coverage.missing"
+        in issue_fields
+    )
+    assert (
+        "audit_artifacts.release_package_summary.json.objective_coverage.criteria"
+        in issue_fields
+    )
+    assert (
+        "audit_artifacts.release_package_summary.json.objective_coverage."
+        "criteria.labs.satisfied"
     ) in issue_fields
 
 
