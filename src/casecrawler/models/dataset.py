@@ -13,6 +13,7 @@ class ExportFormat(str, Enum):
     RAW_JSONL = "raw_jsonl"
     SFT_JSONL = "sft_jsonl"
     NOTE_FACT_SFT_JSONL = "note_fact_sft_jsonl"
+    CLINICAL_OBSERVATION_JSONL = "clinical_observation_jsonl"
     MEDICATION_RECONCILIATION_JSONL = "medication_reconciliation_jsonl"
     CHAT_JSONL = "chat_jsonl"
     TOOL_CALL_JSONL = "tool_call_jsonl"
