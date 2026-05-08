@@ -4,6 +4,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+from casecrawler.generation.recipes import RECIPES
 from casecrawler.models.dataset import (
     DatasetManifest,
     ExportFormat,
@@ -256,6 +257,7 @@ class DatasetStore:
         approved_count = sum(1 for record in records if self.effective_approved(record))
         first = records[0]
         export_formats = _manifest_export_formats(records)
+        recipe_metadata = _manifest_recipe_metadata(records)
         return DatasetManifest(
             dataset_id=dataset_id,
             name=f"{first.topic}-synthetic",
@@ -268,6 +270,7 @@ class DatasetStore:
             created_at=first.provenance.created_at,
             metadata={
                 "record_ids": [record.record_id for record in records],
+                **recipe_metadata,
                 "latest_exports": [
                     export_manifest.model_dump()
                     for export_manifest in self.list_export_manifests(
@@ -342,3 +345,29 @@ def _manifest_export_formats(records: list[SyntheticRecord]) -> list[ExportForma
             if export_format not in requested:
                 requested.append(export_format)
     return requested or list(ExportFormat)
+
+
+def _manifest_recipe_metadata(records: list[SyntheticRecord]) -> dict:
+    recipe_counts: dict[str, int] = {}
+    for record in records:
+        overrides = record.metadata.get("generation_overrides", {})
+        if not isinstance(overrides, dict):
+            continue
+        recipe = overrides.get("recipe")
+        if isinstance(recipe, str) and recipe:
+            recipe_counts[recipe] = recipe_counts.get(recipe, 0) + 1
+    if not recipe_counts:
+        return {}
+    selected_recipe = max(recipe_counts, key=recipe_counts.get)
+    metadata = {
+        "generation_recipes": dict(sorted(recipe_counts.items())),
+        "primary_recipe": selected_recipe,
+    }
+    recipe_spec = RECIPES.get(selected_recipe)
+    if recipe_spec is not None:
+        metadata["recommended_reference_keys"] = recipe_spec.recommended_reference_keys
+        metadata["benchmark_thresholds"] = {
+            "min_overall_score": recipe_spec.benchmark_min_overall_score,
+            "min_metric_score": recipe_spec.benchmark_min_metric_score,
+        }
+    return metadata
