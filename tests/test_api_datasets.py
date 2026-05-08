@@ -106,6 +106,40 @@ def test_generate_dataset_api_accepts_clinical_text_model_profile(
     assert captured[0].clinical_text_model_profile == "medgemma_4b_it"
 
 
+def test_generate_dataset_api_accepts_clinical_text_noise_profile(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    class FakePipeline:
+        async def generate(self, req):
+            captured.append(req)
+            return {
+                "dataset_id": "ds-test",
+                "generated": 0,
+                "approved": 0,
+                "records": [],
+            }
+
+    monkeypatch.setattr(datasets_routes, "SyntheticPipeline", FakePipeline)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/generate",
+        json={
+            "topic": "sepsis",
+            "count": 1,
+            "modalities": ["clinical_text"],
+            "clinical_text_noise_profile": "ocr",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured[0].clinical_text_noise_profile == "ocr"
+
+
 def test_generate_dataset_api_rejects_unbounded_counts(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     config = AppConfig(synthetic=SyntheticConfig(max_api_generation_count=1))

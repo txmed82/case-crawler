@@ -70,6 +70,7 @@ class GenerationRequest(BaseModel):
         default_factory=lambda: [ExportFormat.SFT_JSONL]
     )
     clinical_text_backend: Literal["deterministic", "llm", "external"] | None = None
+    clinical_text_noise_profile: Literal["standard", "message", "ocr", "heavy"] | None = None
     clinical_text_model_profile: str | None = Field(default=None, min_length=1)
     llm_provider: str | None = Field(default=None, min_length=1)
     llm_model: str | None = Field(default=None, min_length=1)

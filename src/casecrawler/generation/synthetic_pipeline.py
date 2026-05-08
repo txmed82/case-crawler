@@ -52,6 +52,7 @@ class SyntheticPipeline:
             config.llm.ollama_base_url,
             config.synthetic.clinical_text_command
             or _clinical_text_profile_command(config.synthetic.clinical_text_model_profile),
+            config.synthetic.clinical_text_noise_profile,
         )
         self._time_series_generator = time_series_generator or _time_series_generator_from_config(
             config.synthetic.time_series_backend,
@@ -226,6 +227,7 @@ class SyntheticPipeline:
     def _text_generator_for(self, req: GenerationRequest) -> TextGenerator:
         if not (
             req.clinical_text_backend
+            or req.clinical_text_noise_profile
             or req.llm_provider
             or req.llm_model
             or req.ollama_base_url
@@ -253,6 +255,8 @@ class SyntheticPipeline:
             req.clinical_text_command
             or profile_command
             or self._config.synthetic.clinical_text_command,
+            req.clinical_text_noise_profile
+            or self._config.synthetic.clinical_text_noise_profile,
         )
 
 
@@ -278,19 +282,20 @@ def _text_generator_from_config(
     model: str,
     ollama_base_url: str,
     command: list[str] | None,
+    noise_profile: str = "standard",
 ) -> TextGenerator:
     if backend == "deterministic":
-        return TextGenerator()
+        return TextGenerator(noise_profile=noise_profile)
     if backend == "llm":
         provider = get_provider(provider_name, model, base_url=ollama_base_url)
-        return TextGenerator(provider=provider)
+        return TextGenerator(provider=provider, noise_profile=noise_profile)
     if backend == "external":
         if not command:
             raise ValueError(
                 "synthetic.clinical_text_command is required when "
                 "clinical_text_backend is 'external'."
             )
-        return TextGenerator(external_command=command)
+        return TextGenerator(external_command=command, noise_profile=noise_profile)
     raise ValueError(f"Unknown synthetic clinical text backend: {backend}")
 
 

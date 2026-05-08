@@ -37,6 +37,33 @@ async def test_synthetic_pipeline_generates_valid_records():
 
 
 @pytest.mark.asyncio
+async def test_synthetic_pipeline_applies_clinical_text_noise_profile():
+    pipeline = SyntheticPipeline(validator=SyntheticValidator())
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="sepsis",
+            count=1,
+            clinical_text_noise_profile="ocr",
+        )
+    )
+
+    ed_note = next(
+        document
+        for document in result["records"][0].documents
+        if document.note_type == "ed_note"
+    )
+    assert ed_note.messy_text.startswith("OCR ED_NOTE:")
+    assert ed_note.extracted_facts["messy_text_profile"] == "ocr"
+    assert (
+        result["records"][0].metadata["generation_overrides"][
+            "clinical_text_noise_profile"
+        ]
+        == "ocr"
+    )
+
+
+@pytest.mark.asyncio
 async def test_synthetic_pipeline_applies_generation_recipe():
     pipeline = SyntheticPipeline(validator=SyntheticValidator())
 
@@ -554,9 +581,9 @@ async def test_synthetic_pipeline_allows_request_clinical_text_backend_override(
         pass
 
     class RequestScopedTextGenerator(FakeTextGenerator):
-        def __init__(self, provider=None):
+        def __init__(self, provider=None, noise_profile="standard"):
             super().__init__(provider=provider)
-            created_generators.append(provider)
+            created_generators.append((provider, noise_profile))
 
     def fake_get_provider(provider_name, model, **kwargs):
         created_providers.append((provider_name, model, kwargs))
@@ -593,6 +620,7 @@ async def test_synthetic_pipeline_allows_request_clinical_text_backend_override(
         ("ollama", "medgemma-local", {"base_url": "http://localhost:11434"})
     ]
     assert len(created_generators) == 1
+    assert created_generators[0][1] == "standard"
     assert result["generated"] == 1
     assert result["records"][0].metadata["clinical_text_model_policy"] == {
         "backend": "llm",
@@ -612,9 +640,14 @@ async def test_synthetic_pipeline_allows_request_external_clinical_text_backend(
     created = []
 
     class RequestScopedTextGenerator(FakeTextGenerator):
-        def __init__(self, provider=None, external_command=None):
+        def __init__(
+            self,
+            provider=None,
+            external_command=None,
+            noise_profile="standard",
+        ):
             super().__init__(provider=provider)
-            created.append(external_command)
+            created.append((external_command, noise_profile))
 
     monkeypatch.setattr(
         "casecrawler.generation.synthetic_pipeline.TextGenerator",
@@ -637,7 +670,7 @@ async def test_synthetic_pipeline_allows_request_external_clinical_text_backend(
         )
     )
 
-    assert created == [["hf-note-sample"]]
+    assert created == [(["hf-note-sample"], "standard")]
     assert result["generated"] == 1
     assert result["records"][0].metadata["clinical_text_model_policy"] == {
         "backend": "external",
@@ -658,9 +691,14 @@ async def test_synthetic_pipeline_allows_request_clinical_text_model_profile(
     created = []
 
     class RequestScopedTextGenerator(FakeTextGenerator):
-        def __init__(self, provider=None, external_command=None):
+        def __init__(
+            self,
+            provider=None,
+            external_command=None,
+            noise_profile="standard",
+        ):
             super().__init__(provider=provider)
-            created.append(external_command)
+            created.append((external_command, noise_profile))
 
     monkeypatch.setattr(
         "casecrawler.generation.synthetic_pipeline.TextGenerator",
@@ -682,7 +720,9 @@ async def test_synthetic_pipeline_allows_request_clinical_text_model_profile(
         )
     )
 
-    assert created == [["hf-note-sample", "--model", "google/medgemma-4b-it"]]
+    assert created == [
+        (["hf-note-sample", "--model", "google/medgemma-4b-it"], "standard")
+    ]
     assert result["records"][0].metadata["clinical_text_model_policy"] == {
         "backend": "external",
         "profile": "medgemma_4b_it",

@@ -635,6 +635,12 @@ def serve() -> None:
     type=click.Choice(["deterministic", "llm", "external"]),
     help="Override clinical text backend for this generation request",
 )
+@click.option(
+    "--clinical-text-noise-profile",
+    default=None,
+    type=click.Choice(["standard", "message", "ocr", "heavy"]),
+    help="Messy clinical text style for deterministic note variants.",
+)
 @click.option("--llm-provider", default=None, help="Override LLM provider for clinical text")
 @click.option("--llm-model", default=None, help="Override LLM model for clinical text")
 @click.option(
@@ -713,6 +719,7 @@ def generate_dataset(
     base_time: str | None,
     encounter_count: int | None,
     clinical_text_backend: str | None,
+    clinical_text_noise_profile: str | None,
     llm_provider: str | None,
     llm_model: str | None,
     ollama_base_url: str | None,
@@ -778,6 +785,7 @@ def generate_dataset(
             "recipe": recipe,
             "cohort_constraints": cohort_constraints,
             "clinical_text_backend": clinical_text_backend,
+            "clinical_text_noise_profile": clinical_text_noise_profile,
             "llm_provider": llm_provider,
             "llm_model": llm_model,
             "ollama_base_url": ollama_base_url,
@@ -915,6 +923,12 @@ def generate_dataset(
     type=click.Choice(["deterministic", "llm", "external"]),
     help="Override clinical text backend for release package generation.",
 )
+@click.option(
+    "--clinical-text-noise-profile",
+    default=None,
+    type=click.Choice(["standard", "message", "ocr", "heavy"]),
+    help="Messy clinical text style for deterministic release-package notes.",
+)
 @click.option("--llm-provider", default=None, help="Override LLM provider for clinical text.")
 @click.option("--llm-model", default=None, help="Override LLM model for clinical text.")
 @click.option(
@@ -998,6 +1012,7 @@ def generate_release_package(
     diffusers_model_id: str | None,
     imaging_command: str | None,
     clinical_text_backend: str | None,
+    clinical_text_noise_profile: str | None,
     llm_provider: str | None,
     llm_model: str | None,
     ollama_base_url: str | None,
@@ -1085,6 +1100,7 @@ def generate_release_package(
             "cohort_constraints": cohort_constraints,
             "export_formats": [ExportFormat(export_format)],
             "clinical_text_backend": clinical_text_backend,
+            "clinical_text_noise_profile": clinical_text_noise_profile,
             "llm_provider": llm_provider,
             "llm_model": llm_model,
             "ollama_base_url": ollama_base_url,
