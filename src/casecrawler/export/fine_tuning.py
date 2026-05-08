@@ -1981,6 +1981,12 @@ def _verify_benchmark_suite_report_artifact(
                 ),
             }
         )
+    suite_passed = payload.get("passed")
+    recommended_reference_keys = _string_list_payload(
+        payload.get("recommended_reference_keys")
+    )
+    result_reference_keys: set[str] = set()
+    failed_result_indexes: list[int] = []
     for index, item in enumerate(results):
         if not isinstance(item, dict):
             issues.append(
@@ -1990,7 +1996,8 @@ def _verify_benchmark_suite_report_artifact(
                 }
             )
             continue
-        if not isinstance(item.get("reference_key"), str):
+        reference_key = item.get("reference_key")
+        if not isinstance(reference_key, str):
             issues.append(
                 {
                     "field": (
@@ -2000,6 +2007,8 @@ def _verify_benchmark_suite_report_artifact(
                     "message": "Benchmark suite result reference_key must be a string.",
                 }
             )
+        elif reference_key.strip():
+            result_reference_keys.add(reference_key.strip())
         if not isinstance(item.get("reference_dataset_id"), str):
             issues.append(
                 {
@@ -2012,7 +2021,8 @@ def _verify_benchmark_suite_report_artifact(
                     ),
                 }
             )
-        if not isinstance(item.get("passed"), bool):
+        result_passed = item.get("passed")
+        if not isinstance(result_passed, bool):
             issues.append(
                 {
                     "field": (
@@ -2022,6 +2032,11 @@ def _verify_benchmark_suite_report_artifact(
                     "message": "Benchmark suite result passed must be a boolean.",
                 }
             )
+        elif result_passed is False:
+            failed_result_indexes.append(index)
+        failing_metrics = item.get("failing_metrics")
+        if isinstance(failing_metrics, list) and failing_metrics:
+            failed_result_indexes.append(index)
         report_payload = item.get("report")
         if not isinstance(report_payload, dict):
             issues.append(
@@ -2043,6 +2058,146 @@ def _verify_benchmark_suite_report_artifact(
             ),
             issues=issues,
         )
+    missing_recommended_keys = sorted(recommended_reference_keys - result_reference_keys)
+    if missing_recommended_keys:
+        issues.append(
+            {
+                "field": (
+                    "audit_artifacts.benchmark_suite_report.json."
+                    "recommended_reference_keys"
+                ),
+                "message": (
+                    "Benchmark suite recommended_reference_keys are missing "
+                    f"matching results: {missing_recommended_keys}."
+                ),
+            }
+        )
+    if suite_passed is True and failed_result_indexes:
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_suite_report.json.passed",
+                "message": (
+                    "Benchmark suite marks passed true but includes failed "
+                    f"result entries: {sorted(set(failed_result_indexes))}."
+                ),
+            }
+        )
+    _verify_benchmark_suite_task_results(payload, issues)
+
+
+def _verify_benchmark_suite_task_results(
+    payload: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    task_results = payload.get("task_export_results")
+    if task_results is None:
+        return
+    if not isinstance(task_results, dict):
+        issues.append(
+            {
+                "field": (
+                    "audit_artifacts.benchmark_suite_report.json."
+                    "task_export_results"
+                ),
+                "message": "Benchmark suite task_export_results must be an object.",
+            }
+        )
+        return
+    suite_passed = payload.get("passed") is True
+    for export_format, result in sorted(task_results.items()):
+        field_prefix = (
+            "audit_artifacts.benchmark_suite_report.json."
+            f"task_export_results.{export_format}"
+        )
+        if not isinstance(export_format, str) or not export_format.strip():
+            issues.append(
+                {
+                    "field": (
+                        "audit_artifacts.benchmark_suite_report.json."
+                        "task_export_results"
+                    ),
+                    "message": "Benchmark suite task export key must be a string.",
+                }
+            )
+            continue
+        if not isinstance(result, dict):
+            issues.append(
+                {
+                    "field": field_prefix,
+                    "message": "Benchmark suite task export result must be an object.",
+                }
+            )
+            continue
+        reference_count = result.get("reference_count")
+        if not isinstance(reference_count, int):
+            issues.append(
+                {
+                    "field": f"{field_prefix}.reference_count",
+                    "message": (
+                        "Benchmark suite task export result reference_count "
+                        "must be an integer."
+                    ),
+                }
+            )
+        elif suite_passed and reference_count < 1:
+            issues.append(
+                {
+                    "field": f"{field_prefix}.reference_count",
+                    "message": (
+                        "Benchmark suite marks passed true but task export "
+                        "has no reference results."
+                    ),
+                }
+            )
+        task_passed = result.get("passed")
+        if not isinstance(task_passed, bool):
+            issues.append(
+                {
+                    "field": f"{field_prefix}.passed",
+                    "message": (
+                        "Benchmark suite task export result passed must be a boolean."
+                    ),
+                }
+            )
+        elif suite_passed and task_passed is not True:
+            issues.append(
+                {
+                    "field": f"{field_prefix}.passed",
+                    "message": (
+                        "Benchmark suite marks passed true but task export "
+                        "result is not passing."
+                    ),
+                }
+            )
+        missing = result.get("missing_reference_keys")
+        if not isinstance(missing, list) or not all(
+            isinstance(item, str) for item in missing
+        ):
+            issues.append(
+                {
+                    "field": f"{field_prefix}.missing_reference_keys",
+                    "message": (
+                        "Benchmark suite task export result missing_reference_keys "
+                        "must be a string list."
+                    ),
+                }
+            )
+        elif suite_passed and missing:
+            issues.append(
+                {
+                    "field": f"{field_prefix}.missing_reference_keys",
+                    "message": (
+                        "Benchmark suite marks passed true but task export "
+                        f"is missing reference keys: {missing}."
+                    ),
+                }
+            )
+
+
+def _string_list_payload(value: object) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    return {item.strip() for item in value if isinstance(item, str) and item.strip()}
 
 
 def _verify_benchmark_report_payload(

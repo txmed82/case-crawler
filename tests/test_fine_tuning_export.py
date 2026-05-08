@@ -625,6 +625,84 @@ def test_verify_jsonl_split_package_validates_benchmark_suite_artifact(tmp_path)
     ) in issue_fields
 
 
+def test_verify_jsonl_split_package_rejects_inconsistent_passing_benchmark_suite(
+    tmp_path,
+):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    reference_records = [
+        record.model_copy(update={"record_id": f"ref-{index}", "dataset_id": "ds-ref"})
+        for index, record in enumerate(records)
+    ]
+    benchmark_report = DatasetBenchmark(
+        min_overall_score=0.0,
+        min_metric_score=0.0,
+    ).compare(records, reference_records)
+    benchmark_suite = {
+        "dataset_id": "ds-split",
+        "primary_recipe": "full_multimodal_acute_care",
+        "recommended_reference_keys": [
+            "synthclinicalnotes",
+            "radiology_report_consistency",
+        ],
+        "task_export_results": {
+            "multimodal_jsonl": {
+                "recommended_reference_keys": ["radiology_report_consistency"],
+                "reference_count": 0,
+                "missing_reference_keys": ["radiology_report_consistency"],
+                "passed": True,
+            }
+        },
+        "reference_count": 1,
+        "passed": True,
+        "mean_overall_score": benchmark_report.overall_score,
+        "thresholds": benchmark_report.thresholds,
+        "results": [
+            {
+                "reference_key": "synthclinicalnotes",
+                "reference_dataset_id": "ds-ref",
+                "passed": False,
+                "overall_score": benchmark_report.overall_score,
+                "failing_metrics": ["imaging_label_overlap"],
+                "report": benchmark_report.model_dump(mode="json"),
+            }
+        ],
+    }
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+        audit_artifacts={"benchmark_suite_report.json": benchmark_suite},
+    )
+
+    report = verify_jsonl_split_package(tmp_path)
+    issue_fields = {issue["field"] for issue in report["issues"]}
+
+    assert report["valid"] is False
+    assert (
+        "audit_artifacts.benchmark_suite_report.json.recommended_reference_keys"
+        in issue_fields
+    )
+    assert "audit_artifacts.benchmark_suite_report.json.passed" in issue_fields
+    assert (
+        "audit_artifacts.benchmark_suite_report.json.task_export_results."
+        "multimodal_jsonl.missing_reference_keys"
+    ) in issue_fields
+    assert (
+        "audit_artifacts.benchmark_suite_report.json.task_export_results."
+        "multimodal_jsonl.reference_count"
+    ) in issue_fields
+
+
 def test_verify_jsonl_split_package_validates_quality_report_dataset_id(tmp_path):
     records = [
         _multimodal_record().model_copy(
