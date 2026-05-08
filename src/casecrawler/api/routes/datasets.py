@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import zipfile
+from io import BytesIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
@@ -9,7 +12,11 @@ from pydantic import BaseModel, Field
 
 from casecrawler.config import get_config
 from casecrawler.export.cards import build_dataset_card, build_model_card
-from casecrawler.export.fine_tuning import export_parquet_bytes, export_record_payloads
+from casecrawler.export.fine_tuning import (
+    export_jsonl_split_package,
+    export_parquet_bytes,
+    export_record_payloads,
+)
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.dataset import (
     ExportFormat,
@@ -636,6 +643,94 @@ def export_dataset(
             )
 
     return StreamingResponse(_iter_jsonl(), media_type="application/x-ndjson")
+
+
+@router.get("/datasets/{dataset_id}/export-splits")
+def export_dataset_splits(
+    dataset_id: str,
+    export_format: ExportFormat = ExportFormat.SFT_JSONL,
+    train_ratio: float = Query(0.8, ge=0.0),
+    validation_ratio: float = Query(0.1, ge=0.0),
+    test_ratio: float = Query(0.1, ge=0.0),
+    seed: str = "casecrawler",
+    allow_blocked: bool = False,
+):
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+    if export_format == ExportFormat.PARQUET:
+        raise HTTPException(
+            status_code=422,
+            detail="Split package export writes JSONL profiles, not parquet.",
+        )
+    records = list(store.iter_records(dataset_id=dataset_id))
+    if not allow_blocked:
+        report = build_dataset_quality_report(
+            dataset_id,
+            records,
+            effective_approved=store.effective_approved,
+        )
+        if not report.export_ready:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Dataset is not ready for split fine-tuning export. "
+                    f"Blockers: {report.issue_counts_by_field}. "
+                    "Set allow_blocked=true to export anyway."
+                ),
+            )
+    try:
+        with TemporaryDirectory() as temp_dir:
+            manifest = export_jsonl_split_package(
+                records,
+                temp_dir,
+                export_format,
+                dataset_id=dataset_id,
+                train_ratio=train_ratio,
+                validation_ratio=validation_ratio,
+                test_ratio=test_ratio,
+                seed=seed,
+            )
+            payload = BytesIO()
+            with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                for name in ("manifest.json", "train.jsonl", "validation.jsonl", "test.jsonl"):
+                    archive.write(Path(temp_dir) / name, arcname=name)
+            zip_bytes = payload.getvalue()
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+
+    store.save_export_manifest(
+        dataset_id=dataset_id,
+        export_format=export_format,
+        file_path=(
+            f"api://datasets/{dataset_id}/export-splits?"
+            f"export_format={export_format.value}"
+        ),
+        record_count=manifest["example_count"],
+        metadata={
+            "transport": "api",
+            "split_package": True,
+            "zip_bytes": len(zip_bytes),
+            "seed": manifest["seed"],
+            "ratios": manifest["ratios"],
+            "splits": {
+                name: {
+                    "record_count": data["record_count"],
+                    "example_count": data["example_count"],
+                }
+                for name, data in manifest["splits"].items()
+            },
+        },
+    )
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{dataset_id}-{export_format.value}-splits.zip"'
+            )
+        },
+    )
 
 
 def _image_media_type(path: Path) -> str:

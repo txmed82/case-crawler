@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   datasetExportUrl,
+  datasetSplitExportUrl,
   fetchDataset,
   fetchDatasetBenchmark,
   fetchDatasetBenchmarkPlan,
@@ -290,6 +291,15 @@ export default function DatasetsPage() {
                             Export Auto-Gated
                           </a>
                         )}
+                      <a
+                        href={datasetSplitExportUrl(
+                          detail.manifest.dataset_id,
+                          effectiveExportFormat
+                        )}
+                        className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Export Splits
+                      </a>
                     </div>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
