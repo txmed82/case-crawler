@@ -3830,6 +3830,95 @@ def _verify_release_summary_benchmark_suite(
             issues,
             field_prefix=field_prefix,
         )
+    _verify_release_summary_benchmark_suite_results(
+        benchmark_suite,
+        issues,
+        field_prefix=field_prefix,
+    )
+
+
+def _verify_release_summary_benchmark_suite_results(
+    benchmark_suite: dict[str, Any],
+    issues: list[dict[str, str]],
+    *,
+    field_prefix: str,
+) -> None:
+    results = benchmark_suite.get("results")
+    if results is None:
+        return
+    if not isinstance(results, list):
+        issues.append(
+            {
+                "field": f"{field_prefix}.results",
+                "message": (
+                    "Release package summary benchmark_suite.results "
+                    "must be a list."
+                ),
+            }
+        )
+        return
+    reference_count = benchmark_suite.get("reference_count")
+    if isinstance(reference_count, int) and reference_count != len(results):
+        issues.append(
+            {
+                "field": f"{field_prefix}.reference_count",
+                "message": (
+                    "Release package summary benchmark_suite.reference_count "
+                    "does not match results length."
+                ),
+            }
+        )
+    result_reference_keys: set[str] = set()
+    failed_result_indexes: list[int] = []
+    for index, item in enumerate(results):
+        if not isinstance(item, dict):
+            issues.append(
+                {
+                    "field": f"{field_prefix}.results.{index}",
+                    "message": (
+                        "Release package summary benchmark_suite result "
+                        "must be an object."
+                    ),
+                }
+            )
+            continue
+        reference_key = item.get("reference_key")
+        if isinstance(reference_key, str) and reference_key.strip():
+            result_reference_keys.add(reference_key.strip())
+        result_passed = item.get("passed")
+        if result_passed is False:
+            failed_result_indexes.append(index)
+        failing_metrics = item.get("failing_metrics")
+        if isinstance(failing_metrics, list) and failing_metrics:
+            failed_result_indexes.append(index)
+    recommended_reference_keys = _string_list_payload(
+        benchmark_suite.get("recommended_reference_keys")
+    )
+    missing_recommended_keys = sorted(
+        recommended_reference_keys - result_reference_keys
+    )
+    if missing_recommended_keys:
+        issues.append(
+            {
+                "field": f"{field_prefix}.recommended_reference_keys",
+                "message": (
+                    "Release package summary benchmark_suite recommended "
+                    "reference keys are missing matching results: "
+                    f"{missing_recommended_keys}."
+                ),
+            }
+        )
+    if benchmark_suite.get("passed") is True and failed_result_indexes:
+        issues.append(
+            {
+                "field": f"{field_prefix}.passed",
+                "message": (
+                    "Release package summary benchmark_suite marks passed true "
+                    "but includes failed result entries: "
+                    f"{sorted(set(failed_result_indexes))}."
+                ),
+            }
+        )
 
 
 def _package_file_metadata(file_paths: dict[str, str]) -> dict[str, dict[str, Any]]:
