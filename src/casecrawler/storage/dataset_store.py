@@ -135,8 +135,15 @@ class DatasetStore:
         for record in self.iter_records(dataset_id=dataset_id):
             human_review = self.get_human_review(record)
             effective_approved = self.effective_approved(record)
+            requires_human_review = record.metadata.get("require_human_review") is True
+            has_required_approval = (
+                human_review is not None
+                and human_review.status == HumanReviewStatus.APPROVED
+            )
             if not include_reviewed and (
-                effective_approved is True
+                (effective_approved is True and not (
+                    requires_human_review and not has_required_approval
+                ))
                 or (
                     human_review is not None
                     and human_review.status == HumanReviewStatus.REJECTED

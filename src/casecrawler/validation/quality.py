@@ -61,6 +61,10 @@ def build_dataset_quality_report(
             record,
             issue_counts_by_field,
         )
+        blocking_issue_count += _count_missing_required_human_review(
+            record,
+            issue_counts_by_field,
+        )
         if record.validation is None:
             issue_counts_by_field["validation.missing"] += 1
             blocking_issue_count += 1
@@ -274,6 +278,19 @@ def _count_missing_imaging_model_policy(
     return 1
 
 
+def _count_missing_required_human_review(
+    record: SyntheticRecord,
+    issue_counts_by_field: Counter[str],
+) -> int:
+    if record.metadata.get("require_human_review") is not True:
+        return 0
+    review = record.metadata.get("human_review")
+    if isinstance(review, dict) and review.get("status") == "approved":
+        return 0
+    issue_counts_by_field["human_review.missing"] += 1
+    return 1
+
+
 def _is_waveform_channel(name: str, sampling_rate_hz: float | None) -> bool:
     if sampling_rate_hz:
         return True
@@ -344,6 +361,10 @@ def _recommendations(
     if issue_counts_by_field.get("imaging.model_policy.missing", 0):
         recommendations.append(
             "Attach imaging model policy metadata before exporting generated image datasets."
+        )
+    if issue_counts_by_field.get("human_review.missing", 0):
+        recommendations.append(
+            "Complete required human review before exporting generated datasets."
         )
     if "clinical_text" not in modality_counts:
         recommendations.append("Add clinical text records for supervised fine-tuning tasks.")

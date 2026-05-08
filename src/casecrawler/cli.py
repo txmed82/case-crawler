@@ -494,6 +494,11 @@ def serve() -> None:
     default=None,
     help="Comma-separated external time-series command for this request",
 )
+@click.option(
+    "--require-human-review",
+    is_flag=True,
+    help="Require human approval before fine-tuning export.",
+)
 def generate_dataset(
     topic: str,
     count: int,
@@ -515,6 +520,7 @@ def generate_dataset(
     time_series_backend: str | None,
     time_series_model_profile: str | None,
     time_series_command: str | None,
+    require_human_review: bool,
 ) -> None:
     """Generate synthetic healthcare records for AI training."""
     from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
@@ -568,6 +574,7 @@ def generate_dataset(
             time_series_backend=time_series_backend,
             time_series_model_profile=time_series_model_profile,
             time_series_command=parsed_time_series_command,
+            require_human_review=require_human_review,
         )
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc

@@ -120,6 +120,18 @@ def test_structured_generator_persists_requested_export_formats():
     assert record.metadata["requested_export_formats"] == ["chat_jsonl", "parquet"]
 
 
+def test_structured_generator_persists_required_human_review_flag():
+    generator = StructuredGenerator()
+    record = generator.generate(
+        dataset_id="ds-1",
+        req=GenerationRequest(topic="sepsis", require_human_review=True),
+        index=0,
+    )
+
+    assert record.metadata["require_human_review"] is True
+    assert record.metadata["generation_overrides"]["require_human_review"] is True
+
+
 def test_structured_generator_persists_generation_overrides():
     req = GenerationRequest(
         topic="pneumonia",

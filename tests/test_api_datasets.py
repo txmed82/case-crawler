@@ -455,6 +455,36 @@ def test_dataset_api_export_blocks_unready_dataset_without_override(tmp_path, mo
     assert json.loads(allowed.text.strip())["record_id"] == "rec-blocked"
 
 
+def test_dataset_api_blocks_export_until_required_human_review(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post(
+        "/api/datasets/generate",
+        json={"topic": "sepsis", "count": 1, "require_human_review": True},
+    )
+    dataset_id = generated.json()["dataset_id"]
+    record_id = generated.json()["records"][0]["record_id"]
+
+    blocked = client.get(
+        f"/api/datasets/{dataset_id}/export",
+        params={"export_format": "sft_jsonl"},
+    )
+    reviewed = client.post(
+        f"/api/records/{record_id}/review",
+        json={"status": "approved", "reviewer": "clinical-reviewer"},
+    )
+    allowed = client.get(
+        f"/api/datasets/{dataset_id}/export",
+        params={"export_format": "sft_jsonl"},
+    )
+
+    assert blocked.status_code == 409
+    assert "human_review.missing" in blocked.json()["detail"]
+    assert reviewed.status_code == 200
+    assert allowed.status_code == 200
+    assert json.loads(allowed.text.strip())["record_id"] == record_id
+
+
 def test_dataset_api_lists_and_saves_human_reviews(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     store = DatasetStore()
