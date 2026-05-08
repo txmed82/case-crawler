@@ -60,10 +60,17 @@ class SyntheaAdapter:
                 for item in source.iterdir()
                 if item.is_file() and item.suffix.lower() == ".json"
             )
-            return [
-                self.import_fhir_bundle(str(bundle_path), dataset_id=dataset_id)
-                for bundle_path in bundle_paths
-            ]
+            if bundle_paths:
+                return [
+                    self.import_fhir_bundle(str(bundle_path), dataset_id=dataset_id)
+                    for bundle_path in bundle_paths
+                ]
+            ndjson_paths = sorted(source.glob("*.ndjson"))
+            if ndjson_paths:
+                return self.import_fhir_ndjson_path(path, dataset_id=dataset_id)
+            return []
+        if source.suffix.lower() == ".ndjson":
+            return self.import_fhir_ndjson_path(path, dataset_id=dataset_id)
         return [self.import_fhir_bundle(str(source), dataset_id=dataset_id)]
 
     def import_fhir_bundle(self, path: str, dataset_id: str) -> SyntheticRecord:
@@ -75,6 +82,57 @@ class SyntheaAdapter:
             resource = entry.get("resource", {})
             if isinstance(resource, Mapping):
                 resources.append(resource)
+        return self.import_fhir_resources(
+            resources,
+            dataset_id=dataset_id,
+            source_ref={"path": path, "format": "fhir_bundle"},
+        )
+
+    def import_fhir_ndjson_path(self, path: str, dataset_id: str) -> list[SyntheticRecord]:
+        source = Path(path)
+        ndjson_paths = sorted(source.glob("*.ndjson")) if source.is_dir() else [source]
+        resources = [
+            resource
+            for ndjson_path in ndjson_paths
+            for resource in _read_ndjson_resources(ndjson_path)
+        ]
+        grouped = _group_resources_by_patient(resources)
+        records = []
+        for patient_id in sorted(grouped):
+            source_ref = {
+                "path": str(source),
+                "format": "fhir_ndjson",
+                "patient_id": patient_id,
+            }
+            record = self.import_fhir_resources(
+                grouped[patient_id],
+                dataset_id=dataset_id,
+                source_ref=source_ref,
+            )
+            records.append(
+                record.model_copy(
+                    update={
+                        "metadata": {
+                            **record.metadata,
+                            "source_format": "fhir_ndjson",
+                        }
+                    }
+                )
+            )
+        return records
+
+    def import_fhir_resources(
+        self,
+        resources: list[Mapping],
+        *,
+        dataset_id: str,
+        source_ref: dict,
+    ) -> SyntheticRecord:
+        resources = [
+            dict(resource)
+            for resource in resources
+            if isinstance(resource, Mapping)
+        ]
         patient_resource = _first_resource(resources, "Patient")
         encounter_resources = _resources(resources, "Encounter")
         condition_resources = _resources(resources, "Condition")
@@ -162,7 +220,7 @@ class SyntheaAdapter:
             provenance=Provenance(
                 generator="synthea-fhir-import",
                 created_at=created_at,
-                source_refs=[{"path": path}],
+                source_refs=[source_ref],
             ),
             metadata={
                 "source": "synthea",
@@ -170,6 +228,77 @@ class SyntheaAdapter:
                 "reference_dataset": SYNTHEA_REFERENCE_KEY,
             },
         )
+
+
+def _read_ndjson_resources(path: Path) -> list[dict]:
+    resources = []
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        value = json.loads(line)
+        if isinstance(value, Mapping):
+            resources.append(dict(value))
+    return resources
+
+
+def _group_resources_by_patient(resources: list[dict]) -> dict[str, list[dict]]:
+    patients = {
+        str(resource.get("id")): [resource]
+        for resource in resources
+        if resource.get("resourceType") == "Patient" and resource.get("id")
+    }
+    if not patients:
+        return {"synthea-patient": resources}
+
+    encounter_patient_ids = {
+        str(resource.get("id")): patient_id
+        for resource in resources
+        if resource.get("resourceType") == "Encounter"
+        and resource.get("id")
+        and (patient_id := _resource_patient_id(resource))
+    }
+
+    grouped = {patient_id: list(patient_resources) for patient_id, patient_resources in patients.items()}
+    for resource in resources:
+        if resource.get("resourceType") == "Patient":
+            continue
+        patient_id = _resource_patient_id(resource)
+        if patient_id is None:
+            patient_id = _resource_encounter_patient_id(resource, encounter_patient_ids)
+        if patient_id is None:
+            continue
+        grouped.setdefault(patient_id, []).append(resource)
+    return grouped
+
+
+def _resource_patient_id(resource: Mapping) -> str | None:
+    subject = resource.get("subject")
+    if isinstance(subject, Mapping):
+        return _patient_id_from_reference(subject.get("reference"))
+    patient = resource.get("patient")
+    if isinstance(patient, Mapping):
+        return _patient_id_from_reference(patient.get("reference"))
+    return None
+
+
+def _resource_encounter_patient_id(
+    resource: Mapping,
+    encounter_patient_ids: dict[str, str],
+) -> str | None:
+    encounter = resource.get("encounter")
+    if not isinstance(encounter, Mapping):
+        return None
+    reference = encounter.get("reference")
+    if not isinstance(reference, str):
+        return None
+    encounter_id = reference.rsplit("/", 1)[-1]
+    return encounter_patient_ids.get(encounter_id)
+
+
+def _patient_id_from_reference(reference: object) -> str | None:
+    if not isinstance(reference, str) or not reference:
+        return None
+    return reference.rsplit("/", 1)[-1] if "Patient/" in reference else None
 
 
 def _run_synthea_command(command: list[str]) -> None:
