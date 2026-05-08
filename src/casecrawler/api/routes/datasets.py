@@ -58,6 +58,7 @@ class ReferenceImportRequest(BaseModel):
     patient_id_field: str | None = None
     image_field: str | None = None
     image_label_field: str | None = None
+    image_label_map: dict[str, str] | None = None
     image_modality: str = "XR"
     image_body_region: str = "chest"
     lab_values_field: str | None = None
@@ -578,6 +579,7 @@ def import_reference_dataset(req: ReferenceImportRequest):
             patient_id_field=req.patient_id_field,
             image_field=req.image_field,
             image_label_field=req.image_label_field,
+            image_label_map=req.image_label_map,
             image_modality=req.image_modality,
             image_body_region=req.image_body_region,
             lab_values_field=req.lab_values_field,

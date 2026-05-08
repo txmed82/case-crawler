@@ -1303,6 +1303,8 @@ def test_dataset_api_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
                         ],
                     }
                 ],
+                "image": "cxr-ref.png",
+                "image_label": "1",
             }
         ]
 
@@ -1327,6 +1329,9 @@ def test_dataset_api_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
             "vital_values_field": "vitals",
             "medications_field": "medications",
             "time_series_field": "signals",
+            "image_field": "image",
+            "image_label_field": "image_label",
+            "image_label_map": {"1": "pneumonia"},
             "limit": 1,
         },
     )
@@ -1344,6 +1349,7 @@ def test_dataset_api_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     assert record.vitals[0].name == "SpO2"
     assert record.medication_history[0].name == "Albuterol"
     assert record.time_series[0].name == "respiratory_rate"
+    assert record.imaging[0].labels[0].display == "Pneumonia"
 
 
 def test_dataset_api_imports_bundled_reference_fixture(tmp_path, monkeypatch):
