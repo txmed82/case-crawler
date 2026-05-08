@@ -271,6 +271,101 @@ def test_validator_rejects_medication_vital_safety_conflicts():
     assert any(issue.field == "medication_history.nitrate_hypotension" for issue in report.issues)
 
 
+def test_validator_rejects_lab_time_series_trending_away_from_reference_range():
+    bad = _record(
+        labs=[
+            LabObservation(
+                name="Lactate",
+                value=4.8,
+                unit="mmol/L",
+                reference_low=0.5,
+                reference_high=2.0,
+                flag="H",
+                effective_time="2026-05-06T08:30:00",
+            ),
+            LabObservation(
+                name="Sodium",
+                value=128,
+                unit="mmol/L",
+                reference_low=136,
+                reference_high=145,
+                flag="L",
+                effective_time="2026-05-06T08:35:00",
+            ),
+        ],
+        time_series=[
+            TimeSeriesChannel(
+                name="lab_lactate",
+                unit="mmol/L",
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T08:30:00",
+                        values={"value": 4.8},
+                    ),
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T09:30:00",
+                        values={"value": 6.1},
+                    ),
+                ],
+            ),
+            TimeSeriesChannel(
+                name="lab_sodium",
+                unit="mmol/L",
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T08:35:00",
+                        values={"value": 128},
+                    ),
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T09:35:00",
+                        values={"value": 123},
+                    ),
+                ],
+            ),
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "time_series.lab_lactate.trend" for issue in report.issues)
+    assert any(issue.field == "time_series.lab_sodium.trend" for issue in report.issues)
+
+
+def test_validator_rejects_hypoxic_spo2_time_series_trending_down():
+    bad = _record(
+        vitals=[
+            VitalObservation(
+                name="SpO2",
+                value=88,
+                unit="%",
+                effective_time="2026-05-06T08:00:00",
+            )
+        ],
+        time_series=[
+            TimeSeriesChannel(
+                name="spo2",
+                unit="%",
+                points=[
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T08:00:00",
+                        values={"value": 88},
+                    ),
+                    TimeSeriesPoint(
+                        timestamp="2026-05-06T09:00:00",
+                        values={"value": 82},
+                    ),
+                ],
+            )
+        ],
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    assert any(issue.field == "time_series.spo2.trend" for issue in report.issues)
+
+
 def test_validator_rejects_phi_like_text():
     bad = _record(metadata={"free_text": "Call patient at 555-123-4567 tomorrow."})
 
