@@ -1534,6 +1534,42 @@ def _verify_release_time_series_artifact_metadata(
                 ),
             }
         )
+    policy = artifact.get("time_series_model_policy")
+    backend = artifact.get("generation_backend")
+    if policy is None:
+        if isinstance(backend, str) and backend.startswith("external:"):
+            issues.append(
+                {
+                    "field": f"time_series_artifacts.{key}.time_series_model_policy",
+                    "message": (
+                        "Release-ready external time-series artifact is missing "
+                        "time-series model policy metadata."
+                    ),
+                }
+            )
+        return
+    if not isinstance(policy, dict):
+        issues.append(
+            {
+                "field": f"time_series_artifacts.{key}.time_series_model_policy",
+                "message": "Time-series model policy metadata must be an object.",
+            }
+        )
+        return
+    for field in ("profile", "license", "use_policy"):
+        if not isinstance(policy.get(field), str) or not policy[field].strip():
+            issues.append(
+                {
+                    "field": (
+                        f"time_series_artifacts.{key}."
+                        f"time_series_model_policy.{field}"
+                    ),
+                    "message": (
+                        "Release-ready time-series artifact time-series model "
+                        f"policy is missing {field}."
+                    ),
+                }
+            )
 
 
 def _time_series_artifact_key_parts(key: str) -> tuple[str | None, str | None]:
@@ -2936,6 +2972,19 @@ def _verify_optional_quality_numeric_fields(
                 ),
             }
         )
+    time_series_model_policy_counts = payload.get("time_series_model_policy_counts")
+    if time_series_model_policy_counts is not None and not _string_int_map(
+        time_series_model_policy_counts
+    ):
+        issues.append(
+            {
+                "field": "audit_artifacts.quality_report.json.time_series_model_policy_counts",
+                "message": (
+                    "Quality report artifact time_series_model_policy_counts "
+                    "must be a string-to-integer map."
+                ),
+            }
+        )
     image_validator_policy_counts = payload.get("image_validator_policy_counts")
     if image_validator_policy_counts is not None and not _string_int_map(
         image_validator_policy_counts
@@ -3244,6 +3293,19 @@ def _verify_release_summary_quality_numeric_fields(
                 ),
             }
         )
+    time_series_model_policy_counts = quality.get("time_series_model_policy_counts")
+    if time_series_model_policy_counts is not None and not _string_int_map(
+        time_series_model_policy_counts
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.time_series_model_policy_counts",
+                "message": (
+                    "Release package summary quality_report."
+                    "time_series_model_policy_counts must be a string-to-integer map."
+                ),
+            }
+        )
     image_validator_policy_counts = quality.get("image_validator_policy_counts")
     if image_validator_policy_counts is not None and not _string_int_map(
         image_validator_policy_counts
@@ -3494,6 +3556,9 @@ def _write_time_series_artifacts(
                 "generation_backend": channel.generation_backend,
                 "sampling_rate_hz": channel.sampling_rate_hz,
                 "point_count": len(channel.points),
+                "time_series_model_policy": _json_object_or_none(
+                    record.metadata.get("time_series_model_policy")
+                ),
             }
     return entries, artifacts
 

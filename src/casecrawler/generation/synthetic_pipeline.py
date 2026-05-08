@@ -11,7 +11,9 @@ from casecrawler.generation.recipes import apply_generation_recipe
 from casecrawler.generation.structured_generator import StructuredGenerator
 from casecrawler.generation.text_generator import TextGenerator
 from casecrawler.generation.timeseries_generator import TimeSeriesGenerator
-from casecrawler.generation.timeseries_models import resolve_time_series_model_profile
+from casecrawler.generation.timeseries_models import (
+    resolve_time_series_model_profile,
+)
 from casecrawler.llm.factory import get_provider
 from casecrawler.models.dataset import GenerationRequest
 from casecrawler.models.synthetic import Modality, SyntheticRecord
@@ -79,6 +81,15 @@ class SyntheticPipeline:
                 record = time_series_generator.add_time_series(
                     record,
                     channels=plan.time_series_channels,
+                )
+                record = record.model_copy(
+                    update={
+                        "metadata": _with_time_series_generation_metadata(
+                            record.metadata,
+                            req,
+                            self._config.synthetic.time_series_model_profile,
+                        )
+                    }
                 )
             if Modality.IMAGING in plan.modalities:
                 images = [
@@ -246,6 +257,29 @@ def _with_imaging_generation_metadata(
     return {
         **metadata,
         "imaging_model_policy": {
+            "profile": profile.name,
+            "model_id": profile.model_id,
+            "license": profile.license,
+            "gated": profile.gated,
+            "use_policy": profile.use_policy,
+        },
+    }
+
+
+def _with_time_series_generation_metadata(
+    metadata: dict,
+    req: GenerationRequest,
+    configured_profile: str | None,
+) -> dict:
+    profile_name = req.time_series_model_profile or configured_profile
+    if not profile_name:
+        return metadata
+    profile = resolve_time_series_model_profile(profile_name)
+    if profile is None:
+        return metadata
+    return {
+        **metadata,
+        "time_series_model_policy": {
             "profile": profile.name,
             "model_id": profile.model_id,
             "license": profile.license,
