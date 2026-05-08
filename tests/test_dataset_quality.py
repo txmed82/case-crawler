@@ -133,7 +133,118 @@ def test_quality_report_marks_fully_approved_dataset_export_ready():
     assert report.export_profile_readiness["note_fact_sft_jsonl"]["ready"] is False
     assert report.export_profile_readiness["multimodal_jsonl"]["ready"] is False
     assert "imaging_file_assets" in report.export_profile_readiness["multimodal_jsonl"]["missing"]
+    assert report.multimodal_release_ready is False
+    assert "vitals" in report.multimodal_release_missing
+    assert "time_series" in report.multimodal_release_missing
+    assert "radiology_images" in report.multimodal_release_missing
+    assert "benchmark_reference" in report.multimodal_release_missing
     assert report.recommendations == []
+
+
+def test_quality_report_marks_multimodal_release_ready_with_core_artifacts(tmp_path):
+    image_path = tmp_path / "cxr.png"
+    image_path.write_bytes(_png_bytes(width=96, height=96))
+    base = _record("rec-1")
+    record = base.model_copy(
+        update={
+            "modalities": [
+                Modality.STRUCTURED_EHR,
+                Modality.CLINICAL_TEXT,
+                Modality.LABS,
+                Modality.VITALS,
+                Modality.TIME_SERIES,
+                Modality.IMAGING,
+            ],
+            "documents": [
+                *base.documents,
+                ClinicalDocument(
+                    document_id="doc-rec-1-vitals",
+                    note_type="vital_signs_flowsheet",
+                    author_role="nurse",
+                    timestamp="2026-01-01T00:05:00",
+                    clean_text="Vital signs flowsheet.",
+                    messy_text="vs flow",
+                ),
+                ClinicalDocument(
+                    document_id="doc-rec-1-radiology",
+                    note_type="radiology_report",
+                    author_role="radiologist",
+                    timestamp="2026-01-01T00:15:00",
+                    clean_text="Portable chest radiograph shows right lower lobe pneumonia.",
+                    messy_text="cxr rll pna",
+                ),
+            ],
+            "vitals": [
+                VitalObservation(
+                    name="HR",
+                    value=112,
+                    unit="/min",
+                    effective_time="2026-01-01T00:00:00",
+                )
+            ],
+            "time_series": [
+                TimeSeriesChannel(
+                    name="heart_rate",
+                    unit="/min",
+                    generation_backend="deterministic",
+                    points=[
+                        TimeSeriesPoint(
+                            timestamp="2026-01-01T00:00:00",
+                            values={"value": 112},
+                        )
+                    ],
+                )
+            ],
+            "imaging": [
+                ImagingAsset(
+                    image_id="img-rec-1",
+                    modality="XR",
+                    body_region="chest",
+                    prompt="portable chest x-ray pneumonia",
+                    file_path=str(image_path),
+                    report_text="Right lower lobe pneumonia.",
+                    generation_backend="diffusers:cxr_pneumonia_dreambooth",
+                )
+            ],
+            "metadata": {
+                "imaging_model_policy": {
+                    "profile": "cxr_pneumonia_dreambooth",
+                    "model_id": "chimbiwide/cxr-pneumonia-dreambooth",
+                    "license": "openrail++",
+                    "gated": False,
+                    "use_policy": "openrail_review_outputs_before_release",
+                }
+            },
+            "validation": ValidationReport(
+                schema_score=1.0,
+                clinical_consistency_score=1.0,
+                privacy_score=1.0,
+                utility_score=1.0,
+                modality_alignment_score=0.91,
+                approved=True,
+            ),
+        }
+    )
+
+    report = build_dataset_quality_report(
+        "ds-quality",
+        [record],
+        benchmark_plan={
+            "recommended_reference_keys": ["synthchex_75k"],
+            "ready": True,
+            "resolved_reference_dataset_id": "ds-reference",
+            "missing_reference_keys": [],
+            "thresholds": {
+                "min_overall_score": 0.75,
+                "min_metric_score": 0.5,
+            },
+        },
+    )
+
+    assert report.export_ready is True
+    assert report.multimodal_release_ready is True
+    assert report.multimodal_release_missing == []
+    assert all(report.core_artifact_coverage.values())
 
 
 def test_quality_report_marks_task_exports_not_ready_without_artifacts():
