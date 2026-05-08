@@ -351,6 +351,24 @@ class DatasetBenchmark:
                 set(reference_profile.imaging_label_pair_counts),
             ),
             _closeness_metric(
+                "mean_imaging_prompt_chars",
+                generated_profile.mean_imaging_prompt_chars,
+                reference_profile.mean_imaging_prompt_chars,
+                tolerance=120.0,
+            ),
+            _closeness_metric(
+                "mean_imaging_report_chars",
+                generated_profile.mean_imaging_report_chars,
+                reference_profile.mean_imaging_report_chars,
+                tolerance=500.0,
+            ),
+            _closeness_metric(
+                "imaging_report_label_evidence_rate",
+                generated_profile.imaging_report_label_evidence_rate,
+                reference_profile.imaging_report_label_evidence_rate,
+                tolerance=0.25,
+            ),
+            _closeness_metric(
                 "mean_imaging_width",
                 generated_profile.mean_imaging_width,
                 reference_profile.mean_imaging_width,
@@ -791,6 +809,24 @@ def _profile_metrics(
             set(reference_profile.imaging_label_pair_counts),
         ),
         _closeness_metric(
+            "mean_imaging_prompt_chars",
+            generated_profile.mean_imaging_prompt_chars,
+            reference_profile.mean_imaging_prompt_chars,
+            tolerance=120.0,
+        ),
+        _closeness_metric(
+            "mean_imaging_report_chars",
+            generated_profile.mean_imaging_report_chars,
+            reference_profile.mean_imaging_report_chars,
+            tolerance=500.0,
+        ),
+        _closeness_metric(
+            "imaging_report_label_evidence_rate",
+            generated_profile.imaging_report_label_evidence_rate,
+            reference_profile.imaging_report_label_evidence_rate,
+            tolerance=0.25,
+        ),
+        _closeness_metric(
             "mean_imaging_width",
             generated_profile.mean_imaging_width,
             reference_profile.mean_imaging_width,
@@ -855,6 +891,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     imaging_model_policy_counts: Counter[str] = Counter()
     imaging_label_counts: Counter[str] = Counter()
     imaging_label_pair_counts: Counter[str] = Counter()
+    imaging_prompt_lengths: list[int] = []
+    imaging_report_lengths: list[int] = []
+    imaging_report_label_evidence_values: list[int] = []
     imaging_widths: list[int] = []
     imaging_heights: list[int] = []
     ages: list[int] = []
@@ -946,6 +985,10 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             imaging_modality_counts[asset.modality] += 1
             imaging_body_region_counts[asset.body_region] += 1
             imaging_backend_counts[asset.generation_backend] += 1
+            if asset.prompt:
+                imaging_prompt_lengths.append(len(asset.prompt))
+            if asset.report_text:
+                imaging_report_lengths.append(len(asset.report_text))
             if asset.file_path:
                 width, height = raster_dimensions(asset.file_path)
                 if width is not None and height is not None:
@@ -963,6 +1006,10 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             for index, left in enumerate(asset_labels):
                 for right in asset_labels[index + 1 :]:
                     imaging_label_pair_counts[f"{left}|{right}"] += 1
+            if asset_labels:
+                imaging_report_label_evidence_values.append(
+                    1 if _imaging_report_has_label_evidence(asset) else 0
+                )
         imaging_policy_key = _imaging_model_policy_key(record)
         if imaging_policy_key:
             imaging_model_policy_counts[imaging_policy_key] += 1
@@ -1021,6 +1068,9 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
         imaging_label_counts=dict(sorted(imaging_label_counts.items())),
         imaging_label_pair_counts=dict(sorted(imaging_label_pair_counts.items())),
+        mean_imaging_prompt_chars=_mean(imaging_prompt_lengths),
+        mean_imaging_report_chars=_mean(imaging_report_lengths),
+        imaging_report_label_evidence_rate=_mean(imaging_report_label_evidence_values),
         mean_imaging_width=_mean(imaging_widths),
         mean_imaging_height=_mean(imaging_heights),
         approved_rate=_mean([int(value) for value in approved_values])
@@ -1402,6 +1452,20 @@ def _parse_datetime(value: str) -> datetime | None:
 def _imaging_label_key(display: str, code: str) -> str:
     value = display or code.replace("_", " ")
     return " ".join(value.lower().replace("_", " ").split())
+
+
+def _imaging_report_has_label_evidence(asset) -> bool:
+    report_text = _metric_key(asset.report_text or "")
+    if not report_text:
+        return False
+    for label in asset.labels:
+        display = _metric_key(label.display or "")
+        code = _metric_key((label.code or "").replace("_", " "))
+        if display and display in report_text:
+            return True
+        if code and code in report_text:
+            return True
+    return False
 
 
 def _imaging_model_policy_key(record: SyntheticRecord) -> str | None:
