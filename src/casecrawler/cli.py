@@ -1160,10 +1160,10 @@ def export_dataset_splits(
 @cli.command("verify-split-package")
 @click.argument(
     "package_dir",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    type=click.Path(exists=True, file_okay=True, dir_okay=True),
 )
 def verify_split_package(package_dir: str) -> None:
-    """Verify a split fine-tuning package manifest, checksums, and JSONL files."""
+    """Verify a split fine-tuning package directory or zip archive."""
     from casecrawler.export.fine_tuning import verify_jsonl_split_package
 
     report = verify_jsonl_split_package(package_dir)
