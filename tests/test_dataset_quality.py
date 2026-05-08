@@ -1,3 +1,6 @@
+import struct
+import zlib
+
 from casecrawler.models.synthetic import (
     ClinicalDocument,
     Code,
@@ -441,7 +444,7 @@ def test_quality_report_requires_expected_clinical_document_author_roles():
 
 def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
     image_path = tmp_path / "image.png"
-    image_path.write_bytes(b"synthetic image")
+    image_path.write_bytes(_png_bytes(width=96, height=64))
     record = _record("rec-1").model_copy(
         update={
             "modalities": [
@@ -595,10 +598,14 @@ def test_quality_report_summarizes_multimodal_training_artifacts(tmp_path):
     assert report.medication_status_counts == {"active": 1}
     assert report.time_series_numeric_summaries["heart_rate.value"]["mean"] == 100.0
     assert report.time_series_numeric_summaries["ecg_lead_ii.millivolts"]["mean"] == 0.1
+    assert report.time_series_unit_counts == {"/min": 1, "mV": 1}
+    assert report.mean_time_series_sampling_rate_hz == 125.0
     assert report.time_series_backend_counts == {
         "deterministic": 1,
         "external:timediff-sample": 1,
     }
+    assert report.mean_imaging_width == 96.0
+    assert report.mean_imaging_height == 64.0
     assert report.imaging_backend_counts == {
         "diffusers:cxr_pneumonia_dreambooth": 1,
     }
@@ -771,3 +778,23 @@ def test_quality_report_surfaces_missing_benchmark_reference_plan():
         "min_metric_score": 0.5,
     }
     assert any("recommended reference dataset" in item for item in report.recommendations)
+
+
+def _png_bytes(*, width: int, height: int) -> bytes:
+    raw = b"".join(b"\x00" + (b"\x80" * width) for _ in range(height))
+    chunks = [
+        b"\x89PNG\r\n\x1a\n",
+        _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)),
+        _png_chunk(b"IDAT", zlib.compress(raw)),
+        _png_chunk(b"IEND", b""),
+    ]
+    return b"".join(chunks)
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + chunk_type
+        + data
+        + struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
+    )

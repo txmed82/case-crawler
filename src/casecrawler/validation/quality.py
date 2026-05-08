@@ -5,6 +5,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
+from casecrawler.imaging.file_metadata import raster_dimensions
 from casecrawler.models.dataset import ExportFormat
 from casecrawler.models.evaluation import DatasetQualityReport
 from casecrawler.models.synthetic import Modality, SyntheticRecord
@@ -29,6 +30,7 @@ def build_dataset_quality_report(
     medication_dose_counts: Counter[str] = Counter()
     medication_frequency_counts: Counter[str] = Counter()
     medication_status_counts: Counter[str] = Counter()
+    time_series_unit_counts: Counter[str] = Counter()
     time_series_backend_counts: Counter[str] = Counter()
     imaging_backend_counts: Counter[str] = Counter()
     imaging_model_policy_counts: Counter[str] = Counter()
@@ -37,6 +39,9 @@ def build_dataset_quality_report(
     lab_numeric_values: dict[str, list[float]] = {}
     vital_numeric_values: dict[str, list[float]] = {}
     time_series_numeric_values: dict[str, list[float]] = {}
+    time_series_sampling_rates: list[float] = []
+    imaging_widths: list[int] = []
+    imaging_heights: list[int] = []
     issue_counts_by_field: Counter[str] = Counter()
     longitudinal_values: list[int] = []
     encounter_spans: list[float] = []
@@ -71,6 +76,7 @@ def build_dataset_quality_report(
             medication_dose_counts,
             medication_frequency_counts,
             medication_status_counts,
+            time_series_unit_counts,
             time_series_backend_counts,
             imaging_backend_counts,
             imaging_model_policy_counts,
@@ -79,6 +85,9 @@ def build_dataset_quality_report(
             lab_numeric_values,
             vital_numeric_values,
             time_series_numeric_values,
+            time_series_sampling_rates,
+            imaging_widths,
+            imaging_heights,
         )
         blocking_issue_count += _count_missing_declared_artifacts(
             record,
@@ -170,10 +179,14 @@ def build_dataset_quality_report(
         medication_dose_counts=dict(sorted(medication_dose_counts.items())),
         medication_frequency_counts=dict(sorted(medication_frequency_counts.items())),
         medication_status_counts=dict(sorted(medication_status_counts.items())),
+        time_series_unit_counts=dict(sorted(time_series_unit_counts.items())),
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
         time_series_numeric_summaries=_numeric_summaries(time_series_numeric_values),
+        mean_time_series_sampling_rate_hz=_mean_float(time_series_sampling_rates),
         imaging_backend_counts=dict(sorted(imaging_backend_counts.items())),
         imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
+        mean_imaging_width=_mean_float(imaging_widths),
+        mean_imaging_height=_mean_float(imaging_heights),
         mean_modality_alignment_score=_mean_float(modality_alignment_scores),
         blocking_issue_count=blocking_issue_count,
         warning_issue_count=warning_issue_count,
@@ -238,6 +251,7 @@ def _count_artifacts(
     medication_dose_counts: Counter[str],
     medication_frequency_counts: Counter[str],
     medication_status_counts: Counter[str],
+    time_series_unit_counts: Counter[str],
     time_series_backend_counts: Counter[str],
     imaging_backend_counts: Counter[str],
     imaging_model_policy_counts: Counter[str],
@@ -246,6 +260,9 @@ def _count_artifacts(
     lab_numeric_values: dict[str, list[float]],
     vital_numeric_values: dict[str, list[float]],
     time_series_numeric_values: dict[str, list[float]],
+    time_series_sampling_rates: list[float],
+    imaging_widths: list[int],
+    imaging_heights: list[int],
 ) -> None:
     documents = len(record.documents)
     artifact_counts["documents"] += documents
@@ -287,7 +304,10 @@ def _count_artifacts(
         medication_status_counts[medication.status or "unknown"] += 1
     artifact_counts["time_series_channels"] += len(record.time_series)
     for channel in record.time_series:
+        time_series_unit_counts[channel.unit] += 1
         time_series_backend_counts[channel.generation_backend or "unknown"] += 1
+        if channel.sampling_rate_hz is not None:
+            time_series_sampling_rates.append(channel.sampling_rate_hz)
         _collect_time_series_numeric_values(channel, time_series_numeric_values)
     artifact_counts["time_series_waveform_channels"] += sum(
         1
@@ -305,6 +325,11 @@ def _count_artifacts(
     )
     for asset in record.imaging:
         imaging_backend_counts[asset.generation_backend or "unknown"] += 1
+        if asset.file_path:
+            width, height = raster_dimensions(asset.file_path)
+            if width is not None and height is not None:
+                imaging_widths.append(width)
+                imaging_heights.append(height)
     policy_key = _imaging_model_policy_key(record)
     if policy_key:
         imaging_model_policy_counts[policy_key] += len(record.imaging)
