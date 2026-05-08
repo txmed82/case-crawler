@@ -60,6 +60,7 @@ class SyntheticPipeline:
     async def generate(self, req: GenerationRequest) -> dict:
         dataset_id = f"ds-{uuid4()}"
         plan = self._modality_planner.build(req)
+        text_generator = self._text_generator_for(req)
         imaging_generator = self._imaging_generator_for(req)
         time_series_generator = self._time_series_generator_for(req)
         records = []
@@ -85,7 +86,7 @@ class SyntheticPipeline:
                 ]
                 record = record.model_copy(update={"imaging": [*record.imaging, *images]})
             if Modality.CLINICAL_TEXT in plan.modalities:
-                record = await self._text_generator.add_documents_async(record)
+                record = await text_generator.add_documents_async(record)
             validation = self._validator_for(req).validate(record)
             record = record.model_copy(update={"validation": validation})
             records.append(record)
@@ -156,6 +157,26 @@ class SyntheticPipeline:
         )
         command = req.time_series_command or self._config.synthetic.time_series_command
         return _time_series_generator_from_config(backend, command)
+
+    def _text_generator_for(self, req: GenerationRequest) -> TextGenerator:
+        if not (
+            req.clinical_text_backend
+            or req.llm_provider
+            or req.llm_model
+            or req.ollama_base_url
+        ):
+            return self._text_generator
+        backend = req.clinical_text_backend or (
+            "llm"
+            if (req.llm_provider or req.llm_model)
+            else self._config.synthetic.clinical_text_backend
+        )
+        return _text_generator_from_config(
+            backend,
+            req.llm_provider or self._config.llm.provider,
+            req.llm_model or self._config.llm.model,
+            req.ollama_base_url or self._config.llm.ollama_base_url,
+        )
 
 
 def _time_series_generator_from_config(

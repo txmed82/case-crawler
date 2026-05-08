@@ -64,6 +64,10 @@ class GenerationRequest(BaseModel):
     export_formats: list[ExportFormat] = Field(
         default_factory=lambda: [ExportFormat.SFT_JSONL]
     )
+    clinical_text_backend: Literal["deterministic", "llm"] | None = None
+    llm_provider: str | None = Field(default=None, min_length=1)
+    llm_model: str | None = Field(default=None, min_length=1)
+    ollama_base_url: str | None = Field(default=None, min_length=1)
     imaging_backend: Literal["placeholder", "diffusers"] | None = None
     imaging_model_profile: str | None = Field(default=None, min_length=1)
     diffusers_model_id: str | None = Field(default=None, min_length=1)

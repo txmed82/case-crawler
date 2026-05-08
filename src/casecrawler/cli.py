@@ -395,6 +395,19 @@ def serve() -> None:
 @click.option("--sexes", default=None, help="Comma-separated sex cycle")
 @click.option("--base-time", default=None, help="ISO-8601 base timestamp")
 @click.option(
+    "--clinical-text-backend",
+    default=None,
+    type=click.Choice(["deterministic", "llm"]),
+    help="Override clinical text backend for this generation request",
+)
+@click.option("--llm-provider", default=None, help="Override LLM provider for clinical text")
+@click.option("--llm-model", default=None, help="Override LLM model for clinical text")
+@click.option(
+    "--ollama-base-url",
+    default=None,
+    help="Override Ollama base URL for clinical text generation",
+)
+@click.option(
     "--imaging-backend",
     default=None,
     type=click.Choice(["placeholder", "diffusers"]),
@@ -435,6 +448,10 @@ def generate_dataset(
     age_max: int | None,
     sexes: str | None,
     base_time: str | None,
+    clinical_text_backend: str | None,
+    llm_provider: str | None,
+    llm_model: str | None,
+    ollama_base_url: str | None,
     imaging_backend: str | None,
     imaging_model_profile: str | None,
     diffusers_model_id: str | None,
@@ -479,6 +496,10 @@ def generate_dataset(
             if selected_modalities is not None
             else GenerationRequest(topic=topic).modalities,
             cohort_constraints=cohort_constraints,
+            clinical_text_backend=clinical_text_backend,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            ollama_base_url=ollama_base_url,
             imaging_backend=imaging_backend,
             imaging_model_profile=imaging_model_profile,
             diffusers_model_id=diffusers_model_id,

@@ -214,6 +214,8 @@ llm:
 
 synthetic:
   clinical_text_backend: "deterministic" # or "llm"
+  # GenerationRequest can override clinical_text_backend, llm_provider,
+  # llm_model, and ollama_base_url for a single dataset generation run.
   imaging_backend: "placeholder" # or "diffusers"
   imaging_model_profile: null # e.g. cxr_pneumonia_dreambooth
   diffusers_model_id: "stabilityai/stable-diffusion-2-1"
