@@ -462,6 +462,12 @@ def serve() -> None:
 )
 @click.option("--base-time", default=None, help="ISO-8601 base timestamp")
 @click.option(
+    "--encounter-count",
+    default=None,
+    type=click.IntRange(1, 30),
+    help="Number of longitudinal encounters per generated patient record",
+)
+@click.option(
     "--clinical-text-backend",
     default=None,
     type=click.Choice(["deterministic", "llm"]),
@@ -522,6 +528,7 @@ def generate_dataset(
     sexes: str | None,
     topic_mix: str | None,
     base_time: str | None,
+    encounter_count: int | None,
     clinical_text_backend: str | None,
     llm_provider: str | None,
     llm_model: str | None,
@@ -556,6 +563,8 @@ def generate_dataset(
         ]
     if base_time:
         cohort_constraints["base_time"] = base_time
+    if encounter_count is not None:
+        cohort_constraints["encounter_count"] = encounter_count
     parsed_time_series_command = (
         [value.strip() for value in time_series_command.split(",") if value.strip()]
         if time_series_command
@@ -800,6 +809,7 @@ def reviews_mark(
             "chat_jsonl",
             "tool_call_jsonl",
             "multimodal_jsonl",
+            "time_series_jsonl",
             "dpo_jsonl",
             "rl_jsonl",
             "fhir_ndjson",
