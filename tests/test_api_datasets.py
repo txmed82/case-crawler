@@ -138,6 +138,66 @@ def test_dataset_api_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert "model_card.md" in listed.json()["exports"][0]["metadata"]["audit_artifacts"]
 
 
+def test_dataset_api_blocks_profile_specific_export_when_artifacts_missing(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post(
+        "/api/datasets/generate",
+        json={
+            "topic": "sepsis",
+            "count": 1,
+            "modalities": ["clinical_text"],
+        },
+    )
+    dataset_id = generated.json()["dataset_id"]
+
+    blocked = client.get(
+        f"/api/datasets/{dataset_id}/export",
+        params={"export_format": "medication_reconciliation_jsonl"},
+    )
+    allowed = client.get(
+        f"/api/datasets/{dataset_id}/export",
+        params={
+            "export_format": "medication_reconciliation_jsonl",
+            "allow_blocked": "true",
+        },
+    )
+
+    assert blocked.status_code == 409
+    assert "Export profile medication_reconciliation_jsonl is not ready" in blocked.json()["detail"]
+    assert "medications" in blocked.json()["detail"]
+    assert allowed.status_code == 200
+
+
+def test_dataset_api_blocks_profile_specific_split_export_when_artifacts_missing(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post(
+        "/api/datasets/generate",
+        json={
+            "topic": "sepsis",
+            "count": 1,
+            "modalities": ["clinical_text"],
+        },
+    )
+    dataset_id = generated.json()["dataset_id"]
+
+    blocked = client.get(
+        f"/api/datasets/{dataset_id}/export-splits",
+        params={"export_format": "clinical_observation_jsonl"},
+    )
+
+    assert blocked.status_code == 409
+    assert "Export profile clinical_observation_jsonl is not ready" in blocked.json()["detail"]
+    assert "labs_or_vitals" in blocked.json()["detail"]
+
+
 def test_dataset_api_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

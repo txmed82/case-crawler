@@ -141,6 +141,91 @@ def test_dataset_cli_exports_split_fine_tuning_package(tmp_path, monkeypatch):
     assert "quality_report.json" in exports[0].metadata["audit_artifacts"]
 
 
+def test_dataset_cli_blocks_profile_specific_export_when_artifacts_missing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generate = runner.invoke(
+        cli,
+        [
+            "generate-dataset",
+            "sepsis",
+            "--count",
+            "1",
+            "--modalities",
+            "clinical_text",
+        ],
+    )
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generate.output).group(1)
+    blocked = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--format",
+            "medication_reconciliation_jsonl",
+            "--output",
+            "meds.jsonl",
+        ],
+    )
+    allowed = runner.invoke(
+        cli,
+        [
+            "export-dataset",
+            "--dataset-id",
+            dataset_id,
+            "--format",
+            "medication_reconciliation_jsonl",
+            "--output",
+            "meds.jsonl",
+            "--allow-blocked",
+        ],
+    )
+
+    assert blocked.exit_code != 0
+    assert "Export profile medication_reconciliation_jsonl is not ready" in blocked.output
+    assert "medications" in blocked.output
+    assert allowed.exit_code == 0
+
+
+def test_dataset_cli_blocks_profile_specific_split_export_when_artifacts_missing(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    generate = runner.invoke(
+        cli,
+        [
+            "generate-dataset",
+            "sepsis",
+            "--count",
+            "1",
+            "--modalities",
+            "clinical_text",
+        ],
+    )
+    dataset_id = re.search(r"Dataset: (ds-[0-9a-f-]+)", generate.output).group(1)
+    blocked = runner.invoke(
+        cli,
+        [
+            "export-dataset-splits",
+            "--dataset-id",
+            dataset_id,
+            "--format",
+            "clinical_observation_jsonl",
+            "--output-dir",
+            "obs-package",
+        ],
+    )
+
+    assert blocked.exit_code != 0
+    assert "Export profile clinical_observation_jsonl is not ready" in blocked.output
+    assert "labs_or_vitals" in blocked.output
+
+
 def test_dataset_cli_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

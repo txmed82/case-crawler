@@ -16,7 +16,7 @@ from casecrawler.models.synthetic import (
     ValidationReport,
     VitalObservation,
 )
-from casecrawler.validation.quality import build_dataset_quality_report
+from casecrawler.validation.quality import build_dataset_quality_report, export_profile_blocker
 
 
 def _record(record_id: str, *, approved: bool = True, issues=None) -> SyntheticRecord:
@@ -159,6 +159,10 @@ def test_quality_report_marks_task_exports_not_ready_without_artifacts():
         "time_series_channels",
         "time_series_points",
     ]
+    assert export_profile_blocker(
+        report,
+        "medication_reconciliation_jsonl",
+    ).startswith("Export profile medication_reconciliation_jsonl is not ready")
 
 
 def test_quality_report_summarizes_longitudinal_encounter_depth():

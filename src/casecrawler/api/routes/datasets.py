@@ -26,7 +26,7 @@ from casecrawler.models.dataset import (
 from casecrawler.models.synthetic import ComplexityProfile, Modality
 from casecrawler.storage.dataset_store import DatasetStore
 from casecrawler.validation.benchmark import DatasetBenchmark
-from casecrawler.validation.quality import build_dataset_quality_report
+from casecrawler.validation.quality import build_dataset_quality_report, export_profile_blocker
 
 router = APIRouter()
 
@@ -539,6 +539,12 @@ def export_dataset(
                     "Set allow_blocked=true to export anyway."
                 ),
             )
+        profile_blocker = export_profile_blocker(report, export_format.value)
+        if profile_blocker:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{profile_blocker} Set allow_blocked=true to export anyway.",
+            )
     try:
         from casecrawler.validation.benchmark_selection import resolve_benchmark_gate
 
@@ -682,6 +688,12 @@ def export_dataset_splits(
                     f"Blockers: {report.issue_counts_by_field}. "
                     "Set allow_blocked=true to export anyway."
                 ),
+            )
+        profile_blocker = export_profile_blocker(report, export_format.value)
+        if profile_blocker:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{profile_blocker} Set allow_blocked=true to export anyway.",
             )
     try:
         from casecrawler.validation.benchmark_selection import resolve_benchmark_gate
