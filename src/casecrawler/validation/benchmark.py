@@ -236,6 +236,16 @@ class DatasetBenchmark:
                 set(reference_profile.medication_name_counts),
             ),
             _distribution_metric(
+                "medication_dose_distribution",
+                generated_profile.medication_dose_counts,
+                reference_profile.medication_dose_counts,
+            ),
+            _distribution_metric(
+                "medication_frequency_distribution",
+                generated_profile.medication_frequency_counts,
+                reference_profile.medication_frequency_counts,
+            ),
+            _distribution_metric(
                 "medication_route_distribution",
                 generated_profile.medication_route_counts,
                 reference_profile.medication_route_counts,
@@ -638,6 +648,16 @@ def _profile_metrics(
             set(reference_profile.medication_name_counts),
         ),
         _distribution_metric(
+            "medication_dose_distribution",
+            generated_profile.medication_dose_counts,
+            reference_profile.medication_dose_counts,
+        ),
+        _distribution_metric(
+            "medication_frequency_distribution",
+            generated_profile.medication_frequency_counts,
+            reference_profile.medication_frequency_counts,
+        ),
+        _distribution_metric(
             "medication_route_distribution",
             generated_profile.medication_route_counts,
             reference_profile.medication_route_counts,
@@ -765,6 +785,8 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     diagnosis_code_counts: Counter[str] = Counter()
     phi_entity_counts: Counter[str] = Counter()
     medication_name_counts: Counter[str] = Counter()
+    medication_dose_counts: Counter[str] = Counter()
+    medication_frequency_counts: Counter[str] = Counter()
     medication_route_counts: Counter[str] = Counter()
     medication_status_counts: Counter[str] = Counter()
     time_series_channel_counts: Counter[str] = Counter()
@@ -841,6 +863,10 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
                 procedure_name_counts[procedure.display] += 1
         for medication in record.medication_history:
             medication_name_counts[medication.name] += 1
+            if medication.dose:
+                medication_dose_counts[medication.dose] += 1
+            if medication.frequency:
+                medication_frequency_counts[medication.frequency] += 1
             if medication.route:
                 medication_route_counts[medication.route] += 1
             medication_status_counts[medication.status or "unknown"] += 1
@@ -909,6 +935,8 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         diagnosis_code_counts=dict(sorted(diagnosis_code_counts.items())),
         phi_entity_counts=dict(sorted(phi_entity_counts.items())),
         medication_name_counts=dict(sorted(medication_name_counts.items())),
+        medication_dose_counts=dict(sorted(medication_dose_counts.items())),
+        medication_frequency_counts=dict(sorted(medication_frequency_counts.items())),
         medication_route_counts=dict(sorted(medication_route_counts.items())),
         medication_status_counts=dict(sorted(medication_status_counts.items())),
         time_series_channel_counts=dict(sorted(time_series_channel_counts.items())),
