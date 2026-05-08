@@ -203,6 +203,9 @@ def test_verify_jsonl_split_package_accepts_valid_moved_package(tmp_path):
                 "approved_count": 4,
                 "approval_rate": 1.0,
                 "export_ready": True,
+                "core_artifact_coverage": {"records": True},
+                "multimodal_release_ready": False,
+                "multimodal_release_missing": ["benchmark_reference"],
             }
         },
     )
@@ -427,6 +430,53 @@ def test_verify_jsonl_split_package_validates_quality_report_dataset_id(tmp_path
         issue["field"] == "audit_artifacts.quality_report.json.dataset_id"
         for issue in report["issues"]
     )
+
+
+def test_verify_jsonl_split_package_validates_quality_report_release_fields(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "sft_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+        audit_artifacts={
+            "quality_report.json": {
+                "dataset_id": "ds-split",
+                "record_count": 3,
+                "approved_count": 3,
+                "approval_rate": 1.0,
+                "export_ready": True,
+                "core_artifact_coverage": {"records": "yes"},
+                "multimodal_release_ready": "false",
+                "multimodal_release_missing": [False],
+            }
+        },
+    )
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    manifest["files"]["quality_report.json"]["byte_size"] = (
+        tmp_path / "quality_report.json"
+    ).stat().st_size
+    manifest["files"]["quality_report.json"]["sha256"] = hashlib.sha256(
+        (tmp_path / "quality_report.json").read_bytes()
+    ).hexdigest()
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path)
+
+    assert report["valid"] is False
+    issue_fields = {issue["field"] for issue in report["issues"]}
+    assert "audit_artifacts.quality_report.json.core_artifact_coverage" in issue_fields
+    assert "audit_artifacts.quality_report.json.multimodal_release_ready" in issue_fields
+    assert "audit_artifacts.quality_report.json.multimodal_release_missing" in issue_fields
 
 
 def test_verify_jsonl_split_package_validates_card_headers(tmp_path):
