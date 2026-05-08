@@ -63,6 +63,11 @@ class DatasetQualityReport(BaseModel):
     approved_count: int
     approval_rate: float
     export_ready: bool
+    benchmark_ready: bool | None = None
+    recommended_reference_keys: list[str] = Field(default_factory=list)
+    resolved_reference_dataset_id: str | None = None
+    missing_reference_keys: list[str] = Field(default_factory=list)
+    benchmark_thresholds: dict[str, float] = Field(default_factory=dict)
     modality_counts: dict[str, int] = Field(default_factory=dict)
     artifact_counts: dict[str, int] = Field(default_factory=dict)
     note_type_counts: dict[str, int] = Field(default_factory=dict)

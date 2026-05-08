@@ -39,6 +39,7 @@ RECIPES: dict[str, GenerationRecipe] = {
         export_formats=[
             ExportFormat.MULTIMODAL_JSONL,
             ExportFormat.SFT_JSONL,
+            ExportFormat.NOTE_FACT_SFT_JSONL,
             ExportFormat.FHIR_NDJSON,
             ExportFormat.PARQUET,
         ],
@@ -105,7 +106,11 @@ RECIPES: dict[str, GenerationRecipe] = {
             Modality.VITALS,
             Modality.TIME_SERIES,
         ],
-        export_formats=[ExportFormat.SFT_JSONL, ExportFormat.PARQUET],
+        export_formats=[
+            ExportFormat.SFT_JSONL,
+            ExportFormat.NOTE_FACT_SFT_JSONL,
+            ExportFormat.PARQUET,
+        ],
         cohort_constraints={
             "topic_mix": [
                 {"topic": "sepsis", "weight": 2},

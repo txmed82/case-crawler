@@ -39,6 +39,7 @@ def test_apply_generation_recipe_fills_default_request_fields():
     assert req.export_formats == [
         ExportFormat.MULTIMODAL_JSONL,
         ExportFormat.SFT_JSONL,
+        ExportFormat.NOTE_FACT_SFT_JSONL,
         ExportFormat.FHIR_NDJSON,
         ExportFormat.PARQUET,
     ]
@@ -62,6 +63,14 @@ def test_apply_generation_recipe_preserves_explicit_overrides():
     assert req.complexity == ComplexityProfile.RARE
     assert req.cohort_constraints["age_min"] == 70
     assert req.cohort_constraints["age_max"] == 88
+
+
+def test_icu_recipe_recommends_note_fact_sft_export():
+    req = apply_generation_recipe(
+        GenerationRequest(topic="sepsis", recipe="icu_timeseries_notes")
+    )
+
+    assert ExportFormat.NOTE_FACT_SFT_JSONL in req.export_formats
 
 
 def test_apply_generation_recipe_rejects_unknown_recipe():

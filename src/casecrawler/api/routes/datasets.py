@@ -331,6 +331,8 @@ def list_dataset_review_queue(
 
 @router.get("/datasets/{dataset_id}/quality")
 def get_dataset_quality(dataset_id: str):
+    from casecrawler.validation.benchmark_selection import build_benchmark_plan_summary
+
     store = DatasetStore()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
@@ -339,6 +341,7 @@ def get_dataset_quality(dataset_id: str):
         dataset_id,
         records,
         effective_approved=store.effective_approved,
+        benchmark_plan=build_benchmark_plan_summary(store, dataset_id),
     ).model_dump()
 
 

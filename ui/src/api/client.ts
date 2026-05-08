@@ -435,6 +435,11 @@ export interface DatasetQualityReport {
   approved_count: number;
   approval_rate: number;
   export_ready: boolean;
+  benchmark_ready?: boolean | null;
+  recommended_reference_keys: string[];
+  resolved_reference_dataset_id?: string | null;
+  missing_reference_keys: string[];
+  benchmark_thresholds: Record<string, number>;
   modality_counts: Record<string, number>;
   artifact_counts: Record<string, number>;
   note_type_counts: Record<string, number>;

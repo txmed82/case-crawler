@@ -941,6 +941,34 @@ function QualityPanel({
             <Metric label="Series" value={quality.artifact_counts.time_series_channels ?? 0} />
             <Metric label="Images" value={quality.artifact_counts.imaging_assets ?? 0} />
           </div>
+          {quality.recommended_reference_keys.length > 0 && (
+            <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium">
+                  Benchmark references: {quality.recommended_reference_keys.join(", ")}
+                </span>
+                <span
+                  className={`rounded-md px-2 py-1 text-xs font-medium ${
+                    quality.benchmark_ready
+                      ? "bg-green-100 text-green-700"
+                      : "bg-yellow-100 text-yellow-800"
+                  }`}
+                >
+                  {quality.benchmark_ready ? "Reference ready" : "Reference missing"}
+                </span>
+              </div>
+              {quality.resolved_reference_dataset_id && (
+                <p className="mt-1 break-words text-xs text-blue-800">
+                  Resolved: {quality.resolved_reference_dataset_id}
+                </p>
+              )}
+              {!quality.benchmark_ready && quality.missing_reference_keys.length > 0 && (
+                <p className="mt-1 break-words text-xs text-blue-800">
+                  Missing imports: {quality.missing_reference_keys.join(", ")}
+                </p>
+              )}
+            </div>
+          )}
           {quality.recommendations.length > 0 && (
             <div className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800">
               {quality.recommendations.slice(0, 3).map((recommendation) => (
