@@ -856,6 +856,7 @@ def _multimodal_release_readiness(
         "labs": artifact_counts.get("labs", 0) > 0,
         "vitals": artifact_counts.get("vitals", 0) > 0,
         "medication_history": artifact_counts.get("medications", 0) > 0,
+        "allergy_intolerances": artifact_counts.get("allergies", 0) > 0,
         "messy_clinical_text": artifact_counts.get("messy_documents", 0) > 0,
         "physician_notes": _physician_note_count(note_type_counts) > 0,
         "nursing_notes": note_type_counts.get("nursing_note", 0) > 0,

@@ -88,7 +88,9 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     assert documents_by_type["ed_note"].extracted_facts["medication_details"][0][
         "route"
     ] == "IV"
-    assert documents_by_type["ed_note"].extracted_facts["allergies"] == []
+    assert documents_by_type["ed_note"].extracted_facts["allergies"] == [
+        "Sulfonamide antibiotics"
+    ]
     assert documents_by_type["ed_note"].extracted_facts["messy_text_profile"] == "standard"
 
 

@@ -197,7 +197,7 @@ def test_structured_generator_emits_only_requested_observation_modalities():
     assert vitals_only.labs == []
     assert vitals_only.vitals
     assert structured_only.medication_history
-    assert structured_only.allergies == []
+    assert structured_only.allergies
     assert structured_only.labs == []
     assert structured_only.vitals == []
 
