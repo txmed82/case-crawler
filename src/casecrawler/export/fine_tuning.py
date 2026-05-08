@@ -2657,6 +2657,7 @@ def _verify_release_summary_quality(
                     ),
                 }
             )
+    _verify_release_summary_quality_numeric_fields(quality, issues)
     coverage = quality.get("core_artifact_coverage")
     if not isinstance(coverage, dict) or not all(
         isinstance(key, str) and isinstance(value, bool)
@@ -2706,6 +2707,57 @@ def _verify_release_summary_quality(
                 "message": (
                     "Release package summary marks multimodal_release_ready "
                     f"but lists missing requirements: {missing}."
+                ),
+            }
+        )
+
+
+def _verify_release_summary_quality_numeric_fields(
+    quality: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    field_prefix = "audit_artifacts.release_package_summary.json.quality_report"
+    for key in (
+        "mean_imaging_prompt_chars",
+        "mean_imaging_report_chars",
+        "mean_imaging_width",
+        "mean_imaging_height",
+        "mean_modality_alignment_score",
+    ):
+        value = quality.get(key)
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            issues.append(
+                {
+                    "field": f"{field_prefix}.{key}",
+                    "message": (
+                        "Release package summary quality_report."
+                        f"{key} must be numeric."
+                    ),
+                }
+            )
+    value = quality.get("imaging_report_label_evidence_rate")
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        issues.append(
+            {
+                "field": f"{field_prefix}.imaging_report_label_evidence_rate",
+                "message": (
+                    "Release package summary quality_report."
+                    "imaging_report_label_evidence_rate must be numeric."
+                ),
+            }
+        )
+        return
+    if not 0 <= float(value) <= 1:
+        issues.append(
+            {
+                "field": f"{field_prefix}.imaging_report_label_evidence_rate",
+                "message": (
+                    "Release package summary quality_report."
+                    "imaging_report_label_evidence_rate must be between 0 and 1."
                 ),
             }
         )

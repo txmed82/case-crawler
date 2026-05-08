@@ -859,6 +859,16 @@ def generate_release_package(
                     "multimodal_release_ready": quality_report.multimodal_release_ready,
                     "multimodal_release_missing": quality_report.multimodal_release_missing,
                     "core_artifact_coverage": quality_report.core_artifact_coverage,
+                    "mean_imaging_prompt_chars": quality_report.mean_imaging_prompt_chars,
+                    "mean_imaging_report_chars": quality_report.mean_imaging_report_chars,
+                    "imaging_report_label_evidence_rate": (
+                        quality_report.imaging_report_label_evidence_rate
+                    ),
+                    "mean_imaging_width": quality_report.mean_imaging_width,
+                    "mean_imaging_height": quality_report.mean_imaging_height,
+                    "mean_modality_alignment_score": (
+                        quality_report.mean_modality_alignment_score
+                    ),
                 },
                 "benchmark": {
                     "reference_dataset_id": reference_dataset_id,
