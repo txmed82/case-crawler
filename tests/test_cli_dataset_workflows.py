@@ -1329,7 +1329,7 @@ def test_dataset_cli_imports_hf_reference_dataset(tmp_path, monkeypatch):
 
     assert listed.exit_code == 0
     assert "synthea_fhir" in listed.output
-    assert "import-synthea-fhir" in listed.output
+    assert "import-synthea" in listed.output
     assert "asclepius" in listed.output
     assert "augmented_clinical_notes" in listed.output
     assert "clinical_notes_to_fhir" in listed.output
@@ -1414,7 +1414,7 @@ def test_dataset_cli_imports_synthea_fhir_directory(tmp_path, monkeypatch):
     )
 
     assert result.exit_code == 0
-    assert "Imported 1 Synthea FHIR record(s) into ds-synthea" in result.output
+    assert "Imported 1 Synthea record(s) into ds-synthea" in result.output
     record = DatasetStore().list_records(dataset_id="ds-synthea")[0]
     assert record.patient.patient_id == "pat-1"
     assert record.labs[0].name == "Lactate"

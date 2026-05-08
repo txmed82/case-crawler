@@ -26,8 +26,8 @@ from casecrawler.models.synthetic import (
 SYNTHEA_TIMEOUT_SECONDS = 600.0
 SYNTHEA_REFERENCE_KEY = "synthea_fhir"
 SYNTHEA_REFERENCE_DESCRIPTION = (
-    "Local Synthea FHIR imports for standards-shaped synthetic patient history "
-    "benchmarking. Use import-synthea-fhir or run-synthea to create this reference."
+    "Local Synthea FHIR or CSV imports for standards-shaped synthetic patient "
+    "history benchmarking. Use import-synthea or run-synthea to create this reference."
 )
 
 
