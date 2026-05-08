@@ -1678,6 +1678,7 @@ def verify_split_package(require_multimodal_release: bool, package_dir: str) -> 
             "benchmark_report.json",
             "benchmark_suite_report.json",
             "quality_report.json",
+            "release_package_summary.json",
         }
         available = set(checked_files) if isinstance(checked_files, dict) else set()
         missing_artifacts = sorted(required_artifacts - available)
