@@ -280,6 +280,31 @@ def test_validator_rejects_phi_like_text():
     assert any(issue.field == "privacy" for issue in report.issues)
 
 
+def test_validator_rejects_common_phi_like_identifiers():
+    bad = _record(
+        documents=[
+            ClinicalDocument(
+                document_id="doc-phi",
+                note_type="ed_note",
+                author_role="physician",
+                timestamp="2026-05-06T09:00:00",
+                clean_text=(
+                    "MRN: 12345678. DOB 01/02/1960. "
+                    "Patient lives at 123 Main Street."
+                ),
+            )
+        ]
+    )
+
+    report = SyntheticValidator().validate(bad)
+
+    assert report.approved is False
+    messages = " ".join(issue.message for issue in report.issues if issue.field == "privacy")
+    assert "medical record number" in messages
+    assert "date of birth" in messages
+    assert "street address" in messages
+
+
 class FakeImageAlignmentValidator:
     def __init__(self, score: float):
         self._score = score

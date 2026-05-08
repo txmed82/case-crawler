@@ -7,6 +7,20 @@ from casecrawler.models.synthetic import Modality, SyntheticRecord, ValidationIs
 PHONE_RE = re.compile(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b")
 SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+MRN_RE = re.compile(
+    r"\b(?:MRN|medical record(?: number)?|record number)\s*[:#-]?\s*[A-Z0-9-]{5,}\b",
+    flags=re.IGNORECASE,
+)
+DOB_RE = re.compile(
+    r"\b(?:DOB|date of birth|birth date)\s*[:#-]?\s*"
+    r"(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})\b",
+    flags=re.IGNORECASE,
+)
+STREET_ADDRESS_RE = re.compile(
+    r"\b\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,4}\s+"
+    r"(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct)\b",
+    flags=re.IGNORECASE,
+)
 
 
 def _extract_strings(value) -> list[str]:
@@ -38,6 +52,9 @@ def validate_privacy(record: SyntheticRecord) -> list[ValidationIssue]:
         (PHONE_RE, "phone number"),
         (SSN_RE, "SSN"),
         (EMAIL_RE, "email"),
+        (MRN_RE, "medical record number"),
+        (DOB_RE, "date of birth"),
+        (STREET_ADDRESS_RE, "street address"),
     ]:
         if regex.search(text):
             issues.append(
