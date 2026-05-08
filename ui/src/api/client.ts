@@ -176,6 +176,7 @@ export interface ReferenceDatasetImportRequest {
   reference_key?: string;
   dataset_id: string;
   repo_id?: string;
+  path?: string;
   split?: string;
   license?: string;
   note_field?: string;
