@@ -11,6 +11,7 @@ from casecrawler.export.fine_tuning import (
     export_record_payloads,
     export_rl_record,
     export_sft_record,
+    export_time_series_records,
     export_tool_call_record,
 )
 from casecrawler.models.synthetic import (
@@ -162,6 +163,61 @@ def test_export_record_dispatches_note_fact_sft_profile():
     assert exported["metadata"]["export_profile"] == "note_fact_sft_jsonl"
     assert exported["examples"] == payloads
     assert payloads[0]["document_id"] == "doc-1"
+
+
+def test_export_time_series_records_creates_channel_level_training_examples():
+    record = _multimodal_record().model_copy(
+        update={
+            "time_series": [
+                TimeSeriesChannel(
+                    name="heart_rate",
+                    unit="/min",
+                    sampling_rate_hz=0.2,
+                    points=[
+                        TimeSeriesPoint(
+                            timestamp="2026-05-06T10:00:00",
+                            values={"heart_rate": 118},
+                        ),
+                        TimeSeriesPoint(
+                            timestamp="2026-05-06T10:05:00",
+                            values={"heart_rate": 122},
+                        ),
+                    ],
+                    generation_backend="deterministic",
+                )
+            ]
+        }
+    )
+
+    examples = export_time_series_records(record)
+
+    assert len(examples) == 1
+    example = examples[0]
+    assert example["record_id"] == "rec-1"
+    assert example["task"] == "clinical_time_series_forecasting"
+    assert example["channel"]["name"] == "heart_rate"
+    assert example["channel"]["sampling_rate_hz"] == 0.2
+    assert example["input"]["points"] == [
+        {"timestamp": "2026-05-06T10:00:00", "values": {"heart_rate": 118.0}}
+    ]
+    assert example["target"]["points"] == [
+        {"timestamp": "2026-05-06T10:05:00", "values": {"heart_rate": 122.0}}
+    ]
+    assert example["clinical_context"]["labs"][0]["name"] == "Lactate"
+    assert example["clinical_context"]["vitals"][0]["name"] == "Heart rate"
+    assert example["clinical_context"]["diagnoses"][0]["display"] == "Sepsis"
+    assert example["metadata"]["export_profile"] == "time_series_jsonl"
+
+
+def test_export_record_dispatches_time_series_profile_as_multiple_payloads():
+    record = _multimodal_record()
+
+    exported = export_record(record, "time_series_jsonl")
+    payloads = export_record_payloads(record, "time_series_jsonl")
+
+    assert exported["metadata"]["export_profile"] == "time_series_jsonl"
+    assert exported["examples"] == payloads
+    assert payloads[0]["channel"]["name"] == "heart_rate"
 
 
 def test_export_multimodal_record_preserves_imaging_labels_and_alignment_tasks():

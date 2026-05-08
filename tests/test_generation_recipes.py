@@ -43,6 +43,7 @@ def test_apply_generation_recipe_fills_default_request_fields():
         ExportFormat.MULTIMODAL_JSONL,
         ExportFormat.SFT_JSONL,
         ExportFormat.NOTE_FACT_SFT_JSONL,
+        ExportFormat.TIME_SERIES_JSONL,
         ExportFormat.FHIR_NDJSON,
         ExportFormat.PARQUET,
     ]
@@ -74,6 +75,7 @@ def test_icu_recipe_recommends_note_fact_sft_export():
     )
 
     assert ExportFormat.NOTE_FACT_SFT_JSONL in req.export_formats
+    assert ExportFormat.TIME_SERIES_JSONL in req.export_formats
 
 
 def test_apply_generation_recipe_rejects_unknown_recipe():

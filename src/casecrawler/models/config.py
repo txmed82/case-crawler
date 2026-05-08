@@ -69,6 +69,7 @@ class SyntheticConfig(BaseModel):
             ExportFormat.CHAT_JSONL,
             ExportFormat.TOOL_CALL_JSONL,
             ExportFormat.MULTIMODAL_JSONL,
+            ExportFormat.TIME_SERIES_JSONL,
             ExportFormat.DPO_JSONL,
             ExportFormat.RL_JSONL,
             ExportFormat.FHIR_NDJSON,

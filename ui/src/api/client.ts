@@ -258,6 +258,7 @@ export type ExportFormat =
   | "chat_jsonl"
   | "tool_call_jsonl"
   | "multimodal_jsonl"
+  | "time_series_jsonl"
   | "dpo_jsonl"
   | "rl_jsonl"
   | "fhir_ndjson"

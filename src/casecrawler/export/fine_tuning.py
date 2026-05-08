@@ -196,6 +196,72 @@ def export_multimodal_record(record: SyntheticRecord) -> dict[str, Any]:
     }
 
 
+def export_time_series_records(record: SyntheticRecord) -> list[dict[str, Any]]:
+    """Export channel-level clinical time-series forecasting examples."""
+    examples: list[dict[str, Any]] = []
+    for channel in record.time_series:
+        if len(channel.points) > 1:
+            input_points = channel.points[:-1]
+            target_points = channel.points[-1:]
+        else:
+            input_points = []
+            target_points = channel.points
+        examples.append(
+            {
+                "record_id": record.record_id,
+                "dataset_id": record.dataset_id,
+                "task": "clinical_time_series_forecasting",
+                "channel": {
+                    "name": channel.name,
+                    "unit": channel.unit,
+                    "sampling_rate_hz": channel.sampling_rate_hz,
+                    "generation_backend": channel.generation_backend,
+                    "point_count": len(channel.points),
+                },
+                "input": {
+                    "patient": record.patient.model_dump(),
+                    "encounters": [
+                        encounter.model_dump() for encounter in record.encounters
+                    ],
+                    "points": [point.model_dump() for point in input_points],
+                },
+                "target": {
+                    "points": [point.model_dump() for point in target_points],
+                },
+                "clinical_context": {
+                    "topic": record.topic,
+                    "complexity": record.complexity.value,
+                    "diagnoses": _diagnoses(record),
+                    "procedures": _procedures(record),
+                    "labs": [lab.model_dump() for lab in record.labs],
+                    "vitals": [vital.model_dump() for vital in record.vitals],
+                    "medication_history": [
+                        medication.model_dump()
+                        for medication in record.medication_history
+                    ],
+                    "documents": [
+                        {
+                            "document_id": document.document_id,
+                            "note_type": document.note_type,
+                            "author_role": document.author_role,
+                            "timestamp": document.timestamp,
+                            "extracted_facts": document.extracted_facts,
+                        }
+                        for document in record.documents
+                    ],
+                },
+                "provenance": record.provenance.model_dump(),
+                "metadata": {
+                    **_metadata(record),
+                    "export_profile": "time_series_jsonl",
+                    "channel_name": channel.name,
+                    "generation_backend": channel.generation_backend,
+                },
+            }
+        )
+    return examples
+
+
 def _multimodal_image_payload(asset) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "image_id": asset.image_id,
@@ -533,6 +599,13 @@ def export_record(record: SyntheticRecord, export_format: str | ExportFormat) ->
         return export_tool_call_record(record)
     if resolved_format == ExportFormat.MULTIMODAL_JSONL:
         return export_multimodal_record(record)
+    if resolved_format == ExportFormat.TIME_SERIES_JSONL:
+        return {
+            "record_id": record.record_id,
+            "dataset_id": record.dataset_id,
+            "examples": export_time_series_records(record),
+            "metadata": {**_metadata(record), "export_profile": "time_series_jsonl"},
+        }
     if resolved_format == ExportFormat.DPO_JSONL:
         return export_dpo_record(record)
     if resolved_format == ExportFormat.RL_JSONL:
@@ -553,6 +626,8 @@ def export_record_payloads(
     resolved_format = ExportFormat(export_format)
     if resolved_format == ExportFormat.NOTE_FACT_SFT_JSONL:
         return export_note_fact_sft_records(record)
+    if resolved_format == ExportFormat.TIME_SERIES_JSONL:
+        return export_time_series_records(record)
     return [export_record(record, resolved_format)]
 
 
