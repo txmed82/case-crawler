@@ -150,6 +150,14 @@ def test_export_jsonl_split_package_writes_manifest_and_stable_splits(tmp_path):
     assert manifest["dataset_id"] == "ds-split"
     assert manifest["export_format"] == "clinical_observation_jsonl"
     assert manifest["record_count"] == 5
+    assert manifest["task_coverage"] == {
+        "clinical_lab_observation_interpretation": 5,
+        "clinical_vital_observation_interpretation": 5,
+    }
+    assert manifest["splits"]["train"]["task_coverage"] == {
+        "clinical_lab_observation_interpretation": 3,
+        "clinical_vital_observation_interpretation": 3,
+    }
     assert manifest["splits"]["train"]["record_count"] == 3
     assert manifest["splits"]["validation"]["record_count"] == 1
     assert manifest["splits"]["test"]["record_count"] == 1
@@ -294,6 +302,70 @@ def test_verify_jsonl_split_package_requires_release_time_series_artifacts(tmp_p
 
     assert report["valid"] is False
     assert any(issue["field"] == "time_series_artifacts" for issue in report["issues"])
+
+
+def test_verify_jsonl_split_package_validates_task_coverage_summary(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-split"}
+        )
+        for index in range(3)
+    ]
+    export_jsonl_split_package(
+        records,
+        tmp_path / "package",
+        "clinical_observation_jsonl",
+        dataset_id="ds-split",
+        train_ratio=0.34,
+        validation_ratio=0.33,
+        test_ratio=0.33,
+        seed="unit-test",
+    )
+    manifest_path = tmp_path / "package" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["task_coverage"]["clinical_lab_observation_interpretation"] = 99
+    manifest["splits"]["train"]["task_coverage"] = {}
+    manifest_path.write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path / "package")
+    issue_fields = {issue["field"] for issue in report["issues"]}
+
+    assert report["valid"] is False
+    assert "task_coverage" in issue_fields
+    assert "splits.train.task_coverage" in issue_fields
+
+
+def test_verify_jsonl_split_package_requires_release_task_coverage(tmp_path):
+    record = _multimodal_record().model_copy(update={"dataset_id": "ds-split"})
+    export_jsonl_split_package(
+        [record],
+        tmp_path / "package",
+        "multimodal_jsonl",
+        dataset_id="ds-split",
+        audit_artifacts={
+            "quality_report.json": {
+                "dataset_id": "ds-split",
+                "record_count": 1,
+                "approved_count": 1,
+                "approval_rate": 1.0,
+                "export_ready": True,
+                "core_artifact_coverage": {
+                    key: True for key in REQUIRED_RELEASE_COVERAGE_KEYS
+                },
+                "multimodal_release_ready": True,
+                "multimodal_release_missing": [],
+            }
+        },
+    )
+    manifest_path = tmp_path / "package" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["task_coverage"] = {}
+    manifest_path.write_text(json.dumps(manifest))
+
+    report = verify_jsonl_split_package(tmp_path / "package")
+
+    assert report["valid"] is False
+    assert any(issue["field"] == "task_coverage" for issue in report["issues"])
 
 
 def test_verify_jsonl_split_package_validates_time_series_artifact_metadata(tmp_path):
