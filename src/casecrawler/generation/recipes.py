@@ -268,7 +268,6 @@ def apply_generation_recipe(req: GenerationRequest) -> GenerationRequest:
         choices = ", ".join(sorted(RECIPES))
         raise ValueError(f"Unknown generation recipe {req.recipe!r}. Choose from: {choices}.") from exc
 
-    default = GenerationRequest(topic=req.topic)
     cohort_constraints = {
         **recipe.cohort_constraints,
         **req.cohort_constraints,
@@ -276,13 +275,14 @@ def apply_generation_recipe(req: GenerationRequest) -> GenerationRequest:
     updates = {
         "cohort_constraints": cohort_constraints,
     }
-    if req.modalities == default.modalities:
+    explicit_fields = req.model_fields_set
+    if "modalities" not in explicit_fields:
         updates["modalities"] = recipe.modalities
-    if req.export_formats == default.export_formats:
+    if "export_formats" not in explicit_fields:
         updates["export_formats"] = recipe.export_formats
-    if req.complexity == default.complexity:
+    if "complexity" not in explicit_fields:
         updates["complexity"] = recipe.complexity
-    if req.validation_threshold == default.validation_threshold:
+    if "validation_threshold" not in explicit_fields:
         updates["validation_threshold"] = recipe.validation_threshold
     if req.imaging_model_profile is None and recipe.default_imaging_model_profile:
         updates["imaging_model_profile"] = recipe.default_imaging_model_profile

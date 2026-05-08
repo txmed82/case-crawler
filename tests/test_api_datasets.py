@@ -507,6 +507,33 @@ def test_dataset_api_release_package_passes_modalities_and_complexity(
     assert response.status_code == 422
     assert captured[0].complexity == ComplexityProfile.RARE
     assert captured[0].modalities == [Modality.CLINICAL_TEXT, Modality.LABS]
+    assert "complexity" in captured[0].model_fields_set
+    assert "modalities" in captured[0].model_fields_set
+
+
+def test_dataset_api_release_package_omits_unprovided_recipe_overrides(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    class FakePipeline:
+        async def generate(self, req):
+            captured.append(req)
+            raise ValueError("stop after capture")
+
+    monkeypatch.setattr(datasets_routes, "SyntheticPipeline", FakePipeline)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/release-package",
+        json={"topic": "sepsis", "count": 1},
+    )
+
+    assert response.status_code == 422
+    assert "complexity" not in captured[0].model_fields_set
+    assert "modalities" not in captured[0].model_fields_set
 
 
 def test_dataset_api_split_export_can_require_benchmark_gate(tmp_path, monkeypatch):

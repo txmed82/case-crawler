@@ -584,7 +584,7 @@ def serve() -> None:
 )
 @click.option(
     "--complexity",
-    default="moderate",
+    default=None,
     type=click.Choice(["simple", "moderate", "complex", "rare"]),
     help="Synthetic record complexity profile",
 )
@@ -673,7 +673,7 @@ def generate_dataset(
     count: int,
     recipe: str | None,
     modalities: str | None,
-    complexity: str,
+    complexity: str | None,
     age_min: int | None,
     age_max: int | None,
     sexes: str | None,
@@ -701,7 +701,6 @@ def generate_dataset(
     from casecrawler.models.synthetic import ComplexityProfile, Modality
     from casecrawler.storage.dataset_store import DatasetStore
 
-    complexity_profile = ComplexityProfile(complexity)
     cohort_constraints = {}
     if age_min is not None:
         cohort_constraints["age_min"] = age_min
@@ -740,30 +739,31 @@ def generate_dataset(
             if modalities
             else None
         )
-        req = GenerationRequest(
-            topic=topic,
-            count=count,
-            recipe=recipe,
-            complexity=complexity_profile,
-            modalities=selected_modalities
-            if selected_modalities is not None
-            else GenerationRequest(topic=topic).modalities,
-            cohort_constraints=cohort_constraints,
-            clinical_text_backend=clinical_text_backend,
-            llm_provider=llm_provider,
-            llm_model=llm_model,
-            ollama_base_url=ollama_base_url,
-            clinical_text_model_profile=clinical_text_model_profile,
-            clinical_text_command=parsed_clinical_text_command,
-            imaging_backend=imaging_backend,
-            imaging_model_profile=imaging_model_profile,
-            diffusers_model_id=diffusers_model_id,
-            imaging_command=parsed_imaging_command,
-            time_series_backend=time_series_backend,
-            time_series_model_profile=time_series_model_profile,
-            time_series_command=parsed_time_series_command,
-            require_human_review=require_human_review,
-        )
+        request_kwargs = {
+            "topic": topic,
+            "count": count,
+            "recipe": recipe,
+            "cohort_constraints": cohort_constraints,
+            "clinical_text_backend": clinical_text_backend,
+            "llm_provider": llm_provider,
+            "llm_model": llm_model,
+            "ollama_base_url": ollama_base_url,
+            "clinical_text_model_profile": clinical_text_model_profile,
+            "clinical_text_command": parsed_clinical_text_command,
+            "imaging_backend": imaging_backend,
+            "imaging_model_profile": imaging_model_profile,
+            "diffusers_model_id": diffusers_model_id,
+            "imaging_command": parsed_imaging_command,
+            "time_series_backend": time_series_backend,
+            "time_series_model_profile": time_series_model_profile,
+            "time_series_command": parsed_time_series_command,
+            "require_human_review": require_human_review,
+        }
+        if complexity is not None:
+            request_kwargs["complexity"] = ComplexityProfile(complexity)
+        if selected_modalities is not None:
+            request_kwargs["modalities"] = selected_modalities
+        req = GenerationRequest(**request_kwargs)
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
     try:
@@ -1028,36 +1028,31 @@ def generate_release_package(
             if modalities
             else None
         )
-        req = GenerationRequest(
-            topic=topic,
-            count=count,
-            recipe=recipe,
-            complexity=(
-                ComplexityProfile(complexity)
-                if complexity is not None
-                else GenerationRequest(topic=topic).complexity
-            ),
-            modalities=(
-                selected_modalities
-                if selected_modalities is not None
-                else GenerationRequest(topic=topic).modalities
-            ),
-            cohort_constraints=cohort_constraints,
-            export_formats=[ExportFormat(export_format)],
-            clinical_text_backend=clinical_text_backend,
-            llm_provider=llm_provider,
-            llm_model=llm_model,
-            ollama_base_url=ollama_base_url,
-            clinical_text_model_profile=clinical_text_model_profile,
-            clinical_text_command=parsed_clinical_text_command,
-            imaging_backend=imaging_backend,
-            imaging_model_profile=imaging_model_profile,
-            diffusers_model_id=diffusers_model_id,
-            imaging_command=parsed_imaging_command,
-            time_series_backend=time_series_backend,
-            time_series_model_profile=time_series_model_profile,
-            time_series_command=parsed_time_series_command,
-        )
+        request_kwargs = {
+            "topic": topic,
+            "count": count,
+            "recipe": recipe,
+            "cohort_constraints": cohort_constraints,
+            "export_formats": [ExportFormat(export_format)],
+            "clinical_text_backend": clinical_text_backend,
+            "llm_provider": llm_provider,
+            "llm_model": llm_model,
+            "ollama_base_url": ollama_base_url,
+            "clinical_text_model_profile": clinical_text_model_profile,
+            "clinical_text_command": parsed_clinical_text_command,
+            "imaging_backend": imaging_backend,
+            "imaging_model_profile": imaging_model_profile,
+            "diffusers_model_id": diffusers_model_id,
+            "imaging_command": parsed_imaging_command,
+            "time_series_backend": time_series_backend,
+            "time_series_model_profile": time_series_model_profile,
+            "time_series_command": parsed_time_series_command,
+        }
+        if complexity is not None:
+            request_kwargs["complexity"] = ComplexityProfile(complexity)
+        if selected_modalities is not None:
+            request_kwargs["modalities"] = selected_modalities
+        req = GenerationRequest(**request_kwargs)
         result = asyncio.run(SyntheticPipeline().generate(req))
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
