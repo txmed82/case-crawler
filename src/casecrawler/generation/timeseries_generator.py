@@ -51,6 +51,7 @@ class TimeSeriesGenerator:
             "lactate": _first_lab(record, "Lactate", 1.4),
         }
         lab_channels = _numeric_lab_channels(record)
+        observed_channels = _observation_channels(record)
         units = {
             "heart_rate": "/min",
             "systolic_bp": "mmHg",
@@ -79,6 +80,18 @@ class TimeSeriesGenerator:
                         spo2=base_values["spo2"],
                         points=points,
                         spec=waveform_specs[name],
+                    )
+                )
+                continue
+            observed_points = observed_channels.get(name)
+            if observed_points and len(observed_points) > 1:
+                generated_channels.append(
+                    TimeSeriesChannel(
+                        name=name,
+                        unit=units[name],
+                        generation_backend="deterministic:structured-observations",
+                        sampling_rate_hz=None,
+                        points=observed_points,
                     )
                 )
                 continue
@@ -187,6 +200,44 @@ def _numeric_lab_channels(record: SyntheticRecord) -> dict[str, tuple[float, str
         target = _lab_target(float(lab.value), lab.reference_low, lab.reference_high)
         channels[channel_name] = (float(lab.value), lab.unit, target)
     return channels
+
+
+def _observation_channels(record: SyntheticRecord) -> dict[str, list[TimeSeriesPoint]]:
+    channels: dict[str, list[TimeSeriesPoint]] = {}
+    for vital in record.vitals:
+        channel_name = _vital_channel_name(vital.name)
+        if channel_name is None:
+            continue
+        channels.setdefault(channel_name, []).append(
+            TimeSeriesPoint(
+                timestamp=vital.effective_time,
+                values={"value": round(float(vital.value), 3)},
+            )
+        )
+    for lab in record.labs:
+        if not isinstance(lab.value, (int, float)):
+            continue
+        channels.setdefault(f"lab_{_slug(lab.name)}", []).append(
+            TimeSeriesPoint(
+                timestamp=lab.effective_time,
+                values={"value": round(float(lab.value), 3)},
+            )
+        )
+    return {
+        name: sorted(points, key=lambda point: point.timestamp)
+        for name, points in channels.items()
+    }
+
+
+def _vital_channel_name(name: str) -> str | None:
+    normalized = _slug(name)
+    if normalized in {"hr", "heart_rate"}:
+        return "heart_rate"
+    if normalized in {"sbp", "systolic_bp", "systolic_blood_pressure"}:
+        return "systolic_bp"
+    if normalized in {"spo2", "oxygen_saturation"}:
+        return "spo2"
+    return None
 
 
 def _lab_target(
