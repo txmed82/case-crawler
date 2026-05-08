@@ -145,6 +145,47 @@ def test_dataset_api_export_can_auto_select_recipe_benchmark_reference(tmp_path,
     }
 
 
+def test_dataset_api_reports_recipe_benchmark_plan_readiness(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    generated = client.post(
+        "/api/datasets/generate",
+        json={"topic": "sepsis", "count": 1, "recipe": "icu_timeseries_notes"},
+    )
+    reference = client.post("/api/datasets/generate", json={"topic": "sepsis", "count": 1})
+    dataset_id = generated.json()["dataset_id"]
+    reference_dataset_id = reference.json()["dataset_id"]
+    store = DatasetStore()
+    for record in store.list_records(dataset_id=reference_dataset_id):
+        store.save_record(
+            record.model_copy(
+                update={
+                    "metadata": {
+                        **record.metadata,
+                        "reference_key": "synthclinicalnotes",
+                        "reference_dataset": "IntelLabs/SynthClinicalNotes",
+                    }
+                }
+            )
+        )
+
+    response = client.get(f"/api/datasets/{dataset_id}/benchmark-plan")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dataset_id"] == dataset_id
+    assert body["primary_recipe"] == "icu_timeseries_notes"
+    assert body["recommended_reference_keys"] == [
+        "synthclinicalnotes",
+        "augmented_clinical_notes",
+        "clinical_notes_to_fhir",
+    ]
+    assert body["resolved_reference_dataset_id"] == reference_dataset_id
+    assert body["resolved_reference_key"] == "synthclinicalnotes"
+    assert body["ready"] is True
+    assert body["thresholds"] == {"min_overall_score": 0.75, "min_metric_score": 0.5}
+
+
 def test_dataset_api_lists_export_manifests(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)

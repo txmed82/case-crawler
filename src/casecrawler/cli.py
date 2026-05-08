@@ -632,6 +632,19 @@ def datasets_quality(dataset_id: str) -> None:
     click.echo(report.model_dump_json(indent=2))
 
 
+@datasets_group.command("benchmark-plan")
+@click.argument("dataset_id")
+def datasets_benchmark_plan(dataset_id: str) -> None:
+    """Show recipe benchmark reference readiness for a dataset."""
+    from casecrawler.storage.dataset_store import DatasetStore
+    from casecrawler.validation.benchmark_selection import build_benchmark_plan_summary
+
+    store = DatasetStore()
+    if not store.dataset_exists(dataset_id):
+        raise click.ClickException(f"Dataset {dataset_id} not found.")
+    click.echo(json.dumps(build_benchmark_plan_summary(store, dataset_id), indent=2))
+
+
 @cli.command("validate")
 @click.option("--dataset-id", default=None, help="Dataset id prefix or exact id")
 def validate_dataset(dataset_id: str | None) -> None:
