@@ -130,6 +130,26 @@ export interface DatasetGenerateResponse {
   records: Record<string, unknown>[];
 }
 
+export interface ReleasePackageRequest {
+  topic: string;
+  count?: number;
+  recipe?: string;
+  export_format?: ExportFormat;
+  seed?: string;
+  imaging_backend?: "placeholder" | "diffusers";
+  imaging_model_profile?: string;
+  diffusers_model_id?: string;
+  fixture_limit?: number;
+  min_overall_score?: number;
+  min_metric_score?: number;
+}
+
+export interface ReleasePackageResponse {
+  datasetId: string | null;
+  filename: string;
+  blob: Blob;
+}
+
 export interface ReferenceDatasetCatalogItem {
   key: string;
   repo_id: string;
@@ -511,6 +531,30 @@ export async function startDatasetGenerate(
   });
   if (!resp.ok) throw new Error(`Failed to generate dataset: ${await readApiError(resp)}`);
   return resp.json();
+}
+
+export async function generateReleasePackage(
+  req: ReleasePackageRequest
+): Promise<ReleasePackageResponse> {
+  const resp = await fetch(`${BASE}/datasets/release-package`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to generate release package: ${await readApiError(resp)}`);
+  }
+  return {
+    datasetId: resp.headers.get("x-casecrawler-dataset-id"),
+    filename: filenameFromContentDisposition(resp.headers.get("content-disposition")),
+    blob: await resp.blob(),
+  };
+}
+
+function filenameFromContentDisposition(value: string | null): string {
+  if (!value) return "casecrawler-release-package.zip";
+  const match = value.match(/filename="?([^";]+)"?/i);
+  return match?.[1] || "casecrawler-release-package.zip";
 }
 
 export async function fetchReferenceDatasetCatalog(): Promise<ReferenceDatasetCatalogResponse> {
