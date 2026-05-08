@@ -39,6 +39,7 @@ router = APIRouter()
 class ReferenceImportRequest(BaseModel):
     reference_key: str | None = Field(default=None, min_length=1)
     dataset_id: str = Field(min_length=1)
+    fixture: bool = False
     repo_id: str | None = Field(default=None, min_length=1)
     split: str | None = None
     license: str | None = None
@@ -249,6 +250,34 @@ def list_dataset_capabilities():
 
 @router.post("/datasets/reference-import")
 def import_reference_dataset(req: ReferenceImportRequest):
+    if req.fixture:
+        from casecrawler.integrations.reference_fixtures import import_reference_fixture
+
+        if not req.reference_key:
+            raise HTTPException(
+                status_code=422,
+                detail="reference_key is required for bundled fixture imports",
+            )
+        try:
+            records = import_reference_fixture(
+                req.reference_key,
+                dataset_id=req.dataset_id,
+                limit=req.limit,
+            )
+        except KeyError as err:
+            raise HTTPException(status_code=404, detail=str(err)) from err
+        store = DatasetStore()
+        for record in records:
+            store.save_record(record)
+        return {
+            "dataset_id": req.dataset_id,
+            "imported": len(records),
+            "reference_key": req.reference_key,
+            "repo_id": "casecrawler-bundled-fixture",
+            "split": "fixture",
+            "license": "synthetic-fixture",
+        }
+
     from casecrawler.integrations.huggingface import (
         REFERENCE_DATASETS,
         import_reference_rows,

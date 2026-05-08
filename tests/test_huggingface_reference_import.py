@@ -11,6 +11,10 @@ from casecrawler.integrations.huggingface import (
     load_reference_dataset,
     reference_row_to_record,
 )
+from casecrawler.integrations.reference_fixtures import (
+    FIXTURE_REFERENCE_KEYS,
+    import_reference_fixture,
+)
 from casecrawler.models.synthetic import Modality
 
 
@@ -23,6 +27,43 @@ def test_reference_dataset_catalog_includes_asclepius_license():
     )
 
     assert asclepius.license == "cc-by-nc-sa-4.0"
+
+
+def test_bundled_reference_fixtures_cover_release_benchmark_keys():
+    assert {
+        "synthea_fhir",
+        "clinical_notes_to_fhir",
+        "medsynth_dialogue_note",
+        "technetium_i",
+        "synthchex_75k",
+        "radiology_report_consistency",
+    }.issubset(set(FIXTURE_REFERENCE_KEYS))
+
+
+def test_import_reference_fixture_builds_structured_fhir_reference_records():
+    records = import_reference_fixture(
+        "clinical_notes_to_fhir",
+        dataset_id="ds-fixture",
+    )
+
+    record = records[0]
+    assert record.dataset_id == "ds-fixture"
+    assert record.metadata["reference_key"] == "clinical_notes_to_fhir"
+    assert record.labs[0].name == "Lactate"
+    assert record.vitals[0].name == "Heart rate"
+    assert record.medication_history[0].name == "Ceftriaxone"
+    assert Modality.STRUCTURED_EHR in record.modalities
+
+
+def test_import_reference_fixture_builds_synthea_reference_records():
+    records = import_reference_fixture("synthea_fhir", dataset_id="ds-synthea-fixture")
+
+    record = records[0]
+    assert record.dataset_id == "ds-synthea-fixture"
+    assert record.metadata["reference_key"] == "synthea_fhir"
+    assert record.labs[0].name == "Lactate"
+    assert record.vitals[0].name == "Heart rate"
+    assert record.medication_history[0].name == "Ceftriaxone"
 
 
 def test_reference_dataset_catalog_includes_clinical_note_fhir_and_radiology_benchmarks():

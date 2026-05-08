@@ -1108,6 +1108,30 @@ def test_dataset_api_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     assert record.time_series[0].name == "respiratory_rate"
 
 
+def test_dataset_api_imports_bundled_reference_fixture(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/reference-import",
+        json={
+            "reference_key": "clinical_notes_to_fhir",
+            "dataset_id": "ds-fixture-reference",
+            "fixture": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["imported"] == 1
+    assert body["repo_id"] == "casecrawler-bundled-fixture"
+    manifest = DatasetStore().get_manifest("ds-fixture-reference")
+    record = DatasetStore().list_records(dataset_id="ds-fixture-reference")[0]
+    assert manifest.metadata["primary_reference_key"] == "clinical_notes_to_fhir"
+    assert record.labs[0].name == "Lactate"
+    assert record.medication_history[0].name == "Ceftriaxone"
+
+
 def test_dataset_api_imports_synthea_fhir_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = TestClient(app)
