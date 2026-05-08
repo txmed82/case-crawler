@@ -674,6 +674,7 @@ def _multimodal_release_readiness(
         ),
         "no_blocking_quality_issues": record_count > 0 and blocking_issue_count == 0,
         "benchmark_reference": benchmark_summary["ready"] is True,
+        "task_reference_coverage": _task_reference_coverage_ready(benchmark_summary),
         "structured_ehr": _artifact_count(
             "structured_ehr",
             artifact_counts=artifact_counts,
@@ -701,6 +702,16 @@ def _multimodal_release_readiness(
         "ready": not missing,
         "missing": missing,
     }
+
+
+def _task_reference_coverage_ready(benchmark_summary: dict) -> bool:
+    readiness = benchmark_summary.get("task_export_reference_readiness")
+    if not isinstance(readiness, dict) or not readiness:
+        return True
+    return all(
+        isinstance(item, dict) and item.get("ready") is True
+        for item in readiness.values()
+    )
 
 
 def _physician_note_count(note_type_counts: Counter[str]) -> int:
