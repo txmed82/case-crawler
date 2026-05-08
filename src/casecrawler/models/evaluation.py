@@ -119,6 +119,9 @@ class DatasetQualityReport(BaseModel):
     mean_imaging_width: float | None = None
     mean_imaging_height: float | None = None
     mean_modality_alignment_score: float | None = None
+    core_artifact_coverage: dict[str, bool] = Field(default_factory=dict)
+    multimodal_release_ready: bool = False
+    multimodal_release_missing: list[str] = Field(default_factory=list)
     blocking_issue_count: int = 0
     warning_issue_count: int = 0
     issue_counts_by_field: dict[str, int] = Field(default_factory=dict)

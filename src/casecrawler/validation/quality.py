@@ -128,6 +128,7 @@ def build_dataset_quality_report(
 
     record_count = len(records)
     approval_rate = approved_count / record_count if record_count else 0.0
+    mean_modality_alignment_score = _mean_float(modality_alignment_scores)
     recommendations = _recommendations(
         record_count=record_count,
         approved_count=approved_count,
@@ -138,6 +139,18 @@ def build_dataset_quality_report(
         benchmark_plan=benchmark_plan,
     )
     benchmark_summary = _benchmark_summary(benchmark_plan)
+    release_readiness = _multimodal_release_readiness(
+        record_count=record_count,
+        approved_count=approved_count,
+        blocking_issue_count=blocking_issue_count,
+        artifact_counts=artifact_counts,
+        note_type_counts=note_type_counts,
+        extracted_fact_key_counts=extracted_fact_key_counts,
+        imaging_model_policy_counts=imaging_model_policy_counts,
+        issue_counts_by_field=issue_counts_by_field,
+        benchmark_summary=benchmark_summary,
+        mean_modality_alignment_score=mean_modality_alignment_score,
+    )
     return DatasetQualityReport(
         dataset_id=dataset_id,
         record_count=record_count,
@@ -187,7 +200,10 @@ def build_dataset_quality_report(
         imaging_model_policy_counts=dict(sorted(imaging_model_policy_counts.items())),
         mean_imaging_width=_mean_float(imaging_widths),
         mean_imaging_height=_mean_float(imaging_heights),
-        mean_modality_alignment_score=_mean_float(modality_alignment_scores),
+        mean_modality_alignment_score=mean_modality_alignment_score,
+        core_artifact_coverage=release_readiness["coverage"],
+        multimodal_release_ready=release_readiness["ready"],
+        multimodal_release_missing=release_readiness["missing"],
         blocking_issue_count=blocking_issue_count,
         warning_issue_count=warning_issue_count,
         issue_counts_by_field=dict(sorted(issue_counts_by_field.items())),
@@ -635,6 +651,63 @@ def _recommendations(
             "Import a recommended reference dataset before benchmark-gated release."
         )
     return recommendations
+
+
+def _multimodal_release_readiness(
+    *,
+    record_count: int,
+    approved_count: int,
+    blocking_issue_count: int,
+    artifact_counts: Counter[str],
+    note_type_counts: Counter[str],
+    extracted_fact_key_counts: Counter[str],
+    imaging_model_policy_counts: Counter[str],
+    issue_counts_by_field: Counter[str],
+    benchmark_summary: dict,
+    mean_modality_alignment_score: float | None,
+) -> dict[str, object]:
+    coverage = {
+        "records": record_count > 0,
+        "approved_records": record_count > 0 and approved_count == record_count,
+        "validation_reports": (
+            record_count > 0 and issue_counts_by_field.get("validation.missing", 0) == 0
+        ),
+        "no_blocking_quality_issues": record_count > 0 and blocking_issue_count == 0,
+        "benchmark_reference": benchmark_summary["ready"] is True,
+        "structured_ehr": _artifact_count(
+            "structured_ehr",
+            artifact_counts=artifact_counts,
+            extracted_fact_key_counts=extracted_fact_key_counts,
+        )
+        > 0,
+        "labs": artifact_counts.get("labs", 0) > 0,
+        "vitals": artifact_counts.get("vitals", 0) > 0,
+        "medication_history": artifact_counts.get("medications", 0) > 0,
+        "messy_clinical_text": artifact_counts.get("messy_documents", 0) > 0,
+        "physician_notes": _physician_note_count(note_type_counts) > 0,
+        "nursing_notes": note_type_counts.get("nursing_note", 0) > 0,
+        "radiology_reports": note_type_counts.get("radiology_report", 0) > 0,
+        "time_series": (
+            artifact_counts.get("time_series_channels", 0) > 0
+            and artifact_counts.get("time_series_points", 0) > 0
+        ),
+        "radiology_images": artifact_counts.get("imaging_file_assets", 0) > 0,
+        "imaging_model_policy": bool(imaging_model_policy_counts),
+        "modality_alignment_scores": mean_modality_alignment_score is not None,
+    }
+    missing = [key for key, ready in coverage.items() if not ready]
+    return {
+        "coverage": dict(sorted(coverage.items())),
+        "ready": not missing,
+        "missing": missing,
+    }
+
+
+def _physician_note_count(note_type_counts: Counter[str]) -> int:
+    return sum(
+        note_type_counts.get(note_type, 0)
+        for note_type in ("ed_note", "progress_note", "discharge_summary")
+    )
 
 
 def _export_profile_readiness(
