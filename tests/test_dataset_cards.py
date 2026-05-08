@@ -1,3 +1,6 @@
+import struct
+import zlib
+
 from casecrawler.export.cards import build_dataset_card, build_model_card
 from casecrawler.models.dataset import DatasetManifest, ExportFormat
 from casecrawler.models.synthetic import (
@@ -7,16 +10,20 @@ from casecrawler.models.synthetic import (
     Provenance,
     Code,
     Encounter,
+    ImagingAsset,
+    LabObservation,
+    MedicationStatement,
     SyntheticPatient,
     SyntheticRecord,
     TimeSeriesChannel,
     TimeSeriesPoint,
+    VitalObservation,
     ValidationReport,
 )
 
 
-def test_build_dataset_card_includes_validation_and_use_limits():
-    record = _record()
+def test_build_dataset_card_includes_validation_and_use_limits(tmp_path):
+    record = _record(tmp_path)
     manifest = _manifest()
 
     card = build_dataset_card(manifest, [record])
@@ -40,6 +47,14 @@ def test_build_dataset_card_includes_validation_and_use_limits():
     assert "- medications: 1" in card
     assert "## Procedures" in card
     assert "- Central venous catheter placement: 1" in card
+    assert "## Clinical Units" in card
+    assert "- lab:mmol/L: 1" in card
+    assert "- vital:/min: 1" in card
+    assert "## Medication Regimens" in card
+    assert "- dose=1 g: 1" in card
+    assert "- frequency=daily: 1" in card
+    assert "- route=IV: 1" in card
+    assert "- status=active: 1" in card
     assert "## Diagnosis Coding Signals" in card
     assert "- ICD-9-CM: 2" in card
     assert "- ICD-9-CM:401.9: 1" in card
@@ -49,8 +64,8 @@ def test_build_dataset_card_includes_validation_and_use_limits():
     assert "- NAME: 1" in card
 
 
-def test_build_model_card_documents_generator_and_validation_gates():
-    record = _record()
+def test_build_model_card_documents_generator_and_validation_gates(tmp_path):
+    record = _record(tmp_path)
     manifest = _manifest()
 
     card = build_model_card(manifest, [record])
@@ -66,6 +81,11 @@ def test_build_model_card_documents_generator_and_validation_gates():
     ) in card
     assert "## Time-Series Backends" in card
     assert "- external:timediff-sample: 1" in card
+    assert "## Time-Series Units" in card
+    assert "- /min: 1" in card
+    assert "## Imaging Dimensions" in card
+    assert "- Mean width: 96.0 px" in card
+    assert "- Mean height: 64.0 px" in card
     assert "## Procedure Coverage" in card
     assert "- Central venous catheter placement: 1" in card
     assert "## Diagnosis Coding Signals" in card
@@ -75,7 +95,9 @@ def test_build_model_card_documents_generator_and_validation_gates():
     assert "PHI-like privacy scanning" in card
 
 
-def _record() -> SyntheticRecord:
+def _record(tmp_path) -> SyntheticRecord:
+    image_path = tmp_path / "xray.png"
+    image_path.write_bytes(_png_bytes(width=96, height=64))
     return SyntheticRecord(
         record_id="rec-1",
         dataset_id="ds-1",
@@ -100,6 +122,34 @@ def _record() -> SyntheticRecord:
                         display="Central venous catheter placement",
                     )
                 ],
+            )
+        ],
+        labs=[
+            LabObservation(
+                name="Lactate",
+                value=3.4,
+                unit="mmol/L",
+                reference_low=0.5,
+                reference_high=2.0,
+                flag="H",
+                effective_time="2026-05-06T10:00:00",
+            )
+        ],
+        vitals=[
+            VitalObservation(
+                name="HR",
+                value=110,
+                unit="/min",
+                effective_time="2026-05-06T10:00:00",
+            )
+        ],
+        medication_history=[
+            MedicationStatement(
+                name="Ceftriaxone",
+                dose="1 g",
+                route="IV",
+                frequency="daily",
+                status="active",
             )
         ],
         documents=[
@@ -135,12 +185,25 @@ def _record() -> SyntheticRecord:
                 name="heart_rate",
                 unit="/min",
                 generation_backend="external:timediff-sample",
+                sampling_rate_hz=1.0,
                 points=[
                     TimeSeriesPoint(
                         timestamp="2026-05-06T10:00:00",
                         values={"value": 110},
                     )
                 ],
+            )
+        ],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="XR",
+                body_region="chest",
+                prompt="portable chest x-ray with sepsis evaluation",
+                file_path=str(image_path),
+                report_text="Portable chest radiograph with no focal opacity.",
+                labels=[],
+                generation_backend="diffusers:cxr_pneumonia_dreambooth",
             )
         ],
         provenance=Provenance(
@@ -169,6 +232,26 @@ def _record() -> SyntheticRecord:
                 "use_policy": "openrail_review_outputs_before_release",
             },
         },
+    )
+
+
+def _png_bytes(*, width: int, height: int) -> bytes:
+    raw = b"".join(b"\x00" + (b"\x80" * width) for _ in range(height))
+    chunks = [
+        b"\x89PNG\r\n\x1a\n",
+        _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)),
+        _png_chunk(b"IDAT", zlib.compress(raw)),
+        _png_chunk(b"IEND", b""),
+    ]
+    return b"".join(chunks)
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + chunk_type
+        + data
+        + struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
     )
 
 
