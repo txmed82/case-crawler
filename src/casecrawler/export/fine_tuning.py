@@ -1520,6 +1520,12 @@ def _verify_package_audit_artifacts(
                 manifest,
                 issues,
             )
+        elif file_name == "benchmark_report.json":
+            _verify_benchmark_report_artifact(
+                package_path / file_name,
+                manifest,
+                issues,
+            )
         elif file_name == "quality_report.json":
             _verify_quality_report_artifact(package_path / file_name, manifest, issues)
         elif file_name == "dataset_card.md":
@@ -1576,6 +1582,67 @@ def _verify_benchmark_profile_artifact(
                     "Benchmark profile dataset_id "
                     f"{profile.dataset_id!r} does not match package dataset_id "
                     f"{manifest_dataset_id!r}."
+                ),
+            }
+        )
+
+
+def _verify_benchmark_report_artifact(
+    path: Path,
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    from casecrawler.models.evaluation import BenchmarkReport
+
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_report.json",
+                "message": f"Benchmark report artifact is invalid JSON: {exc}.",
+            }
+        )
+        return
+    try:
+        report = BenchmarkReport.model_validate(payload)
+    except ValueError as exc:
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_report.json",
+                "message": f"Benchmark report artifact is invalid: {exc}.",
+            }
+        )
+        return
+    manifest_dataset_id = manifest.get("dataset_id")
+    if (
+        isinstance(manifest_dataset_id, str)
+        and report.generated_dataset_id != manifest_dataset_id
+    ):
+        issues.append(
+            {
+                "field": "audit_artifacts.benchmark_report.json.generated_dataset_id",
+                "message": (
+                    "Benchmark report generated_dataset_id "
+                    f"{report.generated_dataset_id!r} does not match package "
+                    f"dataset_id {manifest_dataset_id!r}."
+                ),
+            }
+        )
+    if (
+        isinstance(manifest_dataset_id, str)
+        and report.generated_profile.dataset_id != manifest_dataset_id
+    ):
+        issues.append(
+            {
+                "field": (
+                    "audit_artifacts.benchmark_report.json."
+                    "generated_profile.dataset_id"
+                ),
+                "message": (
+                    "Benchmark report generated_profile.dataset_id "
+                    f"{report.generated_profile.dataset_id!r} does not match "
+                    f"package dataset_id {manifest_dataset_id!r}."
                 ),
             }
         )
