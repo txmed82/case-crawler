@@ -233,6 +233,37 @@ def validate_time_series_waveforms(record: SyntheticRecord) -> list[ValidationIs
     return issues
 
 
+def validate_artifact_generation_backends(record: SyntheticRecord) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    for channel in record.time_series:
+        if not channel.generation_backend.strip():
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.TIME_SERIES,
+                    field=f"time_series.{channel.name}.generation_backend",
+                    message=(
+                        f"Time series channel {channel.name} is missing generation "
+                        "backend provenance."
+                    ),
+                )
+            )
+    for asset in record.imaging:
+        if not asset.generation_backend.strip():
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.IMAGING,
+                    field=f"imaging.{asset.image_id}.generation_backend",
+                    message=(
+                        f"Imaging asset {asset.image_id} is missing generation "
+                        "backend provenance."
+                    ),
+                )
+            )
+    return issues
+
+
 def validate_time_series_structured_alignment(
     record: SyntheticRecord,
 ) -> list[ValidationIssue]:
