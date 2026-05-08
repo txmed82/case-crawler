@@ -386,6 +386,7 @@ def _metadata_cohort_constraints(cohort_constraints: dict) -> dict:
 def _metadata_generation_overrides(req: GenerationRequest) -> dict:
     optional_fields = [
         "clinical_text_backend",
+        "clinical_text_noise_profile",
         "recipe",
         "llm_provider",
         "llm_model",

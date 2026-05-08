@@ -12,6 +12,7 @@ def test_load_default_config():
     assert config.chunking.default_chunk_size == 500
     assert config.embedding.model == "all-MiniLM-L6-v2"
     assert config.synthetic.validation_threshold == 0.8
+    assert config.synthetic.clinical_text_noise_profile == "standard"
     assert config.synthetic.image_output_dir == "./data/images"
     assert config.synthetic.imaging_model_profile is None
     assert config.synthetic.diffusers_model_id == "stabilityai/stable-diffusion-2-1"
@@ -40,6 +41,7 @@ def test_load_synthetic_config_from_yaml(tmp_path):
         "synthetic:\n"
         "  default_complexity: rare\n"
         "  validation_threshold: 0.9\n"
+        "  clinical_text_noise_profile: heavy\n"
         "  imaging_model_profile: cxr_pneumonia_dreambooth\n"
         "  diffusers_model_id: test/medical-image-model\n"
         "  time_series_backend: external\n"
@@ -55,6 +57,7 @@ def test_load_synthetic_config_from_yaml(tmp_path):
 
     assert config.synthetic.default_complexity == "rare"
     assert config.synthetic.validation_threshold == 0.9
+    assert config.synthetic.clinical_text_noise_profile == "heavy"
     assert config.synthetic.imaging_model_profile == "cxr_pneumonia_dreambooth"
     assert config.synthetic.diffusers_model_id == "test/medical-image-model"
     assert config.synthetic.time_series_backend == "external"

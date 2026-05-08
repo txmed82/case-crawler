@@ -33,9 +33,10 @@ synthetic:
     - time_series
   validation_threshold: 0.8
   # GenerationRequest can override clinical_text_backend, llm_provider,
-  # llm_model, ollama_base_url, clinical_text_model_profile, and
-  # clinical_text_command per run.
+  # llm_model, ollama_base_url, clinical_text_noise_profile,
+  # clinical_text_model_profile, and clinical_text_command per run.
   clinical_text_backend: "deterministic" # deterministic, llm, or external
+  clinical_text_noise_profile: "standard" # standard, message, ocr, or heavy
   clinical_text_model_profile: null # e.g. medgemma_4b_it or meditron_7b
   clinical_text_command: null # e.g. ["hf-note-sample", "--model", "local-notes"]
   # Per-request cohort_constraints can include:

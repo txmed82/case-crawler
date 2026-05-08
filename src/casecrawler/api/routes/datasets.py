@@ -95,6 +95,7 @@ class ReleasePackageRequest(BaseModel):
     seed: str = "casecrawler"
     cohort_constraints: dict = Field(default_factory=dict)
     clinical_text_backend: Literal["deterministic", "llm", "external"] | None = None
+    clinical_text_noise_profile: Literal["standard", "message", "ocr", "heavy"] | None = None
     clinical_text_model_profile: str | None = Field(default=None, min_length=1)
     clinical_text_command: list[str] | None = Field(default=None, min_length=1)
     llm_provider: str | None = Field(default=None, min_length=1)
@@ -170,6 +171,7 @@ async def generate_release_package(req: ReleasePackageRequest):
             "cohort_constraints": req.cohort_constraints,
             "export_formats": [req.export_format],
             "clinical_text_backend": req.clinical_text_backend,
+            "clinical_text_noise_profile": req.clinical_text_noise_profile,
             "clinical_text_model_profile": req.clinical_text_model_profile,
             "clinical_text_command": req.clinical_text_command,
             "llm_provider": req.llm_provider,

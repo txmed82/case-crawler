@@ -28,14 +28,20 @@ class TextGenerator:
         provider: BaseLLMProvider | None = None,
         external_command: list[str] | None = None,
         external_runner: ExternalClinicalTextRunner | None = None,
+        noise_profile: str = "standard",
     ) -> None:
         if provider is not None and external_command is not None:
             raise ValueError("TextGenerator cannot use both provider and external_command.")
         if external_command is not None and not external_command:
             raise ValueError("external_command must not be empty when provided.")
+        if noise_profile not in {"standard", "message", "ocr", "heavy"}:
+            raise ValueError(
+                "noise_profile must be one of: standard, message, ocr, heavy."
+            )
         self._provider = provider
         self._external_command = external_command
         self._external_runner = external_runner or _run_external_command
+        self._noise_profile = noise_profile
 
     def add_documents(self, record: SyntheticRecord) -> SyntheticRecord:
         if self._provider is not None:
@@ -128,7 +134,14 @@ class TextGenerator:
             "presentation."
         )
         documents = [
-            _document(record, "ed_note", "physician", timestamp, ed_note),
+            _document(
+                record,
+                "ed_note",
+                "physician",
+                timestamp,
+                ed_note,
+                noise_profile=self._noise_profile,
+            ),
             _document(
                 record,
                 "progress_note",
@@ -140,6 +153,7 @@ class TextGenerator:
                     f"Active diagnoses include {diagnoses or 'none documented'}, with "
                     f"procedures tracked as {procedures or 'none documented'}."
                 ),
+                noise_profile=self._noise_profile,
             ),
             _document(
                 record,
@@ -152,6 +166,7 @@ class TextGenerator:
                     f"diagnosis awareness ({diagnoses or 'none documented'}), "
                     f"and response to active medications: {medications or 'none documented'}."
                 ),
+                noise_profile=self._noise_profile,
             ),
             *(
                 [
@@ -166,6 +181,7 @@ class TextGenerator:
                             "Abnormal flags and reference ranges are preserved "
                             "for synthetic training and validation workflows."
                         ),
+                        noise_profile=self._noise_profile,
                     )
                 ]
                 if record.labs
@@ -184,6 +200,7 @@ class TextGenerator:
                             "Values are time-stamped synthetic observations "
                             "for trend review."
                         ),
+                        noise_profile=self._noise_profile,
                     )
                 ]
                 if record.vitals
@@ -204,6 +221,7 @@ class TextGenerator:
                             "Doses, routes, frequencies, and statuses are synthetic "
                             "and reconciled to the structured medication history."
                         ),
+                        noise_profile=self._noise_profile,
                     )
                 ]
                 if record.medication_history
@@ -221,8 +239,9 @@ class TextGenerator:
                     f"procedures ({procedures or 'none documented'}), treatments, "
                     "medication reconciliation, and follow-up needs."
                 ),
+                noise_profile=self._noise_profile,
             ),
-            *_longitudinal_follow_up_documents(record),
+            *_longitudinal_follow_up_documents(record, noise_profile=self._noise_profile),
             *(
                 [
                     _document(
@@ -231,6 +250,7 @@ class TextGenerator:
                         "radiologist",
                         timestamp,
                         _radiology_review_text(record),
+                        noise_profile=self._noise_profile,
                     )
                 ]
                 if _needs_radiology_report(record)
@@ -249,9 +269,11 @@ def _document(
     *,
     document_key: str | None = None,
     extracted_fact_updates: dict | None = None,
+    noise_profile: str = "standard",
 ) -> ClinicalDocument:
-    messy = _messy_text(note_type, clean_text)
+    messy = _messy_text(note_type, clean_text, profile=noise_profile)
     extracted_facts = _extracted_facts(record, note_type)
+    extracted_facts["messy_text_profile"] = noise_profile
     if extracted_fact_updates:
         extracted_facts.update(extracted_fact_updates)
     return ClinicalDocument(
@@ -267,7 +289,11 @@ def _document(
     )
 
 
-def _longitudinal_follow_up_documents(record: SyntheticRecord) -> list[ClinicalDocument]:
+def _longitudinal_follow_up_documents(
+    record: SyntheticRecord,
+    *,
+    noise_profile: str = "standard",
+) -> list[ClinicalDocument]:
     if len(record.encounters) < 2:
         return []
     documents = []
@@ -304,6 +330,7 @@ def _longitudinal_follow_up_documents(record: SyntheticRecord) -> list[ClinicalD
                 ),
                 document_key=f"progress_note:{encounter.encounter_id}",
                 extracted_fact_updates=facts,
+                noise_profile=noise_profile,
             )
         )
         documents.append(
@@ -321,12 +348,13 @@ def _longitudinal_follow_up_documents(record: SyntheticRecord) -> list[ClinicalD
                 ),
                 document_key=f"nursing_note:{encounter.encounter_id}",
                 extracted_fact_updates=facts,
+                noise_profile=noise_profile,
             )
         )
     return documents
 
 
-def _messy_text(note_type: str, clean_text: str) -> str:
+def _messy_text(note_type: str, clean_text: str, *, profile: str = "standard") -> str:
     shorthand = (
         clean_text.replace("patient", "pt")
         .replace("Patient", "Pt")
@@ -337,6 +365,12 @@ def _messy_text(note_type: str, clean_text: str) -> str:
         .replace("Assessment and plan", "A/P")
         .replace("shortness of breath", "SOB")
     )
+    if profile == "message":
+        return _message_style_text(note_type, shorthand)
+    if profile == "ocr":
+        return _ocr_style_text(note_type, shorthand)
+    if profile == "heavy":
+        return _heavy_messy_text(note_type, shorthand)
     if note_type == "ed_note":
         return f"pt msg: {shorthand}"
     if note_type == "progress_note":
@@ -355,6 +389,58 @@ def _messy_text(note_type: str, clean_text: str) -> str:
         ocr_like = shorthand.replace("Synthetic", "5ynthetic").replace("labels", "1abels")
         return f"OCR: {ocr_like}"
     return shorthand
+
+
+def _message_style_text(note_type: str, shorthand: str) -> str:
+    text = (
+        shorthand.replace("diagnoses", "dx")
+        .replace("diagnosis", "dx")
+        .replace("Procedures", "Proc")
+        .replace("procedures", "proc")
+        .replace("review", "rvw")
+        .replace("document", "doc")
+        .replace("current", "cur")
+    )
+    text = " ".join(text.split())
+    return f"{_message_prefix(note_type)} {text[:420]}"
+
+
+def _ocr_style_text(note_type: str, shorthand: str) -> str:
+    text = (
+        shorthand.replace("Synthetic", "5ynthetic")
+        .replace("synthetic", "5ynthetic")
+        .replace("labels", "1abels")
+        .replace("labs", "1abs")
+        .replace("Initial", "Initia1")
+        .replace("Medication", "Medicat1on")
+        .replace("history", "h1story")
+    )
+    chunks = [text[index : index + 72] for index in range(0, len(text), 72)]
+    return f"OCR {note_type.upper()}:\n" + "\n".join(chunks)
+
+
+def _heavy_messy_text(note_type: str, shorthand: str) -> str:
+    text = _message_style_text(note_type, shorthand)
+    text = text.replace(" and ", " + ").replace(" or ", " / ")
+    text = text.replace("documented", "doc'd").replace("follow-up", "f/u")
+    text = text.replace("synthetic", "synth").replace("Synthetic", "Synth")
+    if note_type in {"radiology_report", "lab_report"}:
+        text = _ocr_style_text(note_type, text)
+    return text
+
+
+def _message_prefix(note_type: str) -> str:
+    prefixes = {
+        "ed_note": "triage msg:",
+        "progress_note": "prog:",
+        "nursing_note": "rn handoff:",
+        "lab_report": "lab inbox:",
+        "vital_signs_flowsheet": "vs flowsheet:",
+        "medication_administration_record": "mar:",
+        "discharge_summary": "dc msg:",
+        "radiology_report": "rad prelim:",
+    }
+    return prefixes.get(note_type, "clinical msg:")
 
 
 def _extracted_facts(record: SyntheticRecord, note_type: str) -> dict:

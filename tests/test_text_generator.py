@@ -86,6 +86,68 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
     assert documents_by_type["ed_note"].extracted_facts["medication_details"][0][
         "route"
     ] == "IV"
+    assert documents_by_type["ed_note"].extracted_facts["messy_text_profile"] == "standard"
+
+
+def test_text_generator_supports_message_ocr_and_heavy_noise_profiles():
+    req = GenerationRequest(
+        topic="pneumonia",
+        modalities=[
+            Modality.STRUCTURED_EHR,
+            Modality.CLINICAL_TEXT,
+            Modality.LABS,
+            Modality.VITALS,
+            Modality.IMAGING,
+        ],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0).model_copy(
+        update={
+            "imaging": [
+                ImagingAsset(
+                    image_id="img-pneumonia",
+                    modality="XR",
+                    body_region="chest",
+                    prompt="Chest radiograph right lower lobe opacity",
+                    report_text="Synthetic chest radiology report with opacity.",
+                    labels=[
+                        Code(
+                            system="synthetic",
+                            code="opacity",
+                            display="Opacity",
+                        )
+                    ],
+                    generation_backend="placeholder",
+                )
+            ]
+        }
+    )
+
+    message_docs = {
+        document.note_type: document
+        for document in TextGenerator(noise_profile="message").add_documents(record).documents
+    }
+    ocr_docs = {
+        document.note_type: document
+        for document in TextGenerator(noise_profile="ocr").add_documents(record).documents
+    }
+    heavy_docs = {
+        document.note_type: document
+        for document in TextGenerator(noise_profile="heavy").add_documents(record).documents
+    }
+
+    assert message_docs["nursing_note"].messy_text.startswith("rn handoff:")
+    assert "pt presents w/" in message_docs["ed_note"].messy_text
+    assert ocr_docs["ed_note"].messy_text.startswith("OCR ED_NOTE:")
+    assert "5ynthetic" in ocr_docs["radiology_report"].messy_text
+    assert heavy_docs["lab_report"].messy_text.startswith("OCR LAB_REPORT:")
+    assert "synth" in heavy_docs["ed_note"].messy_text
+    assert heavy_docs["ed_note"].extracted_facts["messy_text_profile"] == "heavy"
+
+
+def test_text_generator_rejects_unknown_noise_profile():
+    with pytest.raises(ValueError, match="noise_profile must be one of"):
+        TextGenerator(noise_profile="chaos")
 
 
 def test_text_generator_adds_follow_up_notes_for_longitudinal_encounters():
