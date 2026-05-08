@@ -290,6 +290,42 @@ def test_structured_generator_applies_age_and_sex_cohort_constraints():
     assert records[0].metadata["cohort_constraints"]["age_min"] == 70
 
 
+def test_structured_generator_populates_demographics_and_social_history_context():
+    req = GenerationRequest(
+        topic="sepsis",
+        cohort_constraints={
+            "age_min": 40,
+            "age_max": 40,
+            "sexes": ["female"],
+            "races": ["synthetic_race_a", "synthetic_race_b"],
+            "ethnicities": ["synthetic_ethnicity"],
+            "insurance": ["synthetic_plan"],
+            "smoking_statuses": ["never", "former"],
+            "alcohol_use": ["none"],
+            "housing": ["stable"],
+        },
+    )
+    generator = StructuredGenerator()
+
+    first = generator.generate("ds-one", req, 0)
+    second = generator.generate("ds-one", req, 1)
+
+    assert first.patient.demographics == {
+        "age_group": "adult",
+        "sex_at_generation": "female",
+        "race": "synthetic_race_a",
+        "ethnicity": "synthetic_ethnicity",
+        "insurance": "synthetic_plan",
+    }
+    assert first.patient.social_history == {
+        "smoking_status": "never",
+        "alcohol_use": "none",
+        "housing": "stable",
+    }
+    assert second.patient.demographics["race"] == "synthetic_race_b"
+    assert second.patient.social_history["smoking_status"] == "former"
+
+
 def test_structured_generator_rejects_invalid_age_constraints():
     req = GenerationRequest(
         topic="sepsis",
@@ -307,6 +343,13 @@ def test_structured_generator_rejects_empty_sex_constraint():
     )
 
     with pytest.raises(ValueError, match="sexes must contain at least one value"):
+        StructuredGenerator().generate("ds-one", req, 0)
+
+
+def test_structured_generator_rejects_empty_demographic_constraint():
+    req = GenerationRequest(topic="sepsis", cohort_constraints={"races": []})
+
+    with pytest.raises(ValueError, match="races must contain at least one value"):
         StructuredGenerator().generate("ds-one", req, 0)
 
 
