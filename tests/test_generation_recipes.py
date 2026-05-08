@@ -16,6 +16,10 @@ def test_generation_recipe_catalog_includes_multimodal_training_profiles():
     assert Modality.TIME_SERIES in recipes["full_multimodal_acute_care"].modalities
     assert ExportFormat.MULTIMODAL_JSONL in recipes["radiology_cxr_report"].export_formats
     assert recipes["icu_timeseries_notes"].cohort_constraints["topic_mix"]
+    assert recipes["longitudinal_chronic_care"].cohort_constraints["encounter_count"] == 4
+    assert ExportFormat.MEDICATION_RECONCILIATION_JSONL in (
+        recipes["longitudinal_chronic_care"].export_formats
+    )
     assert "synthchex_75k" in recipes["radiology_cxr_report"].recommended_reference_keys
     assert "rexgradient_160k" in recipes["radiology_cxr_report"].recommended_reference_keys
     assert "synthea_fhir" in recipes["full_multimodal_acute_care"].recommended_reference_keys
@@ -81,6 +85,24 @@ def test_icu_recipe_recommends_note_fact_sft_export():
     assert ExportFormat.CLINICAL_OBSERVATION_JSONL in req.export_formats
     assert ExportFormat.MEDICATION_RECONCILIATION_JSONL in req.export_formats
     assert ExportFormat.TIME_SERIES_JSONL in req.export_formats
+
+
+def test_chronic_care_recipe_builds_longitudinal_training_request():
+    req = apply_generation_recipe(
+        GenerationRequest(topic="chronic care", recipe="longitudinal_chronic_care")
+    )
+
+    assert req.modalities == [
+        Modality.STRUCTURED_EHR,
+        Modality.CLINICAL_TEXT,
+        Modality.LABS,
+        Modality.VITALS,
+        Modality.TIME_SERIES,
+    ]
+    assert req.cohort_constraints["encounter_count"] == 4
+    assert req.cohort_constraints["topic_mix"][0]["topic"] == "type 2 diabetes"
+    assert ExportFormat.CLINICAL_OBSERVATION_JSONL in req.export_formats
+    assert ExportFormat.MEDICATION_RECONCILIATION_JSONL in req.export_formats
 
 
 def test_apply_generation_recipe_rejects_unknown_recipe():

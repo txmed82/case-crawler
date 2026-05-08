@@ -754,6 +754,78 @@ _TOPIC_PROFILES: list[tuple[tuple[str, ...], ClinicalProfile]] = [
         ),
     ),
     (
+        ("type 2 diabetes", "diabetes mellitus", "a1c", "diabetic follow-up"),
+        ClinicalProfile(
+            diagnosis_display="type 2 diabetes mellitus",
+            diagnosis_code="type_2_diabetes_mellitus",
+            labs=[
+                _lab("Hemoglobin A1c", 8.4, "%", reference_low=4.0, reference_high=5.6, flag="H", step=-0.1),
+                _lab("Glucose", 178, "mg/dL", reference_low=70, reference_high=110, flag="H", step=-4),
+                _lab("eGFR", 82, "mL/min/1.73m2", reference_low=60, reference_high=120, step=-1),
+                _lab("Urine albumin-creatinine ratio", 86, "mg/g", reference_low=0, reference_high=30, flag="H", step=5),
+            ],
+            vitals=[
+                _vital("HR", 84, "/min", step=1),
+                _vital("SBP", 142, "mmHg", step=1),
+                _vital("SpO2", 98, "%", step=0),
+                _vital("Temperature", 36.9, "C", step=0.0),
+            ],
+            medications=[
+                _med("Metformin", rxnorm="6809", dose="1000 mg", route="oral", frequency="twice daily"),
+                _med("Empagliflozin", rxnorm="1545653", dose="10 mg", route="oral", frequency="daily"),
+                _med("Insulin glargine", rxnorm="274783", dose="18 units", route="subcutaneous", frequency="nightly"),
+            ],
+        ),
+    ),
+    (
+        ("chronic kidney disease", "ckd", "proteinuria"),
+        ClinicalProfile(
+            diagnosis_display="chronic kidney disease",
+            diagnosis_code="chronic_kidney_disease",
+            labs=[
+                _lab("Creatinine", 2.0, "mg/dL", reference_low=0.6, reference_high=1.3, flag="H", step=0.05),
+                _lab("eGFR", 34, "mL/min/1.73m2", reference_low=60, reference_high=120, flag="L", step=-1),
+                _lab("Potassium", 4.8, "mmol/L", reference_low=3.5, reference_high=5.1, step=0.05),
+                _lab("Urine albumin-creatinine ratio", 420, "mg/g", reference_low=0, reference_high=30, flag="H", step=20),
+            ],
+            vitals=[
+                _vital("HR", 78, "/min", step=1),
+                _vital("SBP", 154, "mmHg", step=2),
+                _vital("SpO2", 97, "%", step=0),
+                _vital("Temperature", 36.8, "C", step=0.0),
+            ],
+            medications=[
+                _med("Losartan", rxnorm="52175", dose="50 mg", route="oral", frequency="daily"),
+                _med("Furosemide", rxnorm="4603", dose="20 mg", route="oral", frequency="daily"),
+                _med("Sodium bicarbonate", rxnorm="36676", dose="650 mg", route="oral", frequency="twice daily"),
+            ],
+        ),
+    ),
+    (
+        ("hypertension", "high blood pressure", "bp follow-up"),
+        ClinicalProfile(
+            diagnosis_display="essential hypertension",
+            diagnosis_code="essential_hypertension",
+            labs=[
+                _lab("Creatinine", 1.0, "mg/dL", reference_low=0.6, reference_high=1.3, step=0.0),
+                _lab("Potassium", 4.0, "mmol/L", reference_low=3.5, reference_high=5.1, step=0.0),
+                _lab("Sodium", 139, "mmol/L", reference_low=135, reference_high=145, step=0.0),
+                _lab("LDL cholesterol", 132, "mg/dL", reference_low=0, reference_high=100, flag="H", step=-3),
+            ],
+            vitals=[
+                _vital("HR", 76, "/min", step=1),
+                _vital("SBP", 166, "mmHg", step=2),
+                _vital("SpO2", 98, "%", step=0),
+                _vital("Temperature", 36.7, "C", step=0.0),
+            ],
+            medications=[
+                _med("Amlodipine", rxnorm="17767", dose="10 mg", route="oral", frequency="daily"),
+                _med("Hydrochlorothiazide", rxnorm="5487", dose="25 mg", route="oral", frequency="daily"),
+                _med("Atorvastatin", rxnorm="83367", dose="40 mg", route="oral", frequency="daily"),
+            ],
+        ),
+    ),
+    (
         ("stroke", "cva", "aphasia", "hemiparesis"),
         ClinicalProfile(
             diagnosis_display="ischemic stroke",
