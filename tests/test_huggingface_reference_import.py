@@ -345,12 +345,14 @@ def test_import_reference_rows_accepts_custom_dataset_spec():
     records = import_reference_rows(
         rows,
         dataset_id="ds-custom",
+        reference_key="org/custom-synthetic-notes",
         split="eval",
         limit=1,
         spec=custom_spec,
     )
 
     assert len(records) == 1
+    assert records[0].metadata["reference_key"] == "org/custom-synthetic-notes"
     assert records[0].metadata["reference_dataset"] == "org/custom-synthetic-notes"
     assert records[0].metadata["reference_license"] == "cc-by-4.0"
     assert records[0].documents[0].extracted_facts["instruction"] == "Extract diagnosis."

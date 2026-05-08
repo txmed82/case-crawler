@@ -719,6 +719,7 @@ def test_dataset_cli_imports_custom_hf_reference_dataset(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert "Imported 1 reference record(s) from org/custom-synthetic-notes" in result.output
     record = store.list_records(dataset_id="ds-custom-reference")[0]
+    assert record.metadata["reference_key"] == "org/custom-synthetic-notes"
     assert record.metadata["reference_dataset"] == "org/custom-synthetic-notes"
     assert record.documents[0].extracted_facts["instruction"] == "Extract diagnosis."
 

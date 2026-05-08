@@ -284,6 +284,7 @@ def import_reference_dataset(
             records = import_reference_rows(
                 rows,
                 dataset_id=dataset_id,
+                reference_key=reference_key or repo_id,
                 split=effective_split,
                 limit=limit,
                 spec=spec,

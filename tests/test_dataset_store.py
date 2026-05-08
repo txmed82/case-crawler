@@ -133,6 +133,37 @@ def test_dataset_store_manifest_includes_recipe_benchmark_plan(tmp_path):
     assert manifest.metadata["benchmark_thresholds"]["min_overall_score"] == 0.7
 
 
+def test_dataset_store_manifest_includes_reference_keys(tmp_path):
+    store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
+    record = SyntheticRecord(
+        record_id="rec-ref",
+        dataset_id="ds-ref",
+        topic="clinical_note",
+        complexity=ComplexityProfile.MODERATE,
+        modalities=[Modality.CLINICAL_TEXT],
+        patient=SyntheticPatient(patient_id="pat-1", age=64, sex="female"),
+        encounters=[],
+        provenance=Provenance(
+            generator="huggingface-reference-import",
+            created_at="2026-05-06T10:00:00",
+        ),
+        metadata={
+            "reference_key": "asclepius",
+            "reference_dataset": "starmpcc/Asclepius-Synthetic-Clinical-Notes",
+        },
+    )
+
+    store.save_record(record)
+    manifest = store.get_manifest("ds-ref")
+
+    assert manifest.metadata["primary_reference_key"] == "asclepius"
+    assert manifest.metadata["reference_keys"] == {"asclepius": 1}
+    assert (
+        manifest.metadata["primary_reference_dataset"]
+        == "starmpcc/Asclepius-Synthetic-Clinical-Notes"
+    )
+
+
 def test_dataset_store_tracks_human_review_queue_and_effective_approval(tmp_path):
     store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
     record = SyntheticRecord(

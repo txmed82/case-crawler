@@ -258,6 +258,7 @@ class DatasetStore:
         first = records[0]
         export_formats = _manifest_export_formats(records)
         recipe_metadata = _manifest_recipe_metadata(records)
+        reference_metadata = _manifest_reference_metadata(records)
         return DatasetManifest(
             dataset_id=dataset_id,
             name=f"{first.topic}-synthetic",
@@ -271,6 +272,7 @@ class DatasetStore:
             metadata={
                 "record_ids": [record.record_id for record in records],
                 **recipe_metadata,
+                **reference_metadata,
                 "latest_exports": [
                     export_manifest.model_dump()
                     for export_manifest in self.list_export_manifests(
@@ -371,3 +373,30 @@ def _manifest_recipe_metadata(records: list[SyntheticRecord]) -> dict:
             "min_metric_score": recipe_spec.benchmark_min_metric_score,
         }
     return metadata
+
+
+def _manifest_reference_metadata(records: list[SyntheticRecord]) -> dict:
+    reference_keys = _metadata_counts(records, "reference_key")
+    reference_datasets = _metadata_counts(records, "reference_dataset")
+    if not reference_keys and not reference_datasets:
+        return {}
+    metadata: dict[str, object] = {}
+    if reference_keys:
+        metadata["reference_keys"] = dict(sorted(reference_keys.items()))
+        metadata["primary_reference_key"] = max(reference_keys, key=reference_keys.get)
+    if reference_datasets:
+        metadata["reference_datasets"] = dict(sorted(reference_datasets.items()))
+        metadata["primary_reference_dataset"] = max(
+            reference_datasets,
+            key=reference_datasets.get,
+        )
+    return metadata
+
+
+def _metadata_counts(records: list[SyntheticRecord], field: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for record in records:
+        value = record.metadata.get(field)
+        if isinstance(value, str) and value:
+            counts[value] = counts.get(value, 0) + 1
+    return counts

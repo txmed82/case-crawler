@@ -374,6 +374,9 @@ function BenchmarkPanel({
   const referenceOptions = datasets.filter(
     (dataset) => dataset.dataset_id !== activeDatasetId
   );
+  const recommendedReferenceOptions = referenceOptions.filter((dataset) =>
+    datasetMatchesRecommendedReference(dataset, recipeBenchmarkPlan.recommendedReferenceKeys)
+  );
   const topMetrics = benchmark?.metrics.slice(0, 6) ?? [];
   const hasRecipeBenchmarkPlan =
     recipeBenchmarkPlan.recommendedReferenceKeys.length > 0 ||
@@ -382,6 +385,10 @@ function BenchmarkPanel({
     if (!recipeBenchmarkPlan.thresholds) return;
     onMinOverallScoreChange(recipeBenchmarkPlan.thresholds.minOverallScore);
     onMinMetricScoreChange(recipeBenchmarkPlan.thresholds.minMetricScore);
+  };
+  const selectRecommendedReference = () => {
+    const [firstRecommended] = recommendedReferenceOptions;
+    if (firstRecommended) onReferenceDatasetChange(firstRecommended.dataset_id);
   };
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -399,7 +406,7 @@ function BenchmarkPanel({
             <option value="">Select reference dataset</option>
             {referenceOptions.map((dataset) => (
               <option key={dataset.dataset_id} value={dataset.dataset_id}>
-                {dataset.topic} | {dataset.dataset_id}
+                {formatReferenceOption(dataset, recipeBenchmarkPlan.recommendedReferenceKeys)}
               </option>
             ))}
           </select>
@@ -465,6 +472,15 @@ function BenchmarkPanel({
                 className="shrink-0 rounded-md border border-blue-300 bg-white px-3 py-2 text-xs font-medium text-blue-800 hover:bg-blue-100"
               >
                 Apply thresholds
+              </button>
+            )}
+            {recommendedReferenceOptions.length > 0 && (
+              <button
+                type="button"
+                onClick={selectRecommendedReference}
+                className="shrink-0 rounded-md border border-blue-300 bg-white px-3 py-2 text-xs font-medium text-blue-800 hover:bg-blue-100"
+              >
+                Select reference
               </button>
             )}
           </div>
@@ -650,6 +666,35 @@ function benchmarkThresholdsFromMetadata(
 function scoreFromMetadata(value: unknown): number | null {
   if (typeof value !== "number" || Number.isNaN(value)) return null;
   return clampScore(value);
+}
+
+function datasetMatchesRecommendedReference(
+  dataset: DatasetManifest,
+  recommendedReferenceKeys: string[]
+) {
+  const primaryReferenceKey = stringFromMetadata(dataset.metadata.primary_reference_key);
+  return Boolean(
+    primaryReferenceKey && recommendedReferenceKeys.includes(primaryReferenceKey)
+  );
+}
+
+function formatReferenceOption(
+  dataset: DatasetManifest,
+  recommendedReferenceKeys: string[]
+) {
+  const primaryReferenceKey = stringFromMetadata(dataset.metadata.primary_reference_key);
+  const labelParts = [dataset.topic, dataset.dataset_id];
+  if (primaryReferenceKey) {
+    labelParts.push(`ref ${primaryReferenceKey}`);
+  }
+  const label = labelParts.join(" | ");
+  if (
+    primaryReferenceKey &&
+    recommendedReferenceKeys.includes(primaryReferenceKey)
+  ) {
+    return `${label} | recommended`;
+  }
+  return label;
 }
 
 function QualityPanel({
