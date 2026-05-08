@@ -164,6 +164,9 @@ def export_chat_record(record: SyntheticRecord) -> dict[str, Any]:
 
 
 def export_multimodal_record(record: SyntheticRecord) -> dict[str, Any]:
+    clinical_context = _clinical_context(record)
+    images = [_multimodal_image_payload(asset) for asset in record.imaging]
+    image_payloads = {image["image_id"]: image for image in images}
     image_text_pairs = [
         {
             "image_id": asset.image_id,
@@ -176,26 +179,68 @@ def export_multimodal_record(record: SyntheticRecord) -> dict[str, Any]:
     return {
         "record_id": record.record_id,
         "dataset_id": record.dataset_id,
-        "clinical_context": _clinical_context(record),
-        "images": [_multimodal_image_payload(asset) for asset in record.imaging],
+        "clinical_context": clinical_context,
+        "images": images,
         "image_text_pairs": image_text_pairs,
-        "supervised_tasks": [
-            {
-                "task": "radiology_image_report_alignment",
-                "input": {
-                    "image_id": pair["image_id"],
-                    "clinical_context": _clinical_context(record),
-                    "report_text": pair["text"],
-                },
-                "target": {
-                    "is_synthetic": True,
-                    "labels": pair["labels"],
-                },
-            }
-            for pair in image_text_pairs
-        ],
+        "supervised_tasks": _multimodal_supervised_tasks(
+            image_text_pairs,
+            image_payloads,
+            clinical_context,
+        ),
         "metadata": _metadata(record),
     }
+
+
+def _multimodal_supervised_tasks(
+    image_text_pairs: list[dict[str, Any]],
+    image_payloads: dict[str, dict[str, Any]],
+    clinical_context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    tasks: list[dict[str, Any]] = []
+    for pair in image_text_pairs:
+        image_payload = image_payloads.get(pair["image_id"], {})
+        image_input = {
+            "image_id": pair["image_id"],
+            "clinical_context": clinical_context,
+            "image_metadata": image_payload.get("image_metadata"),
+        }
+        tasks.extend(
+            [
+                {
+                    "task": "radiology_image_report_alignment",
+                    "input": {
+                        **image_input,
+                        "report_text": pair["text"],
+                    },
+                    "target": {
+                        "is_synthetic": True,
+                        "labels": pair["labels"],
+                    },
+                },
+                {
+                    "task": "radiology_report_generation",
+                    "input": {
+                        **image_input,
+                        "labels": pair["labels"],
+                    },
+                    "target": {
+                        "report_text": pair["text"],
+                        "is_synthetic": True,
+                    },
+                },
+                {
+                    "task": "radiology_label_extraction",
+                    "input": {
+                        **image_input,
+                        "report_text": pair["text"],
+                    },
+                    "target": {
+                        "labels": pair["labels"],
+                    },
+                },
+            ]
+        )
+    return tasks
 
 
 def export_time_series_records(record: SyntheticRecord) -> list[dict[str, Any]]:
