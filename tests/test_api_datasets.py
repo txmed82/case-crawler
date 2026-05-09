@@ -444,6 +444,12 @@ def test_dataset_api_generates_release_package_with_fixture_references(
         ]
         == 1
     )
+    assert (
+        summary["objective_coverage"]["criteria"]["radiology_images"]["evidence"][
+            "image_artifact_metadata_count"
+        ]
+        == 1
+    )
     assert summary["quality_report"]["multimodal_release_ready"] is True
     assert summary["quality_report"]["imaging_report_label_evidence_rate"] is not None
     assert summary["quality_report"]["mean_imaging_report_chars"] > 0

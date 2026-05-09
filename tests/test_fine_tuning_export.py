@@ -603,6 +603,7 @@ def test_verify_jsonl_split_package_requires_release_image_artifact_metadata(tmp
     image_artifact["labels"] = [{"system": "synthetic", "code": "opacity"}]
     image_artifact["imaging_model_policy"].pop("use_policy")
     image_artifact["image_validator_policy"].pop("backend")
+    image_artifact.pop("metadata")
     manifest_path.write_text(json.dumps(manifest))
 
     report = verify_jsonl_split_package(tmp_path / "package")
@@ -621,6 +622,7 @@ def test_verify_jsonl_split_package_requires_release_image_artifact_metadata(tmp
         field.endswith(".image_validator_policy.backend")
         for field in issue_fields
     )
+    assert any(field.endswith(".metadata") for field in issue_fields)
 
 
 def test_verify_jsonl_split_package_validates_multimodal_jsonl_image_paths(tmp_path):
