@@ -246,7 +246,9 @@ diagnosis-code fields, image fields, image-label fields, explicit lab/vital
 arrays, medication-history arrays, and time-series channel arrays into the local
 `SyntheticRecord` schema. The same field mapping works for local JSONL, NDJSON,
 JSON arrays, or `{"rows": [...]}` files via `--path` or the REST import `path`
-field, so private validation sets can stay local.
+field, so private validation sets can stay local. Persisted image-reference
+imports also attach per-asset file metadata and Hugging Face license/use-policy
+provenance so benchmark images can be audited alongside generated images.
 
 The current external landscape and model/dataset research notes are tracked in
 `docs/research/2026-05-08-synthetic-healthcare-data-landscape.md`.

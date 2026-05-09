@@ -820,6 +820,24 @@ def test_image_reference_row_persists_image_asset(tmp_path):
     assert {label.display for label in record.imaging[0].labels} == {"Pneumonia"}
     assert record.documents[0].extracted_facts["imaging_labels"] == ["Pneumonia"]
     assert Path(record.imaging[0].file_path).read_bytes() == b"fake-image"
+    assert record.imaging[0].metadata["generation_backend"] == (
+        "huggingface-reference:chimbiwide/synthetic-chest-xray-pneumonia"
+    )
+    assert record.imaging[0].metadata["artifact_contract"] == (
+        "casecrawler.models.synthetic.ImagingAsset"
+    )
+    assert record.imaging[0].metadata["reference_dataset"] == {
+        "repo_id": "chimbiwide/synthetic-chest-xray-pneumonia",
+        "split": "train",
+        "license": "cc-by-4.0",
+        "gated": False,
+        "use_policy": "review_license_before_use",
+        "import_use_policy": "reference_import_not_relicensed",
+        "image_field": "image",
+        "image_label_field": "label",
+    }
+    assert record.imaging[0].metadata["file"]["byte_size"] == len(b"fake-image")
+    assert len(record.imaging[0].metadata["file"]["sha256"]) == 64
 
 
 def test_image_reference_row_preserves_meaningful_note_text(tmp_path):

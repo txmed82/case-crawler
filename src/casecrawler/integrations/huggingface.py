@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Iterable
 from uuid import NAMESPACE_URL, uuid5
 
+from casecrawler.imaging.file_metadata import image_file_metadata
 from casecrawler.models.synthetic import (
     AllergyIntolerance,
     ClinicalDocument,
@@ -1511,8 +1512,36 @@ def _image_reference_artifacts(
             report_text=report_text or prompt,
             labels=labels,
             generation_backend=f"huggingface-reference:{spec.repo_id}",
+            metadata=_image_reference_metadata(
+                spec=spec,
+                image_path=image_path,
+            ),
         )
     ]
+
+
+def _image_reference_metadata(
+    *,
+    spec: HuggingFaceReferenceDataset,
+    image_path: str | None,
+) -> dict:
+    metadata = {
+        "generation_backend": f"huggingface-reference:{spec.repo_id}",
+        "artifact_contract": "casecrawler.models.synthetic.ImagingAsset",
+        "reference_dataset": {
+            "repo_id": spec.repo_id,
+            "split": spec.split,
+            "license": spec.license,
+            "gated": spec.gated,
+            "use_policy": spec.use_policy,
+            "import_use_policy": "reference_import_not_relicensed",
+            "image_field": spec.image_field,
+            "image_label_field": spec.image_label_field,
+        },
+    }
+    if image_path and Path(image_path).is_file():
+        metadata["file"] = image_file_metadata(image_path)
+    return metadata
 
 
 def _persist_reference_image(
