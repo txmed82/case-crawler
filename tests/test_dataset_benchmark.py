@@ -4,7 +4,9 @@ import zlib
 import pytest
 
 from casecrawler.models.synthetic import (
+    AllergyIntolerance,
     ClinicalDocument,
+    ClinicalOrder,
     Code,
     ComplexityProfile,
     Encounter,
@@ -112,6 +114,27 @@ def _record(
                 status="active",
             )
         ],
+        allergies=[
+            AllergyIntolerance(
+                substance="Penicillin",
+                reaction="hives",
+                severity="moderate",
+                status="active",
+            )
+        ],
+        orders=[
+            ClinicalOrder(
+                order_id=f"ord-{record_id}-lab",
+                order_type="laboratory",
+                display="WBC",
+                code="6690-2",
+                system="LOINC",
+                status="completed",
+                priority="stat",
+                ordered_at="2026-01-01T00:00:00",
+                encounter_id=f"enc-{record_id}",
+            )
+        ],
         time_series=[
             TimeSeriesChannel(
                 name="heart_rate",
@@ -216,6 +239,14 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.medication_dose_counts == {"1 g": 2}
     assert profile.medication_frequency_counts == {"daily": 2}
     assert profile.medication_status_counts == {"active": 2}
+    assert profile.allergy_substance_counts == {"Penicillin": 2}
+    assert profile.allergy_reaction_counts == {"hives": 2}
+    assert profile.allergy_severity_counts == {"moderate": 2}
+    assert profile.allergy_status_counts == {"active": 2}
+    assert profile.order_type_counts == {"laboratory": 2}
+    assert profile.order_display_counts == {"WBC": 2}
+    assert profile.order_status_counts == {"completed": 2}
+    assert profile.order_priority_counts == {"stat": 2}
     assert profile.document_author_role_counts == {"physician": 2}
     assert profile.messy_document_rate == 1.0
     assert profile.extracted_fact_key_counts == {
@@ -238,6 +269,8 @@ def test_profile_records_summarizes_multimodal_cohort():
     assert profile.artifact_counts["labs"] == 2
     assert profile.artifact_counts["vitals"] == 2
     assert profile.artifact_counts["medications"] == 2
+    assert profile.artifact_counts["allergies"] == 2
+    assert profile.artifact_counts["orders"] == 2
     assert profile.artifact_counts["time_series_channels"] == 2
     assert profile.artifact_counts["time_series_points"] == 4
     assert profile.artifact_counts["imaging_assets"] == 2
@@ -250,6 +283,8 @@ def test_profile_records_summarizes_multimodal_cohort():
         "labs_per_record": 1.0,
         "vitals_per_record": 1.0,
         "medications_per_record": 1.0,
+        "allergies_per_record": 1.0,
+        "orders_per_record": 1.0,
         "time_series_channels_per_record": 1.0,
         "imaging_assets_per_record": 1.0,
         "imaging_file_assets_per_record": 0.0,
@@ -843,6 +878,41 @@ def test_dataset_benchmark_fails_on_medication_regimen_mismatch():
     assert metrics["medication_frequency_distribution"].score == 0.0
     assert "medication_dose_distribution" in report.failing_metrics
     assert "medication_frequency_distribution" in report.failing_metrics
+
+
+def test_dataset_benchmark_fails_on_allergy_and_order_mismatch():
+    generated = [_record("rec-1", "ds-gen")]
+    reference_base = _record("ref-1", "ds-ref")
+    reference = [
+        reference_base.model_copy(
+            update={
+                "allergies": [
+                    reference_base.allergies[0].model_copy(
+                        update={"substance": "Sulfonamide antibiotics"}
+                    )
+                ],
+                "orders": [
+                    reference_base.orders[0].model_copy(
+                        update={
+                            "order_type": "imaging",
+                            "display": "Chest x-ray",
+                            "priority": "routine",
+                        }
+                    )
+                ],
+            }
+        )
+    ]
+
+    report = DatasetBenchmark(min_metric_score=0.5).compare(generated, reference)
+    metrics = {metric.name: metric for metric in report.metrics}
+
+    assert metrics["allergy_substance_overlap"].score == 0.0
+    assert metrics["order_display_overlap"].score == 0.0
+    assert metrics["order_type_distribution"].score == 0.0
+    assert "allergy_substance_overlap" in report.failing_metrics
+    assert "order_display_overlap" in report.failing_metrics
+    assert "order_type_distribution" in report.failing_metrics
 
 
 def test_dataset_benchmark_compares_imaging_generation_backends():
