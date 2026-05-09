@@ -145,12 +145,16 @@ def build_objective_coverage_audit(
             },
         ),
         "radiology_images": _criterion(
-            "Radiology image artifacts are present and packaged.",
+            "Radiology image artifacts are present, packaged, and auditable.",
             coverage.get("radiology_images") is True
-            and bool(manifest.get("image_artifacts")),
+            and bool(manifest.get("image_artifacts"))
+            and _image_artifacts_have_file_metadata(manifest),
             ["quality_report.json", "manifest.json"],
             {
                 "image_artifact_count": len(manifest.get("image_artifacts", {})),
+                "image_artifact_metadata_count": (
+                    _image_artifact_file_metadata_count(manifest)
+                ),
                 "mean_width": quality_report.mean_imaging_width,
                 "mean_height": quality_report.mean_imaging_height,
             },
@@ -270,6 +274,39 @@ def _cohort_similarity_evidence(
         "generated_social_history_counts": quality_report.social_history_counts,
         "available_metrics": metric_names,
     }
+
+
+def _image_artifacts_have_file_metadata(manifest: dict[str, Any]) -> bool:
+    image_artifacts = manifest.get("image_artifacts")
+    if not isinstance(image_artifacts, dict) or not image_artifacts:
+        return False
+    return _image_artifact_file_metadata_count(manifest) == len(image_artifacts)
+
+
+def _image_artifact_file_metadata_count(manifest: dict[str, Any]) -> int:
+    image_artifacts = manifest.get("image_artifacts")
+    if not isinstance(image_artifacts, dict):
+        return 0
+    count = 0
+    for artifact in image_artifacts.values():
+        if not isinstance(artifact, dict):
+            continue
+        metadata = artifact.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        file_metadata = metadata.get("file")
+        if not isinstance(file_metadata, dict):
+            continue
+        if (
+            isinstance(file_metadata.get("byte_size"), int)
+            and file_metadata["byte_size"] > 0
+            and isinstance(file_metadata.get("mime_type"), str)
+            and bool(file_metadata["mime_type"].strip())
+            and isinstance(file_metadata.get("sha256"), str)
+            and bool(file_metadata["sha256"].strip())
+        ):
+            count += 1
+    return count
 
 
 def _benchmark_metric_names(benchmark_suite: dict[str, Any]) -> list[str]:

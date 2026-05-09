@@ -295,7 +295,9 @@ async def generate_release_package(req: ReleasePackageRequest):
                 manifest={
                     "task_coverage": task_coverage,
                     "image_artifacts": {
-                        image.image_id: True
+                        f"{record.record_id}:{image.image_id}": {
+                            "metadata": image.metadata,
+                        }
                         for record in records
                         for image in record.imaging
                         if image.file_path

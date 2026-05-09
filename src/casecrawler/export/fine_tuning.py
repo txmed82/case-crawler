@@ -1788,6 +1788,72 @@ def _verify_release_image_artifact_metadata(
                         ),
                     }
                 )
+    _verify_release_image_asset_metadata(key, artifact, issues)
+
+
+def _verify_release_image_asset_metadata(
+    key: str,
+    artifact: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    metadata = artifact.get("metadata")
+    if not isinstance(metadata, dict):
+        issues.append(
+            {
+                "field": f"image_artifacts.{key}.metadata",
+                "message": "Release-ready image artifact is missing asset metadata.",
+            }
+        )
+        return
+    for field in ("generation_backend", "artifact_contract"):
+        if not isinstance(metadata.get(field), str) or not metadata[field].strip():
+            issues.append(
+                {
+                    "field": f"image_artifacts.{key}.metadata.{field}",
+                    "message": (
+                        "Release-ready image artifact metadata is missing "
+                        f"{field}."
+                    ),
+                }
+            )
+    file_metadata = metadata.get("file")
+    if not isinstance(file_metadata, dict):
+        issues.append(
+            {
+                "field": f"image_artifacts.{key}.metadata.file",
+                "message": (
+                    "Release-ready image artifact metadata is missing file metadata."
+                ),
+            }
+        )
+        return
+    if (
+        not isinstance(file_metadata.get("byte_size"), int)
+        or file_metadata["byte_size"] <= 0
+    ):
+        issues.append(
+            {
+                "field": f"image_artifacts.{key}.metadata.file.byte_size",
+                "message": (
+                    "Release-ready image artifact file metadata is missing "
+                    "valid byte_size."
+                ),
+            }
+        )
+    for field in ("mime_type", "sha256"):
+        if (
+            not isinstance(file_metadata.get(field), str)
+            or not file_metadata[field].strip()
+        ):
+            issues.append(
+                {
+                    "field": f"image_artifacts.{key}.metadata.file.{field}",
+                    "message": (
+                        "Release-ready image artifact file metadata is missing "
+                        f"{field}."
+                    ),
+                }
+            )
 
 
 def _image_artifact_key_parts(key: str) -> tuple[str | None, str | None]:

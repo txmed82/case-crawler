@@ -288,6 +288,94 @@ def test_objective_coverage_requires_messy_clinical_text():
     assert "messy_clinical_text" in audit["missing"]
 
 
+def test_objective_coverage_requires_auditable_radiology_image_metadata(tmp_path):
+    image_path = tmp_path / "image.png"
+    image_path.write_bytes(_png_bytes(width=64, height=64))
+    record = _record("rec-1").model_copy(
+        update={
+            "modalities": [
+                Modality.STRUCTURED_EHR,
+                Modality.CLINICAL_TEXT,
+                Modality.LABS,
+                Modality.IMAGING,
+            ],
+            "documents": [
+                *_record("rec-1").documents,
+                ClinicalDocument(
+                    document_id="doc-rec-1-rad",
+                    note_type="radiology_report",
+                    author_role="radiologist",
+                    timestamp="2026-01-01T00:00:00",
+                    clean_text="Chest radiograph shows opacity.",
+                ),
+            ],
+            "imaging": [
+                ImagingAsset(
+                    image_id="img-1",
+                    modality="XR",
+                    body_region="chest",
+                    prompt="chest x-ray opacity",
+                    file_path=str(image_path),
+                    report_text="Chest radiograph shows opacity.",
+                    labels=[
+                        Code(
+                            system="synthetic",
+                            code="opacity",
+                            display="Opacity",
+                        )
+                    ],
+                    generation_backend="placeholder",
+                )
+            ],
+        }
+    )
+    report = build_dataset_quality_report("ds-quality", [record])
+    benchmark_suite = {"passed": True, "reference_count": 1}
+    manifest = {
+        "task_coverage": {"multimodal_jsonl": 1},
+        "audit_artifacts": {},
+        "image_artifacts": {
+            "rec-1:img-1": {
+                "metadata": {
+                    "generation_backend": "placeholder",
+                    "artifact_contract": "casecrawler.models.synthetic.ImagingAsset",
+                }
+            }
+        },
+    }
+
+    missing_metadata = build_objective_coverage_audit(
+        quality_report=report,
+        benchmark_suite=benchmark_suite,
+        manifest=manifest,
+    )
+    manifest["image_artifacts"]["rec-1:img-1"]["metadata"]["file"] = {
+        "byte_size": image_path.stat().st_size,
+        "mime_type": "image/png",
+        "sha256": "synthetic-hash",
+    }
+    complete_metadata = build_objective_coverage_audit(
+        quality_report=report,
+        benchmark_suite=benchmark_suite,
+        manifest=manifest,
+    )
+
+    assert missing_metadata["criteria"]["radiology_images"]["satisfied"] is False
+    assert (
+        missing_metadata["criteria"]["radiology_images"]["evidence"][
+            "image_artifact_metadata_count"
+        ]
+        == 0
+    )
+    assert complete_metadata["criteria"]["radiology_images"]["satisfied"] is True
+    assert (
+        complete_metadata["criteria"]["radiology_images"]["evidence"][
+            "image_artifact_metadata_count"
+        ]
+        == 1
+    )
+
+
 def test_quality_report_counts_clinical_text_model_policy():
     record = _record("rec-1").model_copy(
         update={
