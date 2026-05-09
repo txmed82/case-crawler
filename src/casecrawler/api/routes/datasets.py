@@ -111,6 +111,7 @@ class ReleasePackageRequest(BaseModel):
     fixture_limit: int = Field(default=1, ge=1)
     min_overall_score: float = Field(default=0.1, ge=0.0, le=1.0)
     min_metric_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    max_validation_retries: int = Field(default=0, ge=0, le=10)
 
 
 @router.get("/datasets")
@@ -184,6 +185,7 @@ async def generate_release_package(req: ReleasePackageRequest):
             "time_series_backend": req.time_series_backend,
             "time_series_model_profile": req.time_series_model_profile,
             "time_series_command": req.time_series_command,
+            "max_validation_retries": req.max_validation_retries,
         }
         if req.complexity is not None:
             request_kwargs["complexity"] = req.complexity

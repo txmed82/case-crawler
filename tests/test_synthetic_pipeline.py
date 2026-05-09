@@ -2,7 +2,7 @@ import pytest
 
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.dataset import GenerationRequest
-from casecrawler.models.synthetic import Code, ImagingAsset, Modality
+from casecrawler.models.synthetic import Code, ImagingAsset, Modality, ValidationReport
 from casecrawler.validation.synthetic_validator import SyntheticValidator
 
 
@@ -793,6 +793,43 @@ async def test_synthetic_pipeline_honors_request_validation_threshold(tmp_path, 
         issue.field == "imaging.alignment"
         for issue in strict["records"][0].validation.issues
     )
+
+
+@pytest.mark.asyncio
+async def test_synthetic_pipeline_retries_failed_validation_attempts():
+    class RetryValidator:
+        def __init__(self):
+            self.calls = 0
+
+        def validate(self, record):
+            self.calls += 1
+            approved = self.calls > 1
+            return ValidationReport(
+                schema_score=1.0,
+                clinical_consistency_score=1.0 if approved else 0.0,
+                privacy_score=1.0,
+                utility_score=1.0,
+                approved=approved,
+            )
+
+    validator = RetryValidator()
+    pipeline = SyntheticPipeline(validator=validator)
+
+    result = await pipeline.generate(
+        GenerationRequest(
+            topic="sepsis",
+            count=1,
+            max_validation_retries=1,
+        )
+    )
+
+    assert validator.calls == 2
+    assert result["approved"] == 1
+    assert result["records"][0].metadata["validation_retry"] == {
+        "attempt": 1,
+        "max_retries": 1,
+        "regenerated": True,
+    }
 
 
 @pytest.mark.asyncio
