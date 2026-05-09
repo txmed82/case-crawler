@@ -7,14 +7,17 @@
 > This spec is retained only as historical design context. It is superseded by
 > `docs/superpowers/plans/2026-05-06-healthcare-synthetic-data-platform.md`.
 > CaseCrawler now keeps ingestion as supporting infrastructure for grounded
-> synthetic healthcare dataset generation rather than as a precursor to
-> education-oriented case generation.
+> synthetic healthcare dataset generation.
 
 ---
 
 ## 1. Overview
 
-CaseCrawler is an open-source agentic system that ingests medical knowledge from across the internet and generates realistic, decision-based clinical cases. This spec covers **v1: the ingestion engine** — the data foundation that crawls, normalizes, chunks, embeds, and stores medical content from multiple sources.
+CaseCrawler is an open-source agentic system that ingests medical knowledge from
+across the internet and uses it to ground synthetic healthcare dataset
+generation. This spec covers **v1: the ingestion engine** — the data foundation
+that crawls, normalizes, chunks, embeds, and stores medical content from multiple
+sources.
 
 The system uses a **hybrid plugin-source + processing-pipeline architecture**. Source plugins handle the specifics of each data source (auth, fetching, parsing). A shared processing pipeline handles everything after: chunking, tagging, embedding, and storage into ChromaDB.
 
@@ -489,10 +492,8 @@ Implementations: `AnthropicProvider`, `OpenAIProvider`, `OpenRouterProvider`, `O
 
 These are documented for context but **not built in this phase:**
 
-- **Case Generation Agent** — takes topic + retrieved content, outputs structured clinical case
-- **Decision Tree Generator** — builds correct path + plausible wrong paths for each case
-- **Complication Engine** — adds delayed diagnosis, incorrect treatment, edge-case deterioration
-- **Standardized Case JSON format** — structured output with vignette, decision prompt, ground truth, decision tree, complications, sources
+- **Synthetic dataset generation** — uses retrieved content to ground
+  multimodal `SyntheticRecord` artifacts
 - **UMLS integration** — terminology normalization across sources
 - **LLM-based tagging** — specialty and concept extraction via LLM during ingestion
 - **Hosted vector DB option** — Pinecone/Weaviate for users who want managed infrastructure
