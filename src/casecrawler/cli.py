@@ -700,6 +700,13 @@ def serve() -> None:
     is_flag=True,
     help="Require human approval before fine-tuning export.",
 )
+@click.option(
+    "--max-validation-retries",
+    default=0,
+    type=click.IntRange(0, 10),
+    show_default=True,
+    help="Regenerate a record up to this many times when validation fails.",
+)
 def generate_dataset(
     topic: str,
     count: int,
@@ -733,6 +740,7 @@ def generate_dataset(
     time_series_model_profile: str | None,
     time_series_command: str | None,
     require_human_review: bool,
+    max_validation_retries: int,
 ) -> None:
     """Generate synthetic healthcare records for AI training."""
     from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
@@ -799,6 +807,7 @@ def generate_dataset(
             "time_series_model_profile": time_series_model_profile,
             "time_series_command": parsed_time_series_command,
             "require_human_review": require_human_review,
+            "max_validation_retries": max_validation_retries,
         }
         if complexity is not None:
             request_kwargs["complexity"] = ComplexityProfile(complexity)
@@ -983,6 +992,13 @@ def generate_dataset(
     show_default=True,
     help="Minimum benchmark metric score for the release gate.",
 )
+@click.option(
+    "--max-validation-retries",
+    default=0,
+    type=click.IntRange(0, 10),
+    show_default=True,
+    help="Regenerate a record up to this many times when validation fails.",
+)
 def generate_release_package(
     topic: str,
     output_dir: str,
@@ -1024,6 +1040,7 @@ def generate_release_package(
     fixture_limit: int,
     min_overall_score: float,
     min_metric_score: float,
+    max_validation_retries: int,
 ) -> None:
     """Generate, benchmark, export, and verify a multimodal release package."""
     from casecrawler.export.cards import build_dataset_card, build_model_card
@@ -1113,6 +1130,7 @@ def generate_release_package(
             "time_series_backend": time_series_backend,
             "time_series_model_profile": time_series_model_profile,
             "time_series_command": parsed_time_series_command,
+            "max_validation_retries": max_validation_retries,
         }
         if complexity is not None:
             request_kwargs["complexity"] = ComplexityProfile(complexity)

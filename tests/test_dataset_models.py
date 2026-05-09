@@ -73,6 +73,11 @@ def test_generation_request_rejects_invalid_validation_threshold():
         GenerationRequest(topic="sepsis", validation_threshold=1.5)
 
 
+def test_generation_request_rejects_invalid_validation_retry_limit():
+    with pytest.raises(ValidationError):
+        GenerationRequest(topic="sepsis", max_validation_retries=-1)
+
+
 def test_dataset_manifest_records_validation_summary():
     manifest = DatasetManifest(
         dataset_id="ds-1",

@@ -86,6 +86,7 @@ class GenerationRequest(BaseModel):
     require_human_review: bool = False
     ingest_first: bool = False
     validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    max_validation_retries: int = Field(default=0, ge=0, le=10)
 
 
 class DatasetManifest(BaseModel):

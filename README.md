@@ -201,6 +201,7 @@ casecrawler export-dataset-splits \
   --output-dir finetune-package
 casecrawler generate-release-package "mixed acute care cohort" \
   --count 25 \
+  --max-validation-retries 2 \
   --output-dir release-package \
   --format multimodal_jsonl \
   --seed casecrawler \

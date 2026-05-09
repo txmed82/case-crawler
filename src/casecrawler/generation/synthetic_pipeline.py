@@ -78,11 +78,46 @@ class SyntheticPipeline:
         records = []
         approved = 0
         for index in range(req.count):
-            record_req = _request_for_record_index(req, index)
+            record = await self._generate_validated_record(
+                dataset_id=dataset_id,
+                req=req,
+                logical_index=index,
+                plan=plan,
+                text_generator=text_generator,
+                imaging_generator=imaging_generator,
+                time_series_generator=time_series_generator,
+            )
+            records.append(record)
+            if record.validation and record.validation.approved:
+                approved += 1
+        return {
+            "dataset_id": dataset_id,
+            "generated": len(records),
+            "approved": approved,
+            "plan": plan,
+            "records": records,
+        }
+
+    async def _generate_validated_record(
+        self,
+        *,
+        dataset_id: str,
+        req: GenerationRequest,
+        logical_index: int,
+        plan,
+        text_generator,
+        imaging_generator,
+        time_series_generator,
+    ) -> SyntheticRecord:
+        attempts = req.max_validation_retries + 1
+        last_record: SyntheticRecord | None = None
+        for attempt in range(attempts):
+            generation_index = logical_index + (attempt * req.count)
+            record_req = _request_for_record_index(req, generation_index)
             record = self._structured_generator.generate(
                 dataset_id=dataset_id,
                 req=record_req,
-                index=index,
+                index=generation_index,
             )
             if Modality.TIME_SERIES in plan.modalities:
                 record = time_series_generator.add_time_series(
@@ -133,26 +168,25 @@ class SyntheticPipeline:
                 )
             validator = self._validator_for(record_req)
             validation = validator.validate(record)
+            metadata = {
+                **record.metadata,
+                "validation_retry": {
+                    "attempt": attempt,
+                    "max_retries": req.max_validation_retries,
+                    "regenerated": attempt > 0,
+                },
+            }
             if validation.modality_alignment_score is not None:
-                record = record.model_copy(
-                    update={
-                        "metadata": {
-                            **record.metadata,
-                            "image_validator_policy": validator.image_validator_policy(),
-                        }
-                    }
-                )
-            record = record.model_copy(update={"validation": validation})
-            records.append(record)
+                metadata["image_validator_policy"] = validator.image_validator_policy()
+            record = record.model_copy(
+                update={"metadata": metadata, "validation": validation}
+            )
+            last_record = record
             if validation.approved:
-                approved += 1
-        return {
-            "dataset_id": dataset_id,
-            "generated": len(records),
-            "approved": approved,
-            "plan": plan,
-            "records": records,
-        }
+                return record
+        if last_record is None:
+            raise RuntimeError("Synthetic pipeline produced no validation attempts.")
+        return last_record
 
     def _validator_for(self, req: GenerationRequest) -> SyntheticValidator:
         if self._validator is not None:
