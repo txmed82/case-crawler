@@ -23,6 +23,8 @@ def build_dataset_card(
     generation_overrides = _generation_override_counts(records)
     extracted_fact_counts = _extracted_fact_counts(records)
     procedure_counts = _procedure_counts(records)
+    allergy_counts = _allergy_counts(records)
+    order_counts = _order_counts(records)
     clinical_unit_counts = _clinical_unit_counts(records)
     medication_regimen_counts = _medication_regimen_counts(records)
     diagnosis_code_system_counts = _diagnosis_code_system_counts(records)
@@ -73,6 +75,14 @@ def build_dataset_card(
             "## Medication Regimens",
             "",
             *_counter_lines(medication_regimen_counts or Counter({"none": 1})),
+            "",
+            "## Allergy And Intolerance Signals",
+            "",
+            *_counter_lines(allergy_counts or Counter({"none": 1})),
+            "",
+            "## Clinical Orders",
+            "",
+            *_counter_lines(order_counts or Counter({"none": 1})),
             "",
             "## Diagnosis Coding Signals",
             "",
@@ -495,6 +505,31 @@ def _medication_regimen_counts(records: list[SyntheticRecord]) -> Counter[str]:
             if medication.route:
                 counter[f"route={medication.route}"] += 1
             counter[f"status={medication.status or 'unknown'}"] += 1
+    return counter
+
+
+def _allergy_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        for allergy in record.allergies:
+            counter[allergy.substance] += 1
+            if allergy.reaction:
+                counter[f"reaction={allergy.reaction}"] += 1
+            if allergy.severity:
+                counter[f"severity={allergy.severity}"] += 1
+            counter[f"status={allergy.status or 'unknown'}"] += 1
+    return counter
+
+
+def _order_counts(records: list[SyntheticRecord]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for record in records:
+        for order in record.orders:
+            counter[f"type={order.order_type}"] += 1
+            counter[f"status={order.status or 'unknown'}"] += 1
+            if order.priority:
+                counter[f"priority={order.priority}"] += 1
+            counter[order.display] += 1
     return counter
 
 

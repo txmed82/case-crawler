@@ -4,7 +4,9 @@ import zlib
 from casecrawler.export.cards import build_dataset_card, build_model_card
 from casecrawler.models.dataset import DatasetManifest, ExportFormat
 from casecrawler.models.synthetic import (
+    AllergyIntolerance,
     ClinicalDocument,
+    ClinicalOrder,
     ComplexityProfile,
     Modality,
     Provenance,
@@ -60,6 +62,12 @@ def test_build_dataset_card_includes_validation_and_use_limits(tmp_path):
     assert "- frequency=daily: 1" in card
     assert "- route=IV: 1" in card
     assert "- status=active: 1" in card
+    assert "## Allergy And Intolerance Signals" in card
+    assert "- Penicillin: 1" in card
+    assert "- reaction=hives: 1" in card
+    assert "## Clinical Orders" in card
+    assert "- type=laboratory: 1" in card
+    assert "- Lactate: 1" in card
     assert "## Diagnosis Coding Signals" in card
     assert "- ICD-9-CM: 2" in card
     assert "- ICD-9-CM:401.9: 1" in card
@@ -174,6 +182,27 @@ def _record(tmp_path) -> SyntheticRecord:
                 route="IV",
                 frequency="daily",
                 status="active",
+            )
+        ],
+        allergies=[
+            AllergyIntolerance(
+                substance="Penicillin",
+                reaction="hives",
+                severity="moderate",
+                status="active",
+            )
+        ],
+        orders=[
+            ClinicalOrder(
+                order_id="ord-lactate",
+                order_type="laboratory",
+                display="Lactate",
+                code="2524-7",
+                system="LOINC",
+                status="completed",
+                priority="stat",
+                ordered_at="2026-05-06T10:00:00",
+                encounter_id="enc-1",
             )
         ],
         documents=[
