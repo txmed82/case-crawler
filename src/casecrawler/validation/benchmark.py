@@ -18,6 +18,8 @@ ARTIFACT_DENSITY_KEYS = {
     "labs_per_record": "labs",
     "vitals_per_record": "vitals",
     "medications_per_record": "medications",
+    "allergies_per_record": "allergies",
+    "orders_per_record": "orders",
     "time_series_channels_per_record": "time_series_channels",
     "imaging_assets_per_record": "imaging_assets",
     "imaging_file_assets_per_record": "imaging_file_assets",
@@ -284,6 +286,46 @@ class DatasetBenchmark:
                 "medication_status_distribution",
                 generated_profile.medication_status_counts,
                 reference_profile.medication_status_counts,
+            ),
+            _jaccard_metric(
+                "allergy_substance_overlap",
+                set(generated_profile.allergy_substance_counts),
+                set(reference_profile.allergy_substance_counts),
+            ),
+            _distribution_metric(
+                "allergy_reaction_distribution",
+                generated_profile.allergy_reaction_counts,
+                reference_profile.allergy_reaction_counts,
+            ),
+            _distribution_metric(
+                "allergy_severity_distribution",
+                generated_profile.allergy_severity_counts,
+                reference_profile.allergy_severity_counts,
+            ),
+            _distribution_metric(
+                "allergy_status_distribution",
+                generated_profile.allergy_status_counts,
+                reference_profile.allergy_status_counts,
+            ),
+            _jaccard_metric(
+                "order_display_overlap",
+                set(generated_profile.order_display_counts),
+                set(reference_profile.order_display_counts),
+            ),
+            _distribution_metric(
+                "order_type_distribution",
+                generated_profile.order_type_counts,
+                reference_profile.order_type_counts,
+            ),
+            _distribution_metric(
+                "order_status_distribution",
+                generated_profile.order_status_counts,
+                reference_profile.order_status_counts,
+            ),
+            _distribution_metric(
+                "order_priority_distribution",
+                generated_profile.order_priority_counts,
+                reference_profile.order_priority_counts,
             ),
             _jaccard_metric(
                 "time_series_channel_overlap",
@@ -985,6 +1027,14 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
     medication_frequency_counts: Counter[str] = Counter()
     medication_route_counts: Counter[str] = Counter()
     medication_status_counts: Counter[str] = Counter()
+    allergy_substance_counts: Counter[str] = Counter()
+    allergy_reaction_counts: Counter[str] = Counter()
+    allergy_severity_counts: Counter[str] = Counter()
+    allergy_status_counts: Counter[str] = Counter()
+    order_type_counts: Counter[str] = Counter()
+    order_display_counts: Counter[str] = Counter()
+    order_status_counts: Counter[str] = Counter()
+    order_priority_counts: Counter[str] = Counter()
     time_series_channel_counts: Counter[str] = Counter()
     time_series_unit_counts: Counter[str] = Counter()
     time_series_backend_counts: Counter[str] = Counter()
@@ -1093,6 +1143,19 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
             if medication.route:
                 medication_route_counts[medication.route] += 1
             medication_status_counts[medication.status or "unknown"] += 1
+        for allergy in record.allergies:
+            allergy_substance_counts[allergy.substance] += 1
+            if allergy.reaction:
+                allergy_reaction_counts[allergy.reaction] += 1
+            if allergy.severity:
+                allergy_severity_counts[allergy.severity] += 1
+            allergy_status_counts[allergy.status or "unknown"] += 1
+        for order in record.orders:
+            order_type_counts[order.order_type] += 1
+            order_display_counts[order.display] += 1
+            order_status_counts[order.status or "unknown"] += 1
+            if order.priority:
+                order_priority_counts[order.priority] += 1
         for channel in record.time_series:
             time_series_channel_counts[channel.name] += 1
             time_series_unit_counts[channel.unit] += 1
@@ -1194,6 +1257,14 @@ def profile_records(records: list[SyntheticRecord]) -> CohortProfile:
         medication_frequency_counts=dict(sorted(medication_frequency_counts.items())),
         medication_route_counts=dict(sorted(medication_route_counts.items())),
         medication_status_counts=dict(sorted(medication_status_counts.items())),
+        allergy_substance_counts=dict(sorted(allergy_substance_counts.items())),
+        allergy_reaction_counts=dict(sorted(allergy_reaction_counts.items())),
+        allergy_severity_counts=dict(sorted(allergy_severity_counts.items())),
+        allergy_status_counts=dict(sorted(allergy_status_counts.items())),
+        order_type_counts=dict(sorted(order_type_counts.items())),
+        order_display_counts=dict(sorted(order_display_counts.items())),
+        order_status_counts=dict(sorted(order_status_counts.items())),
+        order_priority_counts=dict(sorted(order_priority_counts.items())),
         time_series_channel_counts=dict(sorted(time_series_channel_counts.items())),
         time_series_unit_counts=dict(sorted(time_series_unit_counts.items())),
         time_series_backend_counts=dict(sorted(time_series_backend_counts.items())),
@@ -1238,6 +1309,8 @@ def _count_record_artifacts(record: SyntheticRecord, artifact_counts: Counter[st
     artifact_counts["labs"] += len(record.labs)
     artifact_counts["vitals"] += len(record.vitals)
     artifact_counts["medications"] += len(record.medication_history)
+    artifact_counts["allergies"] += len(record.allergies)
+    artifact_counts["orders"] += len(record.orders)
     artifact_counts["time_series_channels"] += len(record.time_series)
     artifact_counts["time_series_points"] += sum(
         len(channel.points) for channel in record.time_series
@@ -1258,7 +1331,9 @@ def _count_modality_artifact_coverage(
     checks = {
         Modality.STRUCTURED_EHR: bool(record.encounters)
         and any(encounter.diagnoses for encounter in record.encounters)
-        and bool(record.medication_history),
+        and bool(record.medication_history)
+        and bool(record.allergies)
+        and bool(record.orders),
         Modality.CLINICAL_TEXT: bool(record.documents),
         Modality.LABS: bool(record.labs),
         Modality.VITALS: bool(record.vitals),
