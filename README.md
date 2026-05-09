@@ -1,10 +1,36 @@
 # CaseCrawler
 
+Open-source synthetic healthcare data generation for clinical AI training and evaluation.
+
 CaseCrawler generates validated synthetic healthcare datasets for AI training and evaluation.
 
 It combines grounded medical knowledge retrieval, structured clinical data generation, messy clinical text synthesis, labs, vitals, time-series scaffolding, optional medical imaging hooks, validation, and fine-tuning exports.
 
 The goal is not to simulate a classroom case. The goal is to produce multimodal synthetic records that are ready to inspect, validate, and export as JSONL, FHIR NDJSON, parquet, or model-specific fine-tuning formats.
+
+## Why CaseCrawler Exists
+
+Healthcare AI teams need training and evaluation data that is clinically rich, auditable, privacy-safe, and exportable without depending on real patient records. CaseCrawler is a dataset engine for that workflow:
+
+- Generate patient timelines with structured EHR facts, labs, vitals, medication history, allergies, orders, time series, clinical notes, radiology reports, and radiology image assets
+- Add messy clinical text variants for OCR, message-style, and noisy documentation tasks
+- Plug in local, hosted, Hugging Face, diffusers, Synthea, and external command backends without locking the project to one vendor
+- Validate records with schema, clinical consistency, privacy, utility, image/report alignment, benchmark, and release-readiness gates
+- Export fine-tuning-ready artifacts for SFT, chat, tool use, note-fact extraction, clinical observations, medication reconciliation, multimodal image/report tasks, time series, DPO/RL, FHIR NDJSON, and parquet
+
+## Documentation
+
+Start with the docs hub:
+
+- [Documentation index](docs/README.md)
+- [Getting started](docs/getting-started.md)
+- [Architecture](docs/architecture.md)
+- [Release packages](docs/release-packages.md)
+- [Validation and benchmarking](docs/validation-and-benchmarking.md)
+- [Reference data and model adapters](docs/reference-data-and-models.md)
+- [CLI and API guide](docs/api-and-cli.md)
+- [Synthetic healthcare data landscape research](docs/research/2026-05-08-synthetic-healthcare-data-landscape.md)
+- [Implementation plan](docs/superpowers/plans/2026-05-06-healthcare-synthetic-data-platform.md)
 
 ## Quick Start
 
@@ -21,6 +47,15 @@ casecrawler ingest "sepsis"
 
 # Generate synthetic healthcare records without an LLM key
 casecrawler generate-dataset "sepsis" --count 10
+
+# Generate, benchmark, export, and verify a multimodal release package
+casecrawler generate-release-package "mixed acute care cohort" \
+  --count 25 \
+  --max-validation-retries 2 \
+  --output-dir release-package \
+  --format multimodal_jsonl
+
+casecrawler verify-split-package --require-multimodal-release release-package
 
 # Search the grounded knowledge base
 casecrawler search "sepsis lactate fluid resuscitation"
@@ -111,6 +146,8 @@ Optional backends are intentionally lazy:
 - Registered Hugging Face references include BeTraC/Synth-DoPaCo (`BeTraC/betrac-2026`) for doctor-patient transcript to SOAP-note benchmarking
 
 ## CLI Reference
+
+The full CLI/API guide is in [docs/api-and-cli.md](docs/api-and-cli.md). Common commands are shown below.
 
 ```bash
 # Knowledge ingestion and search
