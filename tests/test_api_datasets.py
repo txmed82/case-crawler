@@ -1356,9 +1356,13 @@ def test_dataset_api_lists_generation_capabilities(tmp_path, monkeypatch):
     assert "clinical_text_model_policy" in release_requirements
     assert "vital_signs_flowsheets" in release_requirements
     assert "medication_administration_records" in release_requirements
+    assert "allergy_intolerances" in release_requirements
+    assert "clinical_orders" in release_requirements
     assert "discharge_summaries" in release_requirements
     assert "radiology_images" in release_requirements
     assert "benchmark reference" in release_requirements["benchmark_reference"].lower()
+    assert "allergy" in release_requirements["allergy_intolerances"].lower()
+    assert "orders" in release_requirements["clinical_orders"].lower()
     references = {dataset["key"]: dataset for dataset in body["reference_datasets"]}
     assert references["synthchex_75k"]["source"] == "huggingface"
     assert references["synthchex_75k"]["image_modality"] == "XR"

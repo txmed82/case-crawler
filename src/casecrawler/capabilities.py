@@ -23,6 +23,12 @@ def release_coverage_requirement_description(key: str) -> str:
         "clinical_text_model_policy": (
             "Clinical text records include generator license/use-policy metadata."
         ),
+        "allergy_intolerances": (
+            "Structured allergy/intolerance safety facts are present."
+        ),
+        "clinical_orders": (
+            "Structured clinical orders are present for order-aware training tasks."
+        ),
         "discharge_summaries": "Clinical text includes physician discharge summaries.",
         "imaging_model_policy": (
             "Generated image records include model license/use-policy metadata."
