@@ -17,6 +17,14 @@ def test_imaging_placeholder_does_not_require_diffusers(tmp_path):
     assert (tmp_path / f"{asset.image_id}.png").read_bytes().startswith(b"\x89PNG")
     assert asset.labels[0].display == "Pulmonary edema"
     assert "Pulmonary edema" in asset.report_text
+    assert asset.metadata["generation_backend"] == "placeholder"
+    assert asset.metadata["artifact_contract"] == (
+        "casecrawler.models.synthetic.ImagingAsset"
+    )
+    assert asset.metadata["file"]["mime_type"] == "image/png"
+    assert asset.metadata["file"]["width"] == 128
+    assert asset.metadata["file"]["height"] == 128
+    assert len(asset.metadata["file"]["sha256"]) == 64
 
 
 class FakeImage:
@@ -54,6 +62,9 @@ def test_diffusers_backend_uses_injected_pipeline(tmp_path):
     assert pipeline.calls[0]["negative_prompt"] == "real patient identifiers"
     assert asset.labels[0].display == "Pulmonary edema"
     assert "Pulmonary edema" in asset.report_text
+    assert asset.metadata["generation_backend"] == "diffusers:test/xray"
+    assert asset.metadata["file"]["byte_size"] == len(b"fake-png")
+    assert len(asset.metadata["file"]["sha256"]) == 64
 
 
 def test_diffusers_backend_generates_unique_files(tmp_path):
@@ -117,6 +128,21 @@ def test_diffusers_backend_uses_imaging_model_profile(tmp_path):
     assert "pneumonia infection" in pipeline.calls[0]["prompt"]
     assert "right lower lobe infiltrate" in pipeline.calls[0]["prompt"]
     assert "patient identifiers" in pipeline.calls[0]["negative_prompt"]
+    assert asset.metadata["model_profile"] == {
+        "name": "cxr_pneumonia_dreambooth",
+        "model_id": "chimbiwide/cxr-pneumonia-dreambooth",
+        "adapter_type": "diffusers",
+        "license": "openrail++",
+        "gated": False,
+        "use_policy": "openrail_review_outputs_before_release",
+        "validation_requirements": [
+            "image_file_signature",
+            "image_dimensions_min_32x32",
+            "radiology_label_evidence",
+            "privacy_screen",
+            "image_text_alignment_if_configured",
+        ],
+    }
 
 
 def test_diffusers_backend_rejects_incompatible_imaging_model_profile(tmp_path):
@@ -162,6 +188,11 @@ def test_external_imaging_backend_accepts_asset_envelope(tmp_path):
     assert asset.image_id == "img-external"
     assert asset.generation_backend == "external:hf-image-sample"
     assert asset.labels[0].display == "Pneumonia"
+    assert asset.metadata["generation_backend"] == "external:hf-image-sample"
+    assert asset.metadata["external_command"] == ["hf-image-sample"]
+    assert asset.metadata["external_contract"]["stdout"] == (
+        "ImagingAsset JSON or {'asset': ImagingAsset JSON}"
+    )
 
 
 def test_external_imaging_backend_rejects_empty_command():

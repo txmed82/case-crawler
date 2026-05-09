@@ -8,6 +8,7 @@ from casecrawler.models.synthetic import (
     Code,
     ComplexityProfile,
     Encounter,
+    ImagingAsset,
     LabObservation,
     MedicationStatement,
     Modality,
@@ -110,6 +111,24 @@ def test_synthetic_record_with_text_labs_and_vitals():
                 messy_text="pt w/ prog dyspnea + edema, BNP 1220",
             )
         ],
+        imaging=[
+            ImagingAsset(
+                image_id="img-1",
+                modality="XR",
+                body_region="chest",
+                prompt="portable chest x-ray with pulmonary edema",
+                report_text="Pulmonary edema.",
+                labels=[
+                    Code(
+                        system="synthetic",
+                        code="pulmonary_edema",
+                        display="Pulmonary edema",
+                    )
+                ],
+                generation_backend="placeholder",
+                metadata={"file": {"width": 128, "height": 128}},
+            )
+        ],
         provenance=Provenance(
             generator="unit-test",
             created_at="2026-05-06T09:30:00",
@@ -129,6 +148,7 @@ def test_synthetic_record_with_text_labs_and_vitals():
     assert record.medication_history[0].name == "Furosemide"
     assert record.allergies[0].substance == "Sulfonamide antibiotics"
     assert record.orders[0].display == "BNP"
+    assert record.imaging[0].metadata["file"]["width"] == 128
     assert record.validation.approved is True
 
 

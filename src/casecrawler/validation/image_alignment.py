@@ -11,6 +11,7 @@ from casecrawler.integrations.huggingface import require_package
 from casecrawler.imaging.file_metadata import (
     SUPPORTED_IMAGE_EXTENSIONS,
     has_supported_image_signature,
+    image_file_metadata,
     raster_dimensions,
 )
 from casecrawler.models.synthetic import ImagingAsset, Modality, ValidationIssue
@@ -192,6 +193,7 @@ def validate_image_file_asset(asset: ImagingAsset) -> list[ValidationIssue]:
         )
     else:
         issues.extend(_validate_raster_dimensions(asset, path))
+        issues.extend(_validate_declared_image_file_metadata(asset, path))
     return issues
 
 
@@ -221,6 +223,33 @@ def _validate_raster_dimensions(asset: ImagingAsset, path: Path) -> list[Validat
             )
         ]
     return []
+
+
+def _validate_declared_image_file_metadata(
+    asset: ImagingAsset,
+    path: Path,
+) -> list[ValidationIssue]:
+    declared = asset.metadata.get("file")
+    if not isinstance(declared, dict):
+        return []
+    actual = image_file_metadata(path)
+    issues: list[ValidationIssue] = []
+    for key in ("byte_size", "sha256", "mime_type", "width", "height"):
+        if key not in declared or key not in actual:
+            continue
+        if declared[key] != actual[key]:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.IMAGING,
+                    field=f"imaging.{asset.image_id}.metadata.file.{key}",
+                    message=(
+                        f"Generated image metadata {key} does not match the "
+                        "current image file."
+                    ),
+                )
+            )
+    return issues
 
 
 def _label_terms(display: str, code: str) -> set[str]:

@@ -2091,7 +2091,13 @@ def test_export_multimodal_record_inlines_existing_image_bytes(tmp_path):
         update={
             "imaging": [
                 _multimodal_record().imaging[0].model_copy(
-                    update={"file_path": str(image_path)}
+                    update={
+                        "file_path": str(image_path),
+                        "metadata": {
+                            "generation_backend": "placeholder",
+                            "file": {"width": 64, "height": 48},
+                        },
+                    }
                 )
             ]
         }
@@ -2106,6 +2112,7 @@ def test_export_multimodal_record_inlines_existing_image_bytes(tmp_path):
     assert image["image_metadata"]["height"] == 48
     assert image["image_metadata"]["byte_size"] == image_path.stat().st_size
     assert len(image["image_metadata"]["sha256"]) == 64
+    assert image["metadata"]["file"] == {"width": 64, "height": 48}
     assert exported["supervised_tasks"][0]["input"]["image_metadata"]["width"] == 64
 
 
