@@ -142,6 +142,7 @@ class ImagingAsset(StrictModel):
     report_text: str
     labels: list[Code] = Field(default_factory=list)
     generation_backend: str
+    metadata: dict = Field(default_factory=dict)
 
 
 class ValidationIssue(StrictModel):

@@ -194,6 +194,30 @@ def test_validate_image_file_asset_accepts_supported_image_signature(tmp_path):
     assert issues == []
 
 
+def test_validate_image_file_asset_checks_declared_metadata(tmp_path):
+    image_path = tmp_path / "image.png"
+    image_path.write_bytes(_png_bytes(width=64, height=64))
+    asset = _asset(str(image_path)).model_copy(
+        update={
+            "metadata": {
+                "file": {
+                    "byte_size": image_path.stat().st_size,
+                    "mime_type": "image/png",
+                    "sha256": "stale",
+                    "width": 128,
+                    "height": 64,
+                }
+            }
+        }
+    )
+
+    issues = validate_image_file_asset(asset)
+
+    assert any(issue.field == "imaging.img-1.metadata.file.sha256" for issue in issues)
+    assert any(issue.field == "imaging.img-1.metadata.file.width" for issue in issues)
+    assert not any(issue.field == "imaging.img-1.metadata.file.height" for issue in issues)
+
+
 def test_validate_image_file_asset_rejects_tiny_raster_image(tmp_path):
     image_path = tmp_path / "image.png"
     image_path.write_bytes(_png_bytes(width=16, height=16))

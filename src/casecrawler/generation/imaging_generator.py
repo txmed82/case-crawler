@@ -5,7 +5,7 @@ import struct
 import subprocess
 import zlib
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import uuid4
 
 from casecrawler.integrations.huggingface import require_package
@@ -17,6 +17,7 @@ from casecrawler.generation.imaging_templates import (
     build_imaging_report,
     infer_imaging_labels,
 )
+from casecrawler.imaging.file_metadata import image_file_metadata
 from casecrawler.models.synthetic import ImagingAsset
 
 
@@ -83,6 +84,12 @@ class ImagingGenerator:
             ),
             labels=labels,
             generation_backend="placeholder",
+            metadata=_asset_generation_metadata(
+                file_path=file_path,
+                backend="placeholder",
+                profile=None,
+                command=None,
+            ),
         )
 
     def generate_diffusers(
@@ -116,6 +123,11 @@ class ImagingGenerator:
             raise RuntimeError("Diffusers backend returned no images.")
         result.images[0].save(file_path)
         labels = infer_imaging_labels(prompt, modality)
+        backend = (
+            f"diffusers:{profile.name}:{self._diffusers_model_id}"
+            if profile
+            else f"diffusers:{self._diffusers_model_id}"
+        )
         return ImagingAsset(
             image_id=image_id,
             modality=modality,
@@ -129,10 +141,12 @@ class ImagingGenerator:
                 labels=labels,
             ),
             labels=labels,
-            generation_backend=(
-                f"diffusers:{profile.name}:{self._diffusers_model_id}"
-                if profile
-                else f"diffusers:{self._diffusers_model_id}"
+            generation_backend=backend,
+            metadata=_asset_generation_metadata(
+                file_path=file_path,
+                backend=backend,
+                profile=profile,
+                command=None,
             ),
         )
 
@@ -169,6 +183,7 @@ class ImagingGenerator:
         return _external_imaging_asset(
             raw_asset,
             backend=f"external:{' '.join(self._external_command)}",
+            command=self._external_command,
             prompt=prompt,
             modality=modality,
             body_region=body_region,
@@ -186,11 +201,24 @@ def _external_imaging_asset(
     asset: dict,
     *,
     backend: str,
+    command: list[str],
     prompt: str,
     modality: str,
     body_region: str,
 ) -> ImagingAsset:
     labels = infer_imaging_labels(prompt, modality)
+    file_path = asset.get("file_path")
+    supplied_metadata = asset.get("metadata")
+    metadata = supplied_metadata if isinstance(supplied_metadata, dict) else {}
+    metadata = {
+        **_asset_generation_metadata(
+            file_path=Path(file_path) if isinstance(file_path, str) else None,
+            backend=backend,
+            profile=None,
+            command=command,
+        ),
+        **metadata,
+    }
     payload = {
         "image_id": f"img-external-{uuid4()}",
         "modality": modality,
@@ -205,10 +233,45 @@ def _external_imaging_asset(
         "labels": labels,
         "generation_backend": backend,
         **asset,
+        "metadata": metadata,
     }
     if not payload.get("generation_backend"):
         payload["generation_backend"] = backend
+    if not isinstance(payload.get("metadata"), dict):
+        payload["metadata"] = metadata
     return ImagingAsset.model_validate(payload)
+
+
+def _asset_generation_metadata(
+    *,
+    file_path: Path | None,
+    backend: str,
+    profile: ImagingModelProfile | None,
+    command: list[str] | None,
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "generation_backend": backend,
+        "artifact_contract": "casecrawler.models.synthetic.ImagingAsset",
+    }
+    if profile is not None:
+        metadata["model_profile"] = {
+            "name": profile.name,
+            "model_id": profile.model_id,
+            "adapter_type": profile.adapter_type,
+            "license": profile.license,
+            "gated": profile.gated,
+            "use_policy": profile.use_policy,
+            "validation_requirements": list(profile.validation_requirements),
+        }
+    if command is not None:
+        metadata["external_command"] = list(command)
+        metadata["external_contract"] = {
+            "stdin": ["output_dir", "prompt", "modality", "body_region"],
+            "stdout": "ImagingAsset JSON or {'asset': ImagingAsset JSON}",
+        }
+    if file_path is not None and file_path.exists() and file_path.is_file():
+        metadata["file"] = image_file_metadata(file_path)
+    return metadata
 
 
 def _write_placeholder_png(

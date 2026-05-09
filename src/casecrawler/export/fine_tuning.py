@@ -546,6 +546,7 @@ def _multimodal_image_payload(
         "report_text": asset.report_text,
         "labels": [label.model_dump() for label in asset.labels],
         "generation_backend": asset.generation_backend,
+        "metadata": asset.metadata,
     }
     if asset.file_path:
         path = Path(asset.file_path)
@@ -4016,6 +4017,7 @@ def _copy_image_artifacts(
                 "modality": asset.modality,
                 "body_region": asset.body_region,
                 "generation_backend": asset.generation_backend,
+                "metadata": asset.metadata,
                 "prompt": asset.prompt,
                 "report_text": asset.report_text,
                 "labels": [label.model_dump(mode="json") for label in asset.labels],

@@ -93,6 +93,9 @@ Optional backends are intentionally lazy:
 - `casecrawler imaging-models` and `/api/datasets/capabilities` expose each
   image profile contract: diffusers command template, prompt inputs, generated
   `ImagingAsset` fields, and required image/report validation gates
+- File-backed `ImagingAsset` records include per-asset metadata for byte size,
+  MIME type, SHA-256, raster dimensions when available, generation backend, and
+  model profile or external command provenance
 - `BiomedCLIPImageValidator` scores generated image/report alignment when `casecrawler[imaging]` dependencies are installed
 - `MedGemmaImageTextValidator` can use gated MedGemma multimodal models through `casecrawler[hf]` plus imaging dependencies for report/image consistency checks
 - `casecrawler[parquet]` for parquet exports
@@ -217,11 +220,12 @@ ready multimodal package. It generates with the full multimodal acute-care
 recipe by default, writes file-backed synthetic radiology images, seeds bundled
 reference fixtures for the generated recipe, runs the benchmark gate, writes
 dataset/model cards plus quality and benchmark audit reports, copies file-backed
-radiology images into the package `images/` directory, exports
-train/validation/test JSONL splits, and verifies strict multimodal release
-readiness. The default benchmark thresholds are a non-zero bundled-fixture smoke
-gate: `--min-overall-score 0.1` and `--min-metric-score 0.0`. Raise them when
-benchmarking against larger imported reference datasets.
+radiology images into the package `images/` directory with image artifact
+metadata and provenance, exports train/validation/test JSONL splits, and
+verifies strict multimodal release readiness. The default benchmark thresholds
+are a non-zero bundled-fixture smoke gate: `--min-overall-score 0.1` and
+`--min-metric-score 0.0`. Raise them when benchmarking against larger imported
+reference datasets.
 
 Benchmark reports compare generated cohorts to stored reference datasets and
 return explicit pass/fail gates plus failing metric names. They compare across
