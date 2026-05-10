@@ -617,15 +617,16 @@ def export_tool_call_record(record: SyntheticRecord) -> dict[str, Any]:
     the record's actual labs / imaging / medications / encounters, which
     is the shape that downstream tool-use fine-tuning expects.
     """
+    messages = _tool_call_messages(record)
     return {
         "record_id": record.record_id,
         "dataset_id": record.dataset_id,
-        "messages": _tool_call_messages(record),
+        "messages": messages,
         "tools": _clinical_tool_definitions(),
         "metadata": {
             **_metadata(record),
             "export_profile": "tool_call_jsonl",
-            "tool_call_count": len(_record_tool_calls(record)),
+            "tool_call_count": len(messages[-1].get("tool_calls", [])),
         },
     }
 
@@ -683,7 +684,15 @@ def _record_tool_calls(record: SyntheticRecord) -> list[dict[str, Any]]:
         "critical",
     }
     for index, lab in enumerate(record.labs):
-        if (lab.flag or "").strip().lower() not in abnormal_flags:
+        # Numerically abnormal labs that lack an explicit flag still drive
+        # a lookup_lab call -- mirrors the existing ``_numeric_reference_flag``
+        # treatment elsewhere in this file.
+        derived_flag = lab.flag or _numeric_reference_flag(
+            lab.value,
+            lab.reference_low,
+            lab.reference_high,
+        )
+        if (derived_flag or "").strip().lower() not in abnormal_flags:
             continue
         calls.append(
             {
@@ -698,7 +707,7 @@ def _record_tool_calls(record: SyntheticRecord) -> list[dict[str, Any]]:
                             "loinc": lab.loinc,
                             "value": lab.value,
                             "unit": lab.unit,
-                            "flag": lab.flag,
+                            "flag": derived_flag,
                         },
                         sort_keys=True,
                     ),
@@ -727,10 +736,14 @@ def _record_tool_calls(record: SyntheticRecord) -> list[dict[str, Any]]:
             }
         )
 
-    # 3. Prescriptions -- one per active medication.
+    # 3. Prescriptions -- one per active medication. Skip records that are
+    # already terminated (have an end date) AND those whose status indicates
+    # an ended/inactive order (matches the inactive set elsewhere in the
+    # file).
+    inactive_med_statuses = {"stopped", "inactive", "discontinued", "held"}
     for index, medication in enumerate(record.medication_history):
-        if medication.end:
-            # Already-ended medications are reconciliation, not new orders.
+        status = (medication.status or "").strip().lower()
+        if medication.end or status in inactive_med_statuses:
             continue
         calls.append(
             {

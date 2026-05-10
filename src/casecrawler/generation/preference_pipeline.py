@@ -174,6 +174,18 @@ def _build_pair_from_texts(
         )
     weights = config.reward_weights or DEFAULT_REWARD_WEIGHTS
     abnormal_findings = _abnormal_findings(record)
+    # Validator output depends only on the record, so compute it once per
+    # pair instead of once per candidate (the previous version multiplied
+    # cost by ``n_candidates`` on every export -- the validator runs ~18
+    # rule functions, not free).
+    val = validator or SyntheticValidator(threshold=0.0)
+    report = val.validate(record)
+    component_scores = {
+        "clinical_consistency_score": float(report.clinical_consistency_score),
+        "privacy_score": float(report.privacy_score),
+        "utility_score": float(report.utility_score),
+        "modality_alignment_score": float(report.modality_alignment_score or 0.0),
+    }
     candidates = [
         _score_candidate(
             text=text,
@@ -181,7 +193,7 @@ def _build_pair_from_texts(
             weights=weights,
             judge=judge,
             abnormal_findings=abnormal_findings,
-            validator=validator,
+            component_scores=component_scores,
         )
         for text in candidates_text
     ]
@@ -210,19 +222,12 @@ def _score_candidate(
     weights: dict[str, float],
     judge: Callable[[str, SyntheticRecord], tuple[float, str]] | None,
     abnormal_findings: list[str],
-    validator: SyntheticValidator | None,
+    component_scores: dict[str, float],
 ) -> PreferenceCandidate:
-    # The validator scores the *record* not the candidate text; it gives
-    # us a baseline score the candidate inherits. The candidate-specific
-    # signal then comes from (a) the judge and (b) abnormal-coverage.
-    val = validator or SyntheticValidator(threshold=0.0)
-    report = val.validate(record)
-    component_scores = {
-        "clinical_consistency_score": float(report.clinical_consistency_score),
-        "privacy_score": float(report.privacy_score),
-        "utility_score": float(report.utility_score),
-        "modality_alignment_score": float(report.modality_alignment_score or 0.0),
-    }
+    # Validator scores depend on the record, not the candidate text -- the
+    # caller computed them once and is passing them in. The
+    # candidate-specific signal comes from (a) the judge and (b)
+    # abnormal-coverage.
     base = sum(
         component_scores[name] * weights.get(name, 0.0)
         for name in component_scores
@@ -267,16 +272,32 @@ def _select_chosen_rejected(
     candidates: list[PreferenceCandidate],
     abnormal_findings: list[str],
 ) -> tuple[PreferenceCandidate, PreferenceCandidate, str]:
+    """RRG-DPO abnormal-aware selection with RS-DPO fallback.
+
+    The previous version was discarding the abnormal-aware decision when
+    scores tied (or when the worst-coverage candidate happened to have
+    the higher score). That defeated the point: missing abnormal
+    findings is *exactly* what we want to teach the model to reject. So
+    when coverage clearly differs, abnormal-aware wins regardless of the
+    score breakdown.
+    """
     if abnormal_findings:
-        # RRG-DPO abnormal-aware: prefer rejected to be the candidate that
-        # missed the most abnormal findings, breaking ties with score.
-        ordered = sorted(
-            candidates,
-            key=lambda c: (-c.abnormal_findings_covered, c.score),
-        )
-        chosen = ordered[0]
-        rejected = ordered[-1]
-        if chosen is not rejected and chosen.score > rejected.score:
+        coverage = [c.abnormal_findings_covered for c in candidates]
+        max_cov = max(coverage)
+        min_cov = min(coverage)
+        if max_cov > min_cov:
+            # Among candidates that cover the most findings, take the
+            # highest-scored one. Among those that cover the fewest, take
+            # the lowest-scored. This makes the learning signal sharper
+            # than a single sort.
+            chosen = max(
+                (c for c in candidates if c.abnormal_findings_covered == max_cov),
+                key=lambda c: c.score,
+            )
+            rejected = min(
+                (c for c in candidates if c.abnormal_findings_covered == min_cov),
+                key=lambda c: c.score,
+            )
             return chosen, rejected, "abnormal_aware"
     by_score = sorted(candidates, key=lambda c: c.score)
     chosen = by_score[-1]
