@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+
 import pytest
 
 from casecrawler.models.dataset import GenerationRequest
@@ -39,8 +41,9 @@ def test_canonical_keys_accepted():
 
 
 def test_diagnostics_module_is_gone():
-    with pytest.raises(ImportError):
-        import casecrawler.models.diagnostics  # noqa: F401
+    with pytest.raises(ModuleNotFoundError) as exc:
+        importlib.import_module("casecrawler.models.diagnostics")
+    assert exc.value.name == "casecrawler.models.diagnostics"
 
 
 def test_ingest_first_field_removed():
