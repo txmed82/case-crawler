@@ -561,7 +561,6 @@ def list_dataset_capabilities():
             "age_min",
             "age_max",
             "sexes",
-            "sex_cycle",
             "topic_mix",
             "topic_mix_weights",
             "base_time",

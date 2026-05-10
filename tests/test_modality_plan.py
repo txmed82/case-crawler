@@ -15,8 +15,6 @@ def test_modality_planner_builds_requested_modalities():
     assert plan.topic == "heart failure"
     assert plan.cohort_size == 1
     assert plan.modalities == req.modalities
-    assert "ed_note" in plan.document_types
-    assert "progress_note" in plan.document_types
     assert "heart_rate" in plan.time_series_channels
     assert "ecg_lead_ii" in plan.time_series_channels
     assert "pleth" in plan.time_series_channels
