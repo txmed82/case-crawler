@@ -295,11 +295,43 @@ def export_chat_record(record: SyntheticRecord) -> dict[str, Any]:
     }
 
 
+def has_placeholder_imaging(record: SyntheticRecord) -> bool:
+    """True if any of ``record.imaging`` is a placeholder asset.
+
+    Stamped by ``ImagingGenerator.generate_placeholder`` via the
+    ``metadata["is_placeholder"]`` flag. Strict export modes should refuse
+    to emit these because they're 128x128 deterministic synthetic PNGs --
+    not real medical images and not safe to train a vision model on.
+    """
+    return any(
+        bool(asset.metadata.get("is_placeholder")) for asset in record.imaging
+    )
+
+
+class StrictExportError(ValueError):
+    """Raised when ``--strict`` rejects a record from a multimodal export."""
+
+
 def export_multimodal_record(
     record: SyntheticRecord,
     *,
     image_package_paths: dict[str, str] | None = None,
+    strict: bool = False,
 ) -> dict[str, Any]:
+    """Build the multimodal training payload for ``record``.
+
+    When ``strict=True`` and the record carries any placeholder imaging
+    asset (see :func:`has_placeholder_imaging`), this raises
+    :class:`StrictExportError`. The strict path is the right default for
+    release packages that ship to downstream training jobs; ad-hoc local
+    exports continue to work without it.
+    """
+    if strict and has_placeholder_imaging(record):
+        raise StrictExportError(
+            f"Record {record.record_id!r} has placeholder imaging assets; "
+            "refusing to include in strict multimodal export. Configure an "
+            "HF imaging backend (hf_local / hf_endpoint) for real images."
+        )
     clinical_context = _clinical_context(record)
     image_package_paths = image_package_paths or {}
     images = [

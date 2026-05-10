@@ -70,6 +70,21 @@ class ImagingGenerator:
         file_path = Path(output_dir) / f"{image_id}.png"
         _write_placeholder_png(file_path, prompt=prompt, modality=modality)
         labels = infer_imaging_labels(prompt, modality)
+        metadata = _asset_generation_metadata(
+            file_path=file_path,
+            backend="placeholder",
+            profile=None,
+            command=None,
+        )
+        # Strict export modes (multimodal_jsonl --strict, release packages)
+        # filter on this flag. Placeholder PNGs are clearly marked as such
+        # so they cannot quietly leak into a downstream training set.
+        metadata["is_placeholder"] = True
+        metadata["placeholder_reason"] = (
+            "Synthetic placeholder image generated for offline / CI use. "
+            "Not suitable for vision-model training. Configure an HF imaging "
+            "backend (hf_local / hf_endpoint) for real images."
+        )
         return ImagingAsset(
             image_id=image_id,
             modality=modality,
@@ -84,12 +99,7 @@ class ImagingGenerator:
             ),
             labels=labels,
             generation_backend="placeholder",
-            metadata=_asset_generation_metadata(
-                file_path=file_path,
-                backend="placeholder",
-                profile=None,
-                command=None,
-            ),
+            metadata=metadata,
         )
 
     def generate_diffusers(
