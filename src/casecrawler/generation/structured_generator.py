@@ -254,11 +254,11 @@ def _stable_record_seed(dataset_id: str, req: GenerationRequest, index: int) -> 
 
 def _age_for_index(cohort_constraints: dict, index: int) -> int:
     age_min = _coerce_int(
-        cohort_constraints.get("age_min", cohort_constraints.get("min_age", 45)),
+        cohort_constraints.get("age_min", 45),
         "age_min",
     )
     age_max = _coerce_int(
-        cohort_constraints.get("age_max", cohort_constraints.get("max_age", 79)),
+        cohort_constraints.get("age_max", 79),
         "age_max",
     )
     if age_min > age_max:
@@ -268,7 +268,7 @@ def _age_for_index(cohort_constraints: dict, index: int) -> int:
 
 
 def _sex_for_index(cohort_constraints: dict, index: int) -> str:
-    configured = cohort_constraints.get("sexes", cohort_constraints.get("sex_cycle"))
+    configured = cohort_constraints.get("sexes")
     if configured is None:
         sexes = ["male", "female"]
     elif isinstance(configured, str):
@@ -382,10 +382,7 @@ def _metadata_cohort_constraints(cohort_constraints: dict) -> dict:
     preserved_keys = [
         "age_min",
         "age_max",
-        "min_age",
-        "max_age",
         "sexes",
-        "sex_cycle",
         "races",
         "ethnicities",
         "insurance",

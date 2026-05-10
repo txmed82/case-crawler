@@ -7,37 +7,27 @@ from casecrawler.models.synthetic import Modality
 
 
 class ModalityPlan(BaseModel):
+    """Plan for which time-series channels and imaging views to generate.
+
+    Earlier revisions also carried `document_types` / `lab_panels` /
+    `vital_signs` fields, but those were populated by ``ModalityPlanner.build``
+    and never read by any downstream generator (the structured + text
+    generators consult the modality list directly), so they have been removed.
+    """
+
     topic: str
     cohort_size: int
     modalities: list[Modality]
     cohort_constraints: dict = Field(default_factory=dict)
-    document_types: list[str] = Field(default_factory=list)
-    lab_panels: list[str] = Field(default_factory=list)
-    vital_signs: list[str] = Field(default_factory=list)
     time_series_channels: list[str] = Field(default_factory=list)
     imaging_views: list[str] = Field(default_factory=list)
 
 
 class ModalityPlanner:
     def build(self, req: GenerationRequest) -> ModalityPlan:
-        document_types: list[str] = []
-        lab_panels: list[str] = []
-        vital_signs: list[str] = []
         time_series_channels: list[str] = []
         imaging_views: list[str] = []
 
-        if Modality.CLINICAL_TEXT in req.modalities:
-            document_types = [
-                "ed_note",
-                "progress_note",
-                "nursing_note",
-                "discharge_summary",
-                "radiology_report",
-            ]
-        if Modality.LABS in req.modalities:
-            lab_panels = ["cbc", "metabolic_panel", "lactate", "inflammatory_markers"]
-        if Modality.VITALS in req.modalities:
-            vital_signs = ["heart_rate", "systolic_bp", "spo2", "temperature"]
         if Modality.TIME_SERIES in req.modalities:
             time_series_channels = [
                 "heart_rate",
@@ -55,9 +45,6 @@ class ModalityPlanner:
             cohort_size=req.count,
             modalities=req.modalities,
             cohort_constraints=req.cohort_constraints,
-            document_types=document_types,
-            lab_panels=lab_panels,
-            vital_signs=vital_signs,
             time_series_channels=time_series_channels,
             imaging_views=imaging_views,
         )

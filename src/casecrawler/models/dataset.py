@@ -4,9 +4,16 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from casecrawler.models.synthetic import ComplexityProfile, Modality
+
+
+_LEGACY_COHORT_KEYS: dict[str, str] = {
+    "min_age": "age_min",
+    "max_age": "age_max",
+    "sex_cycle": "sexes",
+}
 
 
 class ExportFormat(str, Enum):
@@ -84,9 +91,27 @@ class GenerationRequest(BaseModel):
     time_series_model_profile: str | None = Field(default=None, min_length=1)
     time_series_command: list[str] | None = Field(default=None, min_length=1)
     require_human_review: bool = False
-    ingest_first: bool = False
     validation_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
     max_validation_retries: int = Field(default=0, ge=0, le=10)
+
+    @model_validator(mode="after")
+    def _reject_legacy_cohort_keys(self) -> "GenerationRequest":
+        if not isinstance(self.cohort_constraints, dict):
+            return self
+        offenders = [
+            (legacy, canonical)
+            for legacy, canonical in _LEGACY_COHORT_KEYS.items()
+            if legacy in self.cohort_constraints
+        ]
+        if offenders:
+            details = ", ".join(
+                f"{legacy!r} -> {canonical!r}" for legacy, canonical in offenders
+            )
+            raise ValueError(
+                "cohort_constraints uses retired key spellings; rename "
+                f"{details} (the legacy keys are no longer accepted)."
+            )
+        return self
 
 
 class DatasetManifest(BaseModel):
