@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 
 from casecrawler.models.document import Chunk
+
+logger = logging.getLogger(__name__)
 
 EMBEDDING_DIM = 384
 
@@ -29,12 +32,22 @@ def deterministic_embedding(text: str, dim: int = EMBEDDING_DIM) -> list[float]:
 class Embedder:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
         self.model = None
+        self.fallback_reason: str | None = None
         try:
             from sentence_transformers import SentenceTransformer
 
             self.model = SentenceTransformer(model_name)
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "sentence-transformers model %r unavailable; "
+                "falling back to deterministic hash embeddings (%s: %s). "
+                "Search quality will be degraded.",
+                model_name,
+                type(exc).__name__,
+                exc,
+            )
             self.model = None
+            self.fallback_reason = f"{type(exc).__name__}: {exc}"
 
     def embed_text(self, text: str) -> list[float]:
         if self.model is None:

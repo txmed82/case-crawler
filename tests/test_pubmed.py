@@ -80,7 +80,10 @@ EFETCH_XML = """<?xml version="1.0" ?>
 
 
 @pytest.fixture
-def pubmed():
+def pubmed(monkeypatch):
+    # NCBI's Entrez policy requires a valid contact email for automated
+    # requests; the source layer enforces this at request time.
+    monkeypatch.setenv("ENTREZ_EMAIL", "tests@casecrawler.local")
     return PubMedSource()
 
 
