@@ -36,10 +36,15 @@ class SyntheticValidator:
         threshold: float = 0.8,
         image_alignment_validator: ImageAlignmentValidator | None = None,
         require_grounding: bool = False,
+        contradiction_judge: "object | None" = None,
     ) -> None:
         self._threshold = threshold
         self._image_alignment_validator = image_alignment_validator or ImageAlignmentValidator()
         self._require_grounding = require_grounding
+        # Optional callable: (record, document_text) -> list[{field, message}].
+        # When provided, augments the regex contradiction set in
+        # ``validate_text_structured_contradictions``.
+        self._contradiction_judge = contradiction_judge
 
     def image_validator_policy(self) -> dict[str, object]:
         profile_key = getattr(self._image_alignment_validator, "profile_key", None)
@@ -78,7 +83,9 @@ class SyntheticValidator:
             *validate_time_series_waveforms(record),
             *validate_time_series_structured_alignment(record),
             *validate_time_series_trends(record),
-            *validate_text_structured_contradictions(record),
+            *validate_text_structured_contradictions(
+                record, judge=self._contradiction_judge
+            ),
             *validate_document_extracted_fact_alignment(record),
             *validate_radiology_document_alignment(record),
             *validate_imaging_asset_clinical_shape(record),

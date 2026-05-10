@@ -51,8 +51,29 @@ def _extract_strings(value) -> list[str]:
 
 
 def _text_blobs(record: SyntheticRecord) -> list[str]:
-    blobs = _extract_strings(record.model_dump(mode="python"))
-    return blobs
+    """Return strings the privacy regex set should scan.
+
+    The earlier implementation walked ``record.model_dump(mode="python")``
+    and pulled every string anywhere in the record. That produced
+    false positives on fields that are NOT patient PHI by definition:
+
+    - the tool's own contact email in ``provenance.source_refs`` and
+      ``provenance.generator`` would trip the EMAIL regex
+    - URLs, DOIs, and snippets in ``metadata.grounding.citations``
+      could match the address / MRN heuristics
+
+    The fix: dump the record without those subtrees, then run
+    ``_extract_strings`` on the remaining structure. Patient
+    demographics, encounters, free-text metadata, etc. are still
+    scanned -- only the always-non-PHI subtrees are excluded.
+    """
+
+    payload = record.model_dump(mode="python")
+    payload.pop("provenance", None)
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        metadata.pop("grounding", None)
+    return _extract_strings(payload)
 
 
 def _generated_text_blobs(record: SyntheticRecord) -> list[str]:
