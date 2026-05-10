@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
-
 import openai
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
+from casecrawler.llm._openai_compat import chat_complete, chat_complete_structured
 from casecrawler.llm.base import BaseLLMProvider, GenerationResult, StructuredGenerationResult
 
 
@@ -17,56 +16,21 @@ class OpenRouterProvider(BaseLLMProvider):
         self._model = model
 
     async def generate(self, prompt: str, system: str = "", **kwargs) -> GenerationResult:
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-
-        response = await self._client.chat.completions.create(
+        return await chat_complete(
+            self._client,
             model=self._model,
-            messages=messages,
-            max_tokens=4096,
-        )
-        return GenerationResult(
-            text=response.choices[0].message.content,
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-            model=response.model,
+            prompt=prompt,
+            system=system,
         )
 
     async def generate_structured(
         self, prompt: str, schema: type[BaseModel], system: str = "", **kwargs
     ) -> StructuredGenerationResult:
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({
-            "role": "user",
-            "content": f"{prompt}\n\nRespond with valid JSON matching this schema:\n{json.dumps(schema.model_json_schema(), indent=2)}",
-        })
-
-        response = await self._client.chat.completions.create(
+        return await chat_complete_structured(
+            self._client,
             model=self._model,
-            messages=messages,
-            max_tokens=4096,
-            response_format={"type": "json_object"},
-        )
-        content = response.choices[0].message.content
-        try:
-            raw = json.loads(content)
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"OpenRouter structured response was not valid JSON: {exc}"
-            ) from exc
-        try:
-            data = schema(**raw)
-        except ValidationError as exc:
-            raise ValueError(
-                f"OpenRouter structured response did not match schema {schema.__name__}: {exc}"
-            ) from exc
-        return StructuredGenerationResult(
-            data=data,
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-            model=response.model,
+            prompt=prompt,
+            schema=schema,
+            system=system,
+            provider_label="OpenRouter",
         )

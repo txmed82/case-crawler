@@ -212,7 +212,9 @@ def test_external_timeseries_runner_normalizes_process_failures(monkeypatch):
             stderr="bad error",
         )
 
-    monkeypatch.setattr(timeseries_generator.subprocess, "run", fake_run)
+    from casecrawler.generation import _external_subprocess
+
+    monkeypatch.setattr(_external_subprocess.subprocess, "run", fake_run)
 
     try:
         timeseries_generator._run_external_command(["timediff-sample"], "{}")

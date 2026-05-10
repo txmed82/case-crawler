@@ -43,27 +43,27 @@ class FakePaidSrc(BaseSource):
 
 
 def test_registry_discovers_free_source():
-    registry = SourceRegistry()
+    registry = SourceRegistry(source_classes=(FakeFreeSrc, FakePaidSrc))
     registry.discover()
     assert "fake_free" in registry.available_source_names
 
 
 def test_registry_excludes_paid_without_key():
     with patch.dict(os.environ, {}, clear=True):
-        registry = SourceRegistry()
+        registry = SourceRegistry(source_classes=(FakeFreeSrc, FakePaidSrc))
         registry.discover()
         assert "fake_paid" not in registry.available_source_names
 
 
 def test_registry_includes_paid_with_key():
     with patch.dict(os.environ, {"FAKE_PAID_API_KEY": "test-key"}):
-        registry = SourceRegistry()
+        registry = SourceRegistry(source_classes=(FakeFreeSrc, FakePaidSrc))
         registry.discover()
         assert "fake_paid" in registry.available_source_names
 
 
 def test_registry_get_source():
-    registry = SourceRegistry()
+    registry = SourceRegistry(source_classes=(FakeFreeSrc, FakePaidSrc))
     registry.discover()
     source = registry.get("fake_free")
     assert source is not None
@@ -71,14 +71,14 @@ def test_registry_get_source():
 
 
 def test_registry_get_missing_source():
-    registry = SourceRegistry()
+    registry = SourceRegistry(source_classes=(FakeFreeSrc, FakePaidSrc))
     registry.discover()
     assert registry.get("nonexistent") is None
 
 
 def test_registry_all_sources_info():
     with patch.dict(os.environ, {}, clear=True):
-        registry = SourceRegistry()
+        registry = SourceRegistry(source_classes=(FakeFreeSrc, FakePaidSrc))
         registry.discover()
         info = registry.all_sources_info()
         paid_info = [s for s in info if s["name"] == "fake_paid"]

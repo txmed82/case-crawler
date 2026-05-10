@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 import struct
-import subprocess
 import zlib
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
+from casecrawler.generation._external_subprocess import run_external_command
 from casecrawler.integrations.huggingface import require_package
 from casecrawler.generation.imaging_models import (
     ImagingModelProfile,
@@ -322,27 +322,9 @@ def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
 
 
 def _run_external_command(command: list[str], payload: str) -> str:
-    try:
-        result = subprocess.run(
-            command,
-            input=payload,
-            capture_output=True,
-            check=True,
-            text=True,
-            timeout=EXTERNAL_IMAGING_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(
-            "External imaging backend timed out after "
-            f"{EXTERNAL_IMAGING_TIMEOUT_SECONDS:.0f}s: {command!r}."
-        ) from exc
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            "External imaging backend failed with exit code "
-            f"{exc.returncode}: {command!r}. stdout={exc.stdout!r} stderr={exc.stderr!r}"
-        ) from exc
-    except OSError as exc:
-        raise RuntimeError(
-            f"External imaging backend could not be executed: {command!r}."
-        ) from exc
-    return result.stdout
+    return run_external_command(
+        command,
+        payload,
+        backend_label="imaging",
+        timeout_seconds=EXTERNAL_IMAGING_TIMEOUT_SECONDS,
+    )

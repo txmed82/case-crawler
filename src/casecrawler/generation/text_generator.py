@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from typing import Protocol
 from uuid import NAMESPACE_URL, uuid5
 
 from pydantic import BaseModel, Field
 
+from casecrawler.generation._external_subprocess import run_external_command
 from casecrawler.llm.base import BaseLLMProvider
 from casecrawler.models.synthetic import ClinicalDocument, Modality, SyntheticRecord
 
@@ -715,27 +715,9 @@ def _external_document(
 
 
 def _run_external_command(command: list[str], payload: str) -> str:
-    try:
-        result = subprocess.run(
-            command,
-            input=payload,
-            capture_output=True,
-            check=True,
-            text=True,
-            timeout=EXTERNAL_CLINICAL_TEXT_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(
-            "External clinical text backend timed out after "
-            f"{EXTERNAL_CLINICAL_TEXT_TIMEOUT_SECONDS:.0f}s: {command!r}."
-        ) from exc
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            "External clinical text backend failed with exit code "
-            f"{exc.returncode}: {command!r}. stdout={exc.stdout!r} stderr={exc.stderr!r}"
-        ) from exc
-    except OSError as exc:
-        raise RuntimeError(
-            f"External clinical text backend could not be executed: {command!r}."
-        ) from exc
-    return result.stdout
+    return run_external_command(
+        command,
+        payload,
+        backend_label="clinical text",
+        timeout_seconds=EXTERNAL_CLINICAL_TEXT_TIMEOUT_SECONDS,
+    )
