@@ -153,6 +153,67 @@ def sources() -> None:
             click.echo(f"  \u2717 {s['name']:<18} (missing {missing})")
 
 
+@cli.command("suggest-imaging-models")
+@click.option("--modality", required=True, help="e.g. chest_xray, ct, mri, pathology, ultrasound, fundus, dermatology")
+@click.option(
+    "--limit",
+    default=10,
+    show_default=True,
+    type=click.IntRange(min=1, max=50),
+)
+@click.option("--pipeline-tag", default="text-to-image", show_default=True)
+@click.option(
+    "--token", default=None,
+    help="HF token. Defaults to HF_TOKEN env var if set.",
+)
+def suggest_imaging_models_cmd(
+    modality: str, limit: int, pipeline_tag: str, token: str | None
+) -> None:
+    """Query the Hugging Face Hub for medical imaging models for ``modality``.
+
+    Print-only: this command never writes your config. Pin a recommended
+    repo to ``synthetic.imaging.models.<modality>`` yourself once you've
+    reviewed the licenses.
+    """
+    import os
+
+    from casecrawler.imaging.hf_hub import HFHubUnavailable, suggest_imaging_models
+
+    resolved_token = token or os.environ.get("HF_TOKEN")
+    try:
+        suggestions = suggest_imaging_models(
+            modality=modality,
+            limit=limit,
+            pipeline_tag=pipeline_tag,
+            token=resolved_token,
+        )
+    except HFHubUnavailable as exc:
+        raise click.ClickException(str(exc)) from exc
+    if not suggestions:
+        click.echo(
+            f"No HF Hub matches for modality={modality!r} pipeline_tag={pipeline_tag!r}. "
+            "Try broader keywords or pass --token to access gated repos."
+        )
+        return
+    click.echo(
+        f"Top {len(suggestions)} HF Hub models for modality={modality!r} "
+        f"(pipeline_tag={pipeline_tag!r}):"
+    )
+    for sug in suggestions:
+        gate_marker = " [GATED]" if sug.gated else ""
+        click.echo(
+            f"  {sug.repo_id}{gate_marker}\n"
+            f"    downloads={sug.downloads} likes={sug.likes} "
+            f"license={sug.license or 'unspecified'} "
+            f"last_modified={sug.last_modified or 'unknown'}"
+        )
+    click.echo(
+        "\nLicenses are reported verbatim from each model card. CaseCrawler "
+        "does not enforce a license gate -- you are responsible for honoring "
+        "the source model's license in your downstream training."
+    )
+
+
 @cli.command("imaging-models")
 def imaging_models() -> None:
     """List built-in synthetic medical imaging model profiles."""
