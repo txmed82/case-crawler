@@ -45,6 +45,26 @@ class LlmConfig(BaseModel):
     ollama_base_url: str = "http://localhost:11434"
 
 
+class GroundingConfig(BaseModel):
+    """RAG grounding configuration for synthetic generation.
+
+    When ``enabled`` is true, ``SyntheticPipeline`` attaches a
+    :class:`GroundingBundle` to every record's ``metadata["grounding"]``
+    and the validator requires at least one citation. When the Chroma
+    collection has no chunks for the topic the ``fallback`` setting
+    decides:
+
+    - ``"template"``: warn, mark the bundle as fallback, allow approval
+      via the offline / template path. Useful for CI and local dev
+      without an ingested knowledge base.
+    - ``"fail"``: refuse to generate the record.
+    """
+
+    enabled: bool = False
+    k: int = Field(default=8, ge=1, le=50)
+    fallback: Literal["template", "fail"] = "template"
+
+
 class SyntheticConfig(BaseModel):
     default_complexity: ComplexityProfile = ComplexityProfile.MODERATE
     default_modalities: list[Modality] = [
@@ -86,6 +106,7 @@ class SyntheticConfig(BaseModel):
     )
     max_api_generation_count: int = Field(default=100, ge=1)
     max_api_returned_records: int = Field(default=25, ge=0)
+    grounding: GroundingConfig = GroundingConfig()
 
 
 class AppConfig(BaseModel):
