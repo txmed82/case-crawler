@@ -11,6 +11,18 @@ from casecrawler.generation.retriever import Retriever
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.config import GroundingConfig
 from casecrawler.models.dataset import GenerationRequest
+from casecrawler.models.synthetic import (
+    ComplexityProfile,
+    GroundingBundle,
+    GroundingCitation,
+    Modality,
+    Provenance,
+    SyntheticPatient,
+    SyntheticRecord,
+    ValidationReport,
+    VitalObservation,
+)
+from casecrawler.validation.synthetic_validator import SyntheticValidator
 
 
 @pytest.fixture(autouse=True)
@@ -24,18 +36,6 @@ def _reset_grounding_config():
         yield
     finally:
         cfg.synthetic.grounding = saved
-from casecrawler.models.synthetic import (
-    ComplexityProfile,
-    GroundingBundle,
-    GroundingCitation,
-    Modality,
-    Provenance,
-    SyntheticPatient,
-    SyntheticRecord,
-    ValidationReport,
-    VitalObservation,
-)
-from casecrawler.validation.synthetic_validator import SyntheticValidator
 
 
 # ---------- Retriever.fetch_grounding ---------------------------------------
