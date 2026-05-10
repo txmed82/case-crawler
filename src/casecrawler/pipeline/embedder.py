@@ -38,13 +38,11 @@ class Embedder:
 
             self.model = SentenceTransformer(model_name)
         except Exception as exc:
-            logger.warning(
+            logger.exception(
                 "sentence-transformers model %r unavailable; "
-                "falling back to deterministic hash embeddings (%s: %s). "
+                "falling back to deterministic hash embeddings. "
                 "Search quality will be degraded.",
                 model_name,
-                type(exc).__name__,
-                exc,
             )
             self.model = None
             self.fallback_reason = f"{type(exc).__name__}: {exc}"
