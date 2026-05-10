@@ -95,7 +95,6 @@ class HFEndpointImagingBackend:
     ) -> ImagingAsset:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         image_id = f"img-hfendpoint-{uuid4()}"
-        file_path = Path(output_dir) / f"{image_id}.png"
 
         body: dict[str, object] = {"inputs": prompt}
         if negative_prompt:
@@ -127,6 +126,12 @@ class HFEndpointImagingBackend:
             )
         if not resp.content:
             raise RuntimeError("hf_endpoint returned empty response body.")
+        # Pick a file extension that matches the bytes the endpoint returned.
+        # Diffusers-backed endpoints can return PNG or JPEG depending on the
+        # serving config; persisting JPEG bytes under a `.png` path confuses
+        # downstream consumers and breaks ImageMagick/PIL identify calls.
+        extension = _infer_image_extension(resp)
+        file_path = Path(output_dir) / f"{image_id}{extension}"
         file_path.write_bytes(resp.content)
 
         card = self._get_card_metadata()
@@ -189,3 +194,33 @@ class HFEndpointImagingBackend:
                 fetched_at=datetime.now(timezone.utc).isoformat(),
             )
         return self._card_metadata
+
+
+def _infer_image_extension(resp: httpx.Response) -> str:
+    """Pick a file extension matching the response's image bytes.
+
+    Looks at ``Content-Type`` first (the standards-compliant signal) and
+    falls back to magic bytes when the header is missing or generic. We
+    keep the decision small and conservative -- PNG, JPEG, and WebP cover
+    every diffusers serving config we've seen on HF Inference Endpoints.
+    """
+    content_type = (resp.headers.get("content-type") or "").lower().split(";")[0].strip()
+    by_type = {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/webp": ".webp",
+    }
+    if content_type in by_type:
+        return by_type[content_type]
+    # Magic-byte fallback for endpoints that don't set Content-Type.
+    head = resp.content[:12]
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if head.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return ".webp"
+    # Default -- preserve the previous behaviour for byte streams we can't
+    # identify rather than refusing to write.
+    return ".png"

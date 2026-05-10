@@ -155,7 +155,12 @@ def sources() -> None:
 
 @cli.command("suggest-imaging-models")
 @click.option("--modality", required=True, help="e.g. chest_xray, ct, mri, pathology, ultrasound, fundus, dermatology")
-@click.option("--limit", default=10, show_default=True, type=int)
+@click.option(
+    "--limit",
+    default=10,
+    show_default=True,
+    type=click.IntRange(min=1, max=50),
+)
 @click.option("--pipeline-tag", default="text-to-image", show_default=True)
 @click.option(
     "--token", default=None,

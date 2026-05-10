@@ -116,8 +116,12 @@ def test_strict_multimodal_export_accepts_real_image():
 
 
 def test_fetch_model_card_metadata_reports_license_and_gated():
+    # huggingface_hub.ModelInfo exposes the field as `card_data`
+    # (snake_case). The fallback HTTP path sees the wire-format `cardData`.
     fake_info = MagicMock()
-    fake_info.cardData = {"license": "apache-2.0", "use_policy": "research-only"}
+    fake_info.card_data = {"license": "apache-2.0", "use_policy": "research-only"}
+    # Force the camelCase attribute to be absent so the fallback isn't used.
+    del fake_info.cardData
     fake_info.gated = False
     fake_info.pipeline_tag = "text-to-image"
     fake_info.tags = ["medical", "chest-xray"]
@@ -134,6 +138,29 @@ def test_fetch_model_card_metadata_reports_license_and_gated():
     assert payload["repo_id"] == "foo/bar"
     assert payload["license"] == "apache-2.0"
     assert payload["model_card_url"] == "https://huggingface.co/foo/bar"
+
+
+def test_fetch_model_card_metadata_handles_modelcarddata_object():
+    """ModelInfo.card_data can be a ModelCardData instance with attribute
+    access rather than a plain dict. The helper must handle both."""
+    class _CardData:
+        license = "mit"
+        use_policy = "non-commercial"
+
+    fake_info = MagicMock()
+    fake_info.card_data = _CardData()
+    del fake_info.cardData
+    fake_info.gated = True
+    fake_info.pipeline_tag = "text-to-image"
+    fake_info.tags = ["medical"]
+    fake_info.last_modified = None
+
+    with patch("huggingface_hub.model_info", return_value=fake_info):
+        meta = fetch_model_card_metadata("foo/object")
+
+    assert meta.license == "mit"
+    assert meta.use_policy == "non-commercial"
+    assert meta.gated is True
 
 
 def test_fetch_model_card_metadata_raises_on_gated_repo():
@@ -245,10 +272,12 @@ def test_hf_endpoint_backend_writes_image_and_stamps_metadata(tmp_path):
     fake_resp.status_code = 200
     fake_resp.content = b"\x89PNG\r\n\x1a\nfake-png-bytes"
     fake_resp.text = ""
+    fake_resp.headers = {"content-type": "image/png"}
 
     fake_client = MagicMock()
     fake_client.post.return_value = fake_resp
 
+    fake_card.card_data = fake_card.cardData  # snake_case for ModelInfo
     with patch("huggingface_hub.model_info", return_value=fake_card):
         backend = HFEndpointImagingBackend(
             endpoint_url="https://test.endpoints.huggingface.cloud",
@@ -269,10 +298,46 @@ def test_hf_endpoint_backend_writes_image_and_stamps_metadata(tmp_path):
     assert asset.metadata["image_source"]["license"] == "mit"
     assert asset.metadata["endpoint"].startswith("https://test.endpoints")
     fake_client.post.assert_called_once()
-    # Token reaches the headers.
     assert fake_client.post.call_args.kwargs["headers"]["Authorization"] == "Bearer hf_test"
-    # The image bytes were written to disk.
     assert (tmp_path / f"{asset.image_id}.png").exists()
+
+
+def test_hf_endpoint_backend_writes_jpeg_when_endpoint_returns_jpeg(tmp_path):
+    """If the endpoint returns JPEG bytes, the file must be written as
+    .jpg, not .png. Otherwise downstream consumers (PIL, ImageMagick)
+    fail to identify the file."""
+    fake_card = MagicMock()
+    fake_card.card_data = {"license": "mit"}
+    fake_card.gated = False
+    fake_card.pipeline_tag = "text-to-image"
+    fake_card.tags = ["medical"]
+    fake_card.last_modified = None
+    del fake_card.cardData
+
+    fake_resp = MagicMock(spec=httpx.Response)
+    fake_resp.status_code = 200
+    fake_resp.content = b"\xff\xd8\xfffake-jpeg-bytes"
+    fake_resp.text = ""
+    fake_resp.headers = {"content-type": "image/jpeg"}
+
+    fake_client = MagicMock()
+    fake_client.post.return_value = fake_resp
+
+    with patch("huggingface_hub.model_info", return_value=fake_card):
+        backend = HFEndpointImagingBackend(
+            endpoint_url="https://test.endpoints.huggingface.cloud",
+            token="hf_test",
+            repo_id="foo/jpeg-model",
+            client=fake_client,
+        )
+        asset = backend.generate(
+            output_dir=str(tmp_path),
+            prompt="x",
+            modality="XR",
+            body_region="chest",
+        )
+    assert (tmp_path / f"{asset.image_id}.jpg").exists()
+    assert not (tmp_path / f"{asset.image_id}.png").exists()
 
 
 def test_hf_endpoint_backend_raises_gated_on_401(tmp_path):

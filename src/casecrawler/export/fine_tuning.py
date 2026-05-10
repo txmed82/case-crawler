@@ -298,14 +298,25 @@ def export_chat_record(record: SyntheticRecord) -> dict[str, Any]:
 def has_placeholder_imaging(record: SyntheticRecord) -> bool:
     """True if any of ``record.imaging`` is a placeholder asset.
 
-    Stamped by ``ImagingGenerator.generate_placeholder`` via the
-    ``metadata["is_placeholder"]`` flag. Strict export modes should refuse
-    to emit these because they're 128x128 deterministic synthetic PNGs --
-    not real medical images and not safe to train a vision model on.
+    Detection covers two sources:
+
+    1. ``metadata["is_placeholder"]`` -- the explicit flag stamped by the
+       current ``ImagingGenerator.generate_placeholder``.
+    2. ``generation_backend == "placeholder"`` -- legacy assets that
+       pre-date the explicit flag (records persisted before the strict
+       export contract landed). Catching these is critical so legacy
+       data can't quietly leak into a strict downstream training set.
+
+    Strict export modes should refuse to emit these because they're
+    128x128 deterministic synthetic PNGs -- not real medical images and
+    not safe to train a vision model on.
     """
-    return any(
-        bool(asset.metadata.get("is_placeholder")) for asset in record.imaging
-    )
+    for asset in record.imaging:
+        if bool(asset.metadata.get("is_placeholder")):
+            return True
+        if (asset.generation_backend or "").startswith("placeholder"):
+            return True
+    return False
 
 
 class StrictExportError(ValueError):
@@ -1089,6 +1100,7 @@ def export_record(
     *,
     image_package_paths: dict[str, str] | None = None,
     time_series_package_paths: dict[str, str] | None = None,
+    strict: bool = False,
 ) -> dict[str, Any]:
     resolved_format = ExportFormat(export_format)
     if resolved_format == ExportFormat.SFT_JSONL:
@@ -1128,6 +1140,7 @@ def export_record(
         return export_multimodal_record(
             record,
             image_package_paths=image_package_paths,
+            strict=strict,
         )
     if resolved_format == ExportFormat.TIME_SERIES_JSONL:
         return {
@@ -1158,6 +1171,7 @@ def export_record_payloads(
     *,
     image_package_paths: dict[str, str] | None = None,
     time_series_package_paths: dict[str, str] | None = None,
+    strict: bool = False,
 ) -> list[dict[str, Any]]:
     resolved_format = ExportFormat(export_format)
     if resolved_format == ExportFormat.NOTE_FACT_SFT_JSONL:
@@ -1177,6 +1191,7 @@ def export_record_payloads(
             resolved_format,
             image_package_paths=image_package_paths,
             time_series_package_paths=time_series_package_paths,
+            strict=strict,
         )
     ]
 

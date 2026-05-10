@@ -22,6 +22,7 @@ typed :class:`HFHubUnavailable` so callers can present a setup hint.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -154,9 +155,16 @@ def fetch_model_card_metadata(
                 f"Could not fetch model card for {repo_id!r}: {exc}"
             ) from exc
 
-    card_data = getattr(info, "cardData", None) or {}
-    license_str = card_data.get("license") if isinstance(card_data, dict) else None
-    use_policy = card_data.get("use_policy") if isinstance(card_data, dict) else None
+    # `huggingface_hub.ModelInfo` exposes this as `card_data` (snake_case),
+    # not `cardData`. The HTTP fallback returns `cardData` (the public API
+    # response is camelCase). Prefer the snake_case attribute when present
+    # and accept either a Mapping or a `ModelCardData` object that supports
+    # attribute access for the fields we need.
+    card_data = getattr(info, "card_data", None)
+    if card_data is None:
+        card_data = getattr(info, "cardData", None)
+    license_str = _card_field(card_data, "license")
+    use_policy = _card_field(card_data, "use_policy")
     return ModelCardMetadata(
         repo_id=repo_id,
         license=license_str,
@@ -190,12 +198,12 @@ def _fetch_via_http(
         )
     resp.raise_for_status()
     payload = resp.json()
-    card_data = payload.get("cardData") or {}
+    card_data = payload.get("cardData")
     return ModelCardMetadata(
         repo_id=repo_id,
-        license=card_data.get("license"),
+        license=_card_field(card_data, "license"),
         gated=bool(payload.get("gated") or False),
-        use_policy=card_data.get("use_policy"),
+        use_policy=_card_field(card_data, "use_policy"),
         pipeline_tag=payload.get("pipeline_tag"),
         tags=tuple(payload.get("tags") or []),
         last_modified=payload.get("lastModified"),
@@ -219,6 +227,8 @@ def suggest_imaging_models(
     user's config.
     """
 
+    if limit <= 0:
+        raise ValueError("suggest_imaging_models requires limit > 0")
     tag, search = _MODALITY_QUERIES.get(modality.lower(), (None, modality))
     params: dict[str, Any] = {
         "search": search,
@@ -264,6 +274,15 @@ def suggest_imaging_models(
             )
         )
     return suggestions
+
+
+def _card_field(card_data: Any, name: str) -> Any:
+    """Read ``name`` from a Hub model card whether it's a Mapping or object."""
+    if card_data is None:
+        return None
+    if isinstance(card_data, Mapping):
+        return card_data.get(name)
+    return getattr(card_data, name, None)
 
 
 def _format_dt(value: Any) -> str | None:
