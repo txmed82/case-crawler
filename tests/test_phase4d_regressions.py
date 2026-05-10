@@ -144,20 +144,21 @@ def test_contradiction_judge_extends_regex_findings():
         ],
     )
 
+    judge_message = "Note implies normal lactic acid; structured lactate is high."
     judge_calls = []
 
     def fake_judge(rec, text):
         judge_calls.append((rec.record_id, "lactic acid" in text.lower()))
-        return [
-            {
-                "field": "documents.lactate",
-                "message": "Note implies normal lactic acid; structured lactate is high.",
-            }
-        ]
+        return [{"field": "documents.lactate", "message": judge_message}]
 
     issues = validate_text_structured_contradictions(record, judge=fake_judge)
     assert judge_calls and judge_calls[0][1] is True
-    assert any(i.field == "documents.lactate" for i in issues)
+    # Verify the judge's message text actually flows through to the
+    # ValidationIssue, not just that the field name happens to match.
+    assert any(
+        i.field == "documents.lactate" and i.message == judge_message
+        for i in issues
+    )
 
 
 def test_contradiction_judge_returning_non_list_does_not_crash():
