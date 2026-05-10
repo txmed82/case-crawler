@@ -610,15 +610,21 @@ def validate_vitals(record: SyntheticRecord) -> list[ValidationIssue]:
                     message="Heart rate is outside a plausible clinical range.",
                 )
             )
-        if normalized_name in {"temperature", "temp"} and not 25 <= vital.value <= 45:
-            issues.append(
-                ValidationIssue(
-                    severity="error",
-                    modality=Modality.VITALS,
-                    field="vitals.temperature",
-                    message="Temperature is outside a plausible clinical range.",
+        if normalized_name in {"temperature", "temp"}:
+            unit_token = (vital.unit or "").strip().lower().lstrip("°")
+            if unit_token in {"f", "fahrenheit"}:
+                celsius_value = (float(vital.value) - 32.0) * 5.0 / 9.0
+            else:
+                celsius_value = float(vital.value)
+            if not 25 <= celsius_value <= 45:
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.VITALS,
+                        field="vitals.temperature",
+                        message="Temperature is outside a plausible clinical range.",
+                    )
                 )
-            )
         if normalized_name in {"respiratory-rate", "rr"} and not 0 < vital.value < 80:
             issues.append(
                 ValidationIssue(

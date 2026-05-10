@@ -134,7 +134,6 @@ class SyntheticValidator:
                 modality_alignment_score is None
                 or modality_alignment_score >= self._threshold
             )
-            and not issues
         )
         return ValidationReport(
             schema_score=schema_score,

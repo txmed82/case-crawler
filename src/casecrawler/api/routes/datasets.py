@@ -1056,6 +1056,7 @@ def export_dataset(
     def _iter_jsonl():
         record_count = 0
         byte_count = 0
+        completed = False
         try:
             for record in records:
                 for payload in export_record_payloads(record, export_format):
@@ -1063,21 +1064,23 @@ def export_dataset(
                     record_count += 1
                     byte_count += len(line.encode("utf-8")) + 1
                     yield line + "\n"
+            completed = True
         finally:
-            store.save_export_manifest(
-                dataset_id=dataset_id,
-                export_format=export_format,
-                file_path=(
-                    f"api://datasets/{dataset_id}/export?"
-                    f"export_format={export_format.value}"
-                ),
-                record_count=record_count,
-                metadata={
-                    "transport": "api",
-                    "jsonl_bytes": byte_count,
-                    **benchmark_metadata,
-                },
-            )
+            if completed:
+                store.save_export_manifest(
+                    dataset_id=dataset_id,
+                    export_format=export_format,
+                    file_path=(
+                        f"api://datasets/{dataset_id}/export?"
+                        f"export_format={export_format.value}"
+                    ),
+                    record_count=record_count,
+                    metadata={
+                        "transport": "api",
+                        "jsonl_bytes": byte_count,
+                        **benchmark_metadata,
+                    },
+                )
 
     return StreamingResponse(_iter_jsonl(), media_type="application/x-ndjson")
 
