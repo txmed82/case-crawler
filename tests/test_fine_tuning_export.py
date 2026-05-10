@@ -2406,15 +2406,28 @@ def test_export_tool_call_record_contains_clinical_extraction_call():
     exported = export_tool_call_record(record)
     assistant = exported["messages"][-1]
 
-    assert exported["tools"][0]["function"]["name"] == "emit_synthetic_clinical_facts"
-    assert assistant["tool_calls"][0]["function"]["name"] == "emit_synthetic_clinical_facts"
-    assert "Lactate" in assistant["tool_calls"][0]["function"]["arguments"]
-    assert "img-1" in assistant["tool_calls"][0]["function"]["arguments"]
-    assert "Central venous catheter placement" in assistant["tool_calls"][0]["function"][
-        "arguments"
+    # New contract: a real clinical tool surface, not a single mega-tool.
+    tool_names = {tool["function"]["name"] for tool in exported["tools"]}
+    assert {"lookup_lab", "order_imaging", "prescribe", "record_diagnosis"} <= tool_names
+    # The legacy fallback is still available for batch-extraction consumers.
+    assert "emit_synthetic_clinical_facts" in tool_names
+
+    # The assistant produces a SEQUENCE of tool calls derived from the record.
+    call_names = [c["function"]["name"] for c in assistant["tool_calls"]]
+    assert call_names, "assistant must emit at least one tool call"
+    # The Lactate lab on this record is flagged abnormal, so we expect a
+    # lookup_lab call carrying it.
+    lab_calls = [c for c in assistant["tool_calls"] if c["function"]["name"] == "lookup_lab"]
+    lab_args = [c["function"]["arguments"] for c in lab_calls]
+    assert any("Lactate" in args for args in lab_args)
+    # The imaging asset on this record drives an order_imaging call.
+    imaging_calls = [
+        c for c in assistant["tool_calls"] if c["function"]["name"] == "order_imaging"
     ]
-    assert "procedures" in exported["tools"][0]["function"]["parameters"]["required"]
+    assert imaging_calls
+
     assert exported["metadata"]["export_profile"] == "tool_call_jsonl"
+    assert exported["metadata"]["tool_call_count"] == len(assistant["tool_calls"])
 
 
 def test_export_dpo_record_contains_preferred_and_rejected_answers():
@@ -2425,23 +2438,38 @@ def test_export_dpo_record_contains_preferred_and_rejected_answers():
     assert exported["prompt"][0]["role"] == "system"
     assert "chosen" in exported
     assert "rejected" in exported
-    assert "synthetic" in exported["chosen"][0]["content"].lower()
-    assert "ignore" in exported["rejected"][0]["content"].lower()
+    # The DPO export now runs through the preference pipeline. Check the
+    # contract: candidates with per-candidate scores, a chosen-vs-rejected
+    # delta, and a non-empty selection strategy.
+    assert exported["chosen"][0]["content"]
+    assert exported["rejected"][0]["content"]
+    assert exported["chosen"][0]["content"] != exported["rejected"][0]["content"]
+    assert exported["scores"]["chosen"] >= exported["scores"]["rejected"]
+    assert exported["scores"]["delta"] >= 0
+    assert exported["selection_strategy"] in {"abnormal_aware", "rs_dpo"}
+    assert len(exported["candidates"]) >= 2
     assert exported["metadata"]["export_profile"] == "dpo_jsonl"
+    assert exported["metadata"]["preference_construction"] == exported["selection_strategy"]
 
 
 def test_export_rl_record_contains_rewarded_clinical_actions():
     record = _multimodal_record()
 
     exported = export_rl_record(record)
-    step = exported["steps"][0]
 
+    # New flat shape: prompt + response + reward, suitable for PPO/GRPO.
     assert exported["record_id"] == "rec-1"
-    assert step["observation"]["patient"]["age"] == 64
-    assert step["optimal_action"] == "review_structured_record"
-    assert step["reward_table"]["review_structured_record"] == 1.0
-    assert step["reward_table"]["disregard_synthetic_provenance"] < 0
+    assert exported["prompt"][0]["role"] == "system"
+    assert exported["response"][0]["role"] == "assistant"
+    assert 0.0 <= exported["reward"] <= 1.0
+    assert exported["candidate_rewards"]
     assert exported["metadata"]["export_profile"] == "rl_jsonl"
+    # Legacy multi-step episode is preserved for backwards compatibility.
+    legacy_step = exported["episode"]["steps"][0]
+    assert legacy_step["observation"]["patient"]["age"] == 64
+    assert legacy_step["optimal_action"] == "review_structured_record"
+    assert legacy_step["reward_table"]["review_structured_record"] == 1.0
+    assert legacy_step["reward_table"]["disregard_synthetic_provenance"] < 0
 
 
 def test_export_record_dispatches_training_profiles():
