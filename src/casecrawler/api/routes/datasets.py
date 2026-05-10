@@ -45,6 +45,50 @@ from casecrawler.validation.quality import build_dataset_quality_report, export_
 router = APIRouter()
 
 
+def stream_jsonl_export(
+    *,
+    store: DatasetStore,
+    dataset_id: str,
+    export_format: ExportFormat,
+    records,
+    benchmark_metadata: dict,
+):
+    """Yield JSONL lines for a streaming dataset export.
+
+    Writes the export manifest exactly once on successful completion of the
+    iteration. If the consumer disconnects or the underlying iteration raises,
+    no manifest is written — the manifest must reflect a complete export only.
+    """
+
+    record_count = 0
+    byte_count = 0
+    completed = False
+    try:
+        for record in records:
+            for payload in export_record_payloads(record, export_format):
+                line = json.dumps(payload, sort_keys=True)
+                record_count += 1
+                byte_count += len(line.encode("utf-8")) + 1
+                yield line + "\n"
+        completed = True
+    finally:
+        if completed:
+            store.save_export_manifest(
+                dataset_id=dataset_id,
+                export_format=export_format,
+                file_path=(
+                    f"api://datasets/{dataset_id}/export?"
+                    f"export_format={export_format.value}"
+                ),
+                record_count=record_count,
+                metadata={
+                    "transport": "api",
+                    "jsonl_bytes": byte_count,
+                    **benchmark_metadata,
+                },
+            )
+
+
 class ReferenceImportRequest(BaseModel):
     reference_key: str | None = Field(default=None, min_length=1)
     dataset_id: str = Field(min_length=1)
@@ -1053,33 +1097,16 @@ def export_dataset(
             },
         )
 
-    def _iter_jsonl():
-        record_count = 0
-        byte_count = 0
-        try:
-            for record in records:
-                for payload in export_record_payloads(record, export_format):
-                    line = json.dumps(payload, sort_keys=True)
-                    record_count += 1
-                    byte_count += len(line.encode("utf-8")) + 1
-                    yield line + "\n"
-        finally:
-            store.save_export_manifest(
-                dataset_id=dataset_id,
-                export_format=export_format,
-                file_path=(
-                    f"api://datasets/{dataset_id}/export?"
-                    f"export_format={export_format.value}"
-                ),
-                record_count=record_count,
-                metadata={
-                    "transport": "api",
-                    "jsonl_bytes": byte_count,
-                    **benchmark_metadata,
-                },
-            )
-
-    return StreamingResponse(_iter_jsonl(), media_type="application/x-ndjson")
+    return StreamingResponse(
+        stream_jsonl_export(
+            store=store,
+            dataset_id=dataset_id,
+            export_format=export_format,
+            records=records,
+            benchmark_metadata=benchmark_metadata,
+        ),
+        media_type="application/x-ndjson",
+    )
 
 
 @router.get("/datasets/{dataset_id}/export-splits")

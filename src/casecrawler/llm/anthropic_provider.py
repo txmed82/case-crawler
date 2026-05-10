@@ -20,7 +20,17 @@ class AnthropicProvider(BaseLLMProvider):
             system=system or "You are a helpful assistant.",
             messages=messages,
         )
-        text = response.content[0].text
+        if not response.content:
+            stop = getattr(response, "stop_reason", None)
+            raise ValueError(
+                f"Anthropic returned no content blocks (stop_reason={stop!r})"
+            )
+        first_block = response.content[0]
+        if getattr(first_block, "type", None) != "text":
+            raise ValueError(
+                f"Anthropic returned a non-text first block: {first_block.type!r}"
+            )
+        text = first_block.text
         return GenerationResult(
             text=text,
             input_tokens=response.usage.input_tokens,

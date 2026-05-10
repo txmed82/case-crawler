@@ -537,6 +537,22 @@ def _rare_complication_display(topic: str) -> str:
     return "rare disease complication"
 
 
+_KEYWORD_PATTERN_CACHE: dict[str, "re.Pattern[str]"] = {}
+
+
+def _keyword_matches(keyword: str, normalized: str) -> bool:
+    cleaned = keyword.strip().lower()
+    if not cleaned:
+        return False
+    pattern = _KEYWORD_PATTERN_CACHE.get(cleaned)
+    if pattern is None:
+        pattern = re.compile(
+            rf"(?:^|\W){re.escape(cleaned)}(?:$|\W)", flags=re.IGNORECASE
+        )
+        _KEYWORD_PATTERN_CACHE[cleaned] = pattern
+    return pattern.search(normalized) is not None
+
+
 def _rare_procedure_code(topic: str) -> str:
     return re.sub(r"\W+", "_", _rare_procedure_display(topic).lower()).strip("_")
 
@@ -577,7 +593,7 @@ def _rare_medication(topic: str) -> dict:
 def _profile_for_topic(topic: str) -> ClinicalProfile:
     normalized = re.sub(r"\s+", " ", topic.lower().replace("-", " ").replace("_", " "))
     for keywords, profile in _TOPIC_PROFILES:
-        if any(keyword in normalized for keyword in keywords):
+        if any(_keyword_matches(keyword, normalized) for keyword in keywords):
             return profile
     return ClinicalProfile(
         diagnosis_display=topic,
@@ -1049,7 +1065,7 @@ _TOPIC_PROFILES: list[tuple[tuple[str, ...], ClinicalProfile]] = [
         ),
     ),
     (
-        ("pulmonary embolism", "pulmonary embolus", "pe ", "pleuritic chest pain"),
+        ("pulmonary embolism", "pulmonary embolus", "pe", "pleuritic chest pain"),
         ClinicalProfile(
             diagnosis_display="pulmonary embolism",
             diagnosis_code="pulmonary_embolism",

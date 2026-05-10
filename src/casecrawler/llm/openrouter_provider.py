@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 import openai
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from casecrawler.llm.base import BaseLLMProvider, GenerationResult, StructuredGenerationResult
 
@@ -51,8 +51,19 @@ class OpenRouterProvider(BaseLLMProvider):
             max_tokens=4096,
             response_format={"type": "json_object"},
         )
-        raw = json.loads(response.choices[0].message.content)
-        data = schema(**raw)
+        content = response.choices[0].message.content
+        try:
+            raw = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"OpenRouter structured response was not valid JSON: {exc}"
+            ) from exc
+        try:
+            data = schema(**raw)
+        except ValidationError as exc:
+            raise ValueError(
+                f"OpenRouter structured response did not match schema {schema.__name__}: {exc}"
+            ) from exc
         return StructuredGenerationResult(
             data=data,
             input_tokens=response.usage.prompt_tokens,

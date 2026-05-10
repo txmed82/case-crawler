@@ -20,7 +20,7 @@ def provider():
 @pytest.mark.asyncio
 async def test_generate(provider):
     mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="Generated text")]
+    mock_response.content = [MagicMock(type="text", text="Generated text")]
     mock_response.usage.input_tokens = 100
     mock_response.usage.output_tokens = 50
     mock_response.model = "claude-sonnet-4-6"
