@@ -1076,7 +1076,18 @@ def validate_text_structured_contradictions(
                 "Contradiction judge raised; falling back to regex-only output."
             )
             judge_issues = []
-        for entry in judge_issues or []:
+        # The judge contract is "list[dict]". A misbehaving judge returning
+        # a truthy non-iterable (``True`` / ``1``) or a string would crash
+        # the iteration below, which would in turn block validation. Guard
+        # the type explicitly so flaky judges fall back to regex-only
+        # behaviour rather than escalating into a hard validator failure.
+        if not isinstance(judge_issues, list):
+            _LOGGER.warning(
+                "Contradiction judge returned %s; expected list[dict]. Ignoring.",
+                type(judge_issues).__name__,
+            )
+            judge_issues = []
+        for entry in judge_issues:
             if not isinstance(entry, dict):
                 continue
             field = str(entry.get("field") or "documents.contradiction")

@@ -160,6 +160,41 @@ def test_contradiction_judge_extends_regex_findings():
     assert any(i.field == "documents.lactate" for i in issues)
 
 
+def test_contradiction_judge_returning_non_list_does_not_crash():
+    """A misbehaving judge that returns a non-list truthy value (e.g.
+    ``True`` or a string) must not crash validation; the regex fallback
+    should still produce its issue list."""
+    record = _record(
+        labs=[
+            LabObservation(
+                name="Lactate",
+                value=4.5,
+                unit="mmol/L",
+                reference_low=0.5,
+                reference_high=2.0,
+                flag="H",
+                effective_time="2026-05-06T08:30:00",
+            )
+        ],
+        documents=[
+            ClinicalDocument(
+                document_id="doc-1",
+                note_type="ed_note",
+                author_role="physician",
+                timestamp="2026-05-06T09:00:00",
+                clean_text="Lactate is normal.",
+            )
+        ],
+    )
+
+    def chaotic_judge(rec, text):
+        return True  # not a list
+
+    issues = validate_text_structured_contradictions(record, judge=chaotic_judge)
+    # Regex still fires; non-list judge output is dropped quietly.
+    assert any(i.field == "documents.lactate" for i in issues)
+
+
 def test_contradiction_judge_failure_falls_back_to_regex():
     record = _record(
         labs=[
