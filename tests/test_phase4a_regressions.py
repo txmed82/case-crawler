@@ -118,7 +118,7 @@ def test_validator_with_grounding_required_accepts_when_citations_present():
         metadata={
             "grounding": GroundingBundle(
                 topic="sepsis",
-                retrieved_at="2026-05-06T09:00:00",
+                retrieved_at="2026-05-06T09:00:00Z",
                 citations=[
                     GroundingCitation(
                         chunk_id="c1",
@@ -144,7 +144,7 @@ def test_validator_with_grounding_required_accepts_fallback_bundle():
         metadata={
             "grounding": GroundingBundle(
                 topic="rare_disease",
-                retrieved_at="2026-05-06T09:00:00",
+                retrieved_at="2026-05-06T09:00:00Z",
                 citations=[],
                 fallback_used=True,
                 fallback_reason="no_chunks_in_index",
@@ -185,7 +185,7 @@ def test_pipeline_grounding_uses_injected_retriever():
         def fetch_grounding(self, topic, modalities=None, k=8):
             return GroundingBundle(
                 topic=topic,
-                retrieved_at="2026-05-06T09:00:00",
+                retrieved_at="2026-05-06T09:00:00Z",
                 citations=[
                     GroundingCitation(
                         chunk_id="c1",
@@ -213,7 +213,7 @@ def test_pipeline_grounding_template_fallback_on_empty():
     class _EmptyRetriever:
         def fetch_grounding(self, topic, modalities=None, k=8):
             return GroundingBundle(
-                topic=topic, retrieved_at="2026-05-06T09:00:00", citations=[]
+                topic=topic, retrieved_at="2026-05-06T09:00:00Z", citations=[]
             )
 
     pipeline = SyntheticPipeline(retriever=_EmptyRetriever())
@@ -232,7 +232,7 @@ def test_pipeline_grounding_fallback_fail_raises_on_empty():
     class _EmptyRetriever:
         def fetch_grounding(self, topic, modalities=None, k=8):
             return GroundingBundle(
-                topic=topic, retrieved_at="2026-05-06T09:00:00", citations=[]
+                topic=topic, retrieved_at="2026-05-06T09:00:00Z", citations=[]
             )
 
     pipeline = SyntheticPipeline(retriever=_EmptyRetriever())
@@ -275,6 +275,36 @@ def test_pipeline_grounding_fallback_template_swallows_retriever_error():
     assert bundle is not None
     assert bundle.fallback_used is True
     assert bundle.fallback_reason == "retrieval_error"
+
+
+def test_pipeline_grounding_template_fallback_when_no_retriever_configured():
+    """When no retriever is injected and the default retriever fails to
+    construct (e.g. Chroma unavailable in CI), the template fallback emits
+    a flagged bundle with reason='no_retriever_configured'."""
+    pipeline = SyntheticPipeline()
+    pipeline._config.synthetic.grounding = GroundingConfig(
+        enabled=True, fallback="template"
+    )
+    # Force the default retriever construction to fail.
+    pipeline._default_retriever = lambda: None  # type: ignore[method-assign]
+    bundle = pipeline._fetch_grounding_for_topic(
+        GenerationRequest(topic="sepsis")
+    )
+    assert bundle is not None
+    assert bundle.fallback_used is True
+    assert bundle.fallback_reason == "no_retriever_configured"
+
+
+def test_pipeline_grounding_fallback_fail_raises_when_no_retriever_configured():
+    pipeline = SyntheticPipeline()
+    pipeline._config.synthetic.grounding = GroundingConfig(
+        enabled=True, fallback="fail"
+    )
+    pipeline._default_retriever = lambda: None  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="no retriever is"):
+        pipeline._fetch_grounding_for_topic(
+            GenerationRequest(topic="sepsis")
+        )
 
 
 # ---------- ValidationReport must serialize unchanged ----------------------
