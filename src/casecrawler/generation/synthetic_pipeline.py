@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ from casecrawler.generation.imaging_generator import ImagingGenerator
 from casecrawler.generation.imaging_models import resolve_imaging_model_profile
 from casecrawler.generation.modality_plan import ModalityPlanner
 from casecrawler.generation.recipes import apply_generation_recipe
+from casecrawler.generation.retriever import Retriever
 from casecrawler.generation.structured_generator import StructuredGenerator
 from casecrawler.generation.text_generator import TextGenerator
 from casecrawler.generation.timeseries_generator import TimeSeriesGenerator
@@ -19,8 +21,10 @@ from casecrawler.generation.timeseries_models import (
 )
 from casecrawler.llm.factory import get_provider
 from casecrawler.models.dataset import GenerationRequest
-from casecrawler.models.synthetic import Modality, SyntheticRecord
+from casecrawler.models.synthetic import GroundingBundle, Modality, SyntheticRecord
 from casecrawler.validation.synthetic_validator import SyntheticValidator
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -41,9 +45,11 @@ class SyntheticPipeline:
         validator: SyntheticValidator | None = None,
         image_output_dir: str | None = None,
         image_backend: str | None = None,
+        retriever: Retriever | None = None,
     ) -> None:
         config = get_config()
         self._config = config
+        self._retriever = retriever
         self._structured_generator = structured_generator or StructuredGenerator()
         self._text_generator = text_generator or _text_generator_from_config(
             config.synthetic.clinical_text_backend,
@@ -75,6 +81,7 @@ class SyntheticPipeline:
         text_generator = self._text_generator_for(req)
         imaging_generator = self._imaging_generator_for(req)
         time_series_generator = self._time_series_generator_for(req)
+        grounding_bundle = self._fetch_grounding_for_topic(req)
         records = []
         approved = 0
         for index in range(req.count):
@@ -86,6 +93,7 @@ class SyntheticPipeline:
                 text_generator=text_generator,
                 imaging_generator=imaging_generator,
                 time_series_generator=time_series_generator,
+                grounding_bundle=grounding_bundle,
             )
             records.append(record)
             if record.validation and record.validation.approved:
@@ -108,6 +116,7 @@ class SyntheticPipeline:
         text_generator,
         imaging_generator,
         time_series_generator,
+        grounding_bundle: GroundingBundle | None = None,
     ) -> SyntheticRecord:
         attempts = req.max_validation_retries + 1
         last_record: SyntheticRecord | None = None
@@ -166,6 +175,15 @@ class SyntheticPipeline:
                         )
                     }
                 )
+            if grounding_bundle is not None:
+                record = record.model_copy(
+                    update={
+                        "metadata": {
+                            **record.metadata,
+                            "grounding": grounding_bundle.model_dump(),
+                        }
+                    }
+                )
             validator = self._validator_for(record_req)
             validation = validator.validate(record)
             metadata = {
@@ -191,7 +209,96 @@ class SyntheticPipeline:
     def _validator_for(self, req: GenerationRequest) -> SyntheticValidator:
         if self._validator is not None:
             return self._validator
-        return SyntheticValidator(threshold=req.validation_threshold)
+        return SyntheticValidator(
+            threshold=req.validation_threshold,
+            require_grounding=self._config.synthetic.grounding.enabled,
+        )
+
+    def _fetch_grounding_for_topic(
+        self, req: GenerationRequest
+    ) -> GroundingBundle | None:
+        """Resolve a single grounding bundle for the request's topic.
+
+        Returns ``None`` when grounding is disabled. Otherwise either
+        delegates to the injected retriever, or builds a default one over the
+        configured Chroma store. When retrieval returns nothing, the
+        ``synthetic.grounding.fallback`` setting controls whether we proceed
+        with an empty (but flagged) bundle or refuse to generate.
+        """
+
+        cfg = self._config.synthetic.grounding
+        if not cfg.enabled:
+            return None
+        retriever = self._retriever or self._default_retriever()
+        if retriever is None:
+            if cfg.fallback == "fail":
+                raise RuntimeError(
+                    "synthetic.grounding.enabled=true but no retriever is "
+                    "available. Configure storage.chroma_persist_dir and "
+                    "ingest a knowledge base, or set "
+                    "synthetic.grounding.fallback='template'."
+                )
+            return self._fallback_bundle(req.topic, "no_retriever_configured")
+        try:
+            bundle = retriever.fetch_grounding(
+                topic=req.topic,
+                modalities=[m.value for m in req.modalities],
+                k=cfg.k,
+            )
+        except Exception:
+            logger.exception(
+                "Grounding retrieval failed for topic %r", req.topic
+            )
+            if cfg.fallback == "fail":
+                raise
+            return self._fallback_bundle(req.topic, "retrieval_error")
+        if not bundle.citations:
+            if cfg.fallback == "fail":
+                raise RuntimeError(
+                    f"Grounding retrieval for topic {req.topic!r} returned no "
+                    "citations and synthetic.grounding.fallback='fail'."
+                )
+            return bundle.model_copy(
+                update={
+                    "fallback_used": True,
+                    "fallback_reason": "no_chunks_in_index",
+                }
+            )
+        return bundle
+
+    def _default_retriever(self) -> Retriever | None:
+        """Construct a Retriever lazily over the configured Chroma store.
+
+        Returns None if Chroma is unavailable (e.g. in a CI environment
+        without the persist dir). Errors are logged, not raised, so the
+        ``fallback="template"`` path stays clean.
+        """
+
+        try:
+            from casecrawler.pipeline.store import Store
+        except Exception:
+            logger.exception("Failed to import casecrawler.pipeline.store")
+            return None
+        try:
+            store = Store(chroma_dir=self._config.storage.chroma_persist_dir)
+            return Retriever(store)
+        except Exception:
+            logger.exception(
+                "Failed to construct default Retriever; grounding will fall back."
+            )
+            return None
+
+    @staticmethod
+    def _fallback_bundle(topic: str, reason: str) -> GroundingBundle:
+        from datetime import datetime
+
+        return GroundingBundle(
+            topic=topic,
+            retrieved_at=datetime.now().isoformat(),
+            citations=[],
+            fallback_used=True,
+            fallback_reason=reason,
+        )
 
     def _generate_image_asset(
         self,

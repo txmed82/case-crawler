@@ -181,3 +181,31 @@ class SyntheticRecord(StrictModel):
     provenance: Provenance
     validation: ValidationReport | None = None
     metadata: dict = Field(default_factory=dict)
+
+
+class GroundingCitation(StrictModel):
+    """A single retrieved chunk used to ground a synthetic record."""
+
+    chunk_id: str
+    source: str
+    source_document_id: str
+    score: float
+    credibility: str
+    snippet: str = ""
+    doi: str | None = None
+    url: str | None = None
+    specialty: str | None = None
+
+
+class GroundingBundle(StrictModel):
+    """Citations attached to a record to substantiate the RAG-grounded claim.
+
+    A bundle is "real" when ``citations`` is non-empty. The validator gates
+    record approval on this when grounding is enabled at the pipeline level.
+    """
+
+    topic: str
+    retrieved_at: str
+    citations: list[GroundingCitation] = Field(default_factory=list)
+    fallback_used: bool = False
+    fallback_reason: str | None = None

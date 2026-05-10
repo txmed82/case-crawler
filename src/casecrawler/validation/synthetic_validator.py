@@ -35,9 +35,11 @@ class SyntheticValidator:
         self,
         threshold: float = 0.8,
         image_alignment_validator: ImageAlignmentValidator | None = None,
+        require_grounding: bool = False,
     ) -> None:
         self._threshold = threshold
         self._image_alignment_validator = image_alignment_validator or ImageAlignmentValidator()
+        self._require_grounding = require_grounding
 
     def image_validator_policy(self) -> dict[str, object]:
         profile_key = getattr(self._image_alignment_validator, "profile_key", None)
@@ -104,6 +106,28 @@ class SyntheticValidator:
                     )
                 )
 
+        grounding_blocking = False
+        if self._require_grounding:
+            grounding = record.metadata.get("grounding") or {}
+            citations = grounding.get("citations") if isinstance(grounding, dict) else None
+            fallback_used = bool(
+                isinstance(grounding, dict) and grounding.get("fallback_used")
+            )
+            if not citations and not fallback_used:
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        modality=Modality.STRUCTURED_EHR,
+                        field="metadata.grounding.citations",
+                        message=(
+                            "Grounding is enabled but the record carries no "
+                            "citations. Either ingest a knowledge base for the "
+                            "topic or set synthetic.grounding.fallback='template'."
+                        ),
+                    )
+                )
+                grounding_blocking = True
+
         clinical_error_count = sum(
             1
             for issue in issues
@@ -134,6 +158,7 @@ class SyntheticValidator:
                 modality_alignment_score is None
                 or modality_alignment_score >= self._threshold
             )
+            and not grounding_blocking
         )
         return ValidationReport(
             schema_score=schema_score,
