@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from casecrawler.models.synthetic import GroundingBundle, GroundingCitation
 from casecrawler.pipeline.store import Store
@@ -89,6 +89,6 @@ class Retriever:
         ]
         return GroundingBundle(
             topic=topic,
-            retrieved_at=datetime.now().isoformat(),
+            retrieved_at=datetime.now(timezone.utc).isoformat(),
             citations=citations,
         )

@@ -50,6 +50,7 @@ class SyntheticPipeline:
         config = get_config()
         self._config = config
         self._retriever = retriever
+        self._default_retriever_cache: Retriever | None = None
         self._structured_generator = structured_generator or StructuredGenerator()
         self._text_generator = text_generator or _text_generator_from_config(
             config.synthetic.clinical_text_backend,
@@ -269,11 +270,15 @@ class SyntheticPipeline:
     def _default_retriever(self) -> Retriever | None:
         """Construct a Retriever lazily over the configured Chroma store.
 
-        Returns None if Chroma is unavailable (e.g. in a CI environment
-        without the persist dir). Errors are logged, not raised, so the
+        The instance is cached on the pipeline so repeated calls (one per
+        ``generate()`` invocation) don't re-open the Chroma client. Returns
+        None if Chroma is unavailable (e.g. in a CI environment without the
+        persist dir). Errors are logged, not raised, so the
         ``fallback="template"`` path stays clean.
         """
 
+        if self._default_retriever_cache is not None:
+            return self._default_retriever_cache
         try:
             from casecrawler.pipeline.store import Store
         except Exception:
@@ -281,7 +286,8 @@ class SyntheticPipeline:
             return None
         try:
             store = Store(chroma_dir=self._config.storage.chroma_persist_dir)
-            return Retriever(store)
+            self._default_retriever_cache = Retriever(store)
+            return self._default_retriever_cache
         except Exception:
             logger.exception(
                 "Failed to construct default Retriever; grounding will fall back."
@@ -290,11 +296,11 @@ class SyntheticPipeline:
 
     @staticmethod
     def _fallback_bundle(topic: str, reason: str) -> GroundingBundle:
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         return GroundingBundle(
             topic=topic,
-            retrieved_at=datetime.now().isoformat(),
+            retrieved_at=datetime.now(timezone.utc).isoformat(),
             citations=[],
             fallback_used=True,
             fallback_reason=reason,

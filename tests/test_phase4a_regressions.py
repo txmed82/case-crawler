@@ -168,7 +168,7 @@ def test_validator_default_does_not_require_grounding():
 # ---------- Pipeline grounding wiring --------------------------------------
 
 
-def test_pipeline_grounding_disabled_returns_none(monkeypatch):
+def test_pipeline_grounding_disabled_returns_none():
     """With grounding disabled, _fetch_grounding_for_topic short-circuits."""
     pipeline = SyntheticPipeline()
     pipeline._config.synthetic.grounding = GroundingConfig(enabled=False)
@@ -207,7 +207,7 @@ def test_pipeline_grounding_uses_injected_retriever():
     assert [c.chunk_id for c in bundle.citations] == ["c1"]
 
 
-def test_pipeline_grounding_template_fallback_on_empty(monkeypatch):
+def test_pipeline_grounding_template_fallback_on_empty():
     """fallback='template' must produce a flagged empty bundle, not raise."""
 
     class _EmptyRetriever:
