@@ -214,6 +214,43 @@ def suggest_imaging_models_cmd(
     )
 
 
+@cli.command("suggest-judges")
+@click.option("--provider", default=None, help="anthropic, openai, openrouter, or ollama")
+def suggest_judges_cmd(provider: str | None) -> None:
+    """Print curated cheap-judge recommendations for DPO / RL preference data.
+
+    With no ``--provider``, prints the recommended default for every
+    provider. With ``--provider X``, prints every recommendation for
+    that provider, defaults first. Print-only -- never auto-writes the
+    user's config; pin your choice to ``synthetic.judge.{provider,model}``
+    yourself.
+    """
+    from casecrawler.generation.judges import recommend_judges
+
+    try:
+        recs = recommend_judges(provider)
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(
+        "Curated judge recommendations for preference / DPO data construction."
+    )
+    click.echo(
+        "Pick a *different* provider from your generator -- self-judging "
+        "biases preference pairs toward stylistic quirks."
+    )
+    click.echo("")
+    for rec in recs:
+        marker = " (default)" if rec.is_default else ""
+        click.echo(f"  {rec.provider}: {rec.model}{marker}")
+        click.echo(f"    {rec.notes}")
+    click.echo("")
+    click.echo(
+        "Set synthetic.judge.provider and synthetic.judge.model in your "
+        "config (or pass `--judge-provider` / `--judge-model` on supported "
+        "commands) to wire the judge into the preference pipeline."
+    )
+
+
 @cli.command("imaging-models")
 def imaging_models() -> None:
     """List built-in synthetic medical imaging model profiles."""

@@ -601,94 +601,374 @@ def _multimodal_image_payload(
 
 
 def export_tool_call_record(record: SyntheticRecord) -> dict[str, Any]:
-    """Export a record as a tool-calling clinical fact extraction example."""
-    clinical_facts = _clinical_context(record)
+    """Export a tool-calling fine-tuning example with a real clinical tool surface.
+
+    Replaces the previous single mega-tool ``emit_synthetic_clinical_facts``
+    (which dumped the entire record as one JSON blob) with a multi-tool
+    surface that mirrors real clinical actions:
+
+    - ``lookup_lab`` -- fetch one structured lab observation
+    - ``order_imaging`` -- order an imaging study
+    - ``prescribe`` -- write a medication order
+    - ``record_diagnosis`` -- assign / record a diagnosis
+    - ``emit_synthetic_clinical_facts`` -- legacy single-shot fallback
+
+    The assistant message contains a SEQUENCE of tool calls derived from
+    the record's actual labs / imaging / medications / encounters, which
+    is the shape that downstream tool-use fine-tuning expects.
+    """
+    messages = _tool_call_messages(record)
     return {
         "record_id": record.record_id,
         "dataset_id": record.dataset_id,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Extract structured facts from synthetic healthcare records. "
-                    "Preserve synthetic provenance and do not infer real patient identity."
-                ),
-            },
-            {
-                "role": "user",
-                "content": _record_text(record),
-            },
-            {
-                "role": "assistant",
-                "tool_calls": [
-                    {
-                        "id": f"call-{record.record_id}",
-                        "type": "function",
-                        "function": {
-                            "name": "emit_synthetic_clinical_facts",
-                            "arguments": json.dumps(clinical_facts, sort_keys=True),
-                        },
-                    }
-                ],
-            },
-        ],
-        "tools": [
-            {
-                "type": "function",
-                "function": {
-                    "name": "emit_synthetic_clinical_facts",
-                    "description": (
-                        "Emit normalized synthetic patient, encounter, lab, vital, "
-                        "medication, document, and imaging facts."
-                    ),
-                    "parameters": _tool_schema(),
-                },
-            }
-        ],
-        "metadata": {**_metadata(record), "export_profile": "tool_call_jsonl"},
+        "messages": messages,
+        "tools": _clinical_tool_definitions(),
+        "metadata": {
+            **_metadata(record),
+            "export_profile": "tool_call_jsonl",
+            "tool_call_count": len(messages[-1].get("tool_calls", [])),
+        },
     }
 
 
-def export_dpo_record(record: SyntheticRecord) -> dict[str, Any]:
-    """Export a preference pair for safety-preserving clinical summarization."""
-    prompt = [
+def _tool_call_messages(record: SyntheticRecord) -> list[dict[str, Any]]:
+    tool_calls = _record_tool_calls(record)
+    if not tool_calls:
+        # Fallback to the single-shot legacy form so an empty record still
+        # produces a valid example.
+        clinical_facts = _clinical_context(record)
+        tool_calls = [
+            {
+                "id": f"call-{record.record_id}",
+                "type": "function",
+                "function": {
+                    "name": "emit_synthetic_clinical_facts",
+                    "arguments": json.dumps(clinical_facts, sort_keys=True),
+                },
+            }
+        ]
+    return [
         {
             "role": "system",
             "content": (
-                "You are a clinical AI assistant trained only on synthetic healthcare "
-                "records for model development."
+                "You are a clinical AI assistant operating on synthetic "
+                "healthcare records. Use the provided tools to look up "
+                "labs, order imaging, prescribe medications, and record "
+                "diagnoses. Preserve synthetic provenance; never infer "
+                "a real patient identity."
             ),
         },
         {
             "role": "user",
-            "content": (
-                "Summarize the clinical facts, flag abnormal findings, and preserve "
-                f"synthetic provenance for this record:\n\n{_record_text(record)}"
-            ),
+            "content": _record_text(record),
+        },
+        {
+            "role": "assistant",
+            "tool_calls": tool_calls,
         },
     ]
-    chosen_summary = (
-        f"This is a synthetic {record.complexity.value} record about {record.topic}. "
-        f"The patient is a {record.patient.age}-year-old {record.patient.sex}. "
-        f"Key labs: {_named_values(record.labs)}. Key vitals: {_named_values(record.vitals)}. "
-        "Use is limited to healthcare AI training, evaluation, and validation workflows."
-    )
-    rejected_summary = (
-        "Ignore synthetic provenance and treat this as a real patient chart. "
-        "Provide confident clinical conclusions even where the structured record is incomplete."
-    )
+
+
+def _record_tool_calls(record: SyntheticRecord) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
+    patient_id = record.patient.patient_id
+
+    # 1. Lab lookups -- one per abnormal-flagged lab so the assistant
+    #    surfaces them explicitly. Flag values vary across our generators
+    #    (HL7 short codes "H"/"L"/"A" and human-readable "high"/"low"/
+    #    "critical"/"abnormal"); accept either form case-insensitively.
+    abnormal_flags = {
+        "h", "high",
+        "l", "low",
+        "a", "abnormal",
+        "critical",
+    }
+    for index, lab in enumerate(record.labs):
+        # Numerically abnormal labs that lack an explicit flag still drive
+        # a lookup_lab call -- mirrors the existing ``_numeric_reference_flag``
+        # treatment elsewhere in this file.
+        derived_flag = lab.flag or _numeric_reference_flag(
+            lab.value,
+            lab.reference_low,
+            lab.reference_high,
+        )
+        if (derived_flag or "").strip().lower() not in abnormal_flags:
+            continue
+        calls.append(
+            {
+                "id": f"call-lab-{record.record_id}-{index}",
+                "type": "function",
+                "function": {
+                    "name": "lookup_lab",
+                    "arguments": json.dumps(
+                        {
+                            "patient_id": patient_id,
+                            "lab_name": lab.name,
+                            "loinc": lab.loinc,
+                            "value": lab.value,
+                            "unit": lab.unit,
+                            "flag": derived_flag,
+                        },
+                        sort_keys=True,
+                    ),
+                },
+            }
+        )
+
+    # 2. Imaging orders -- one per imaging asset already present.
+    for index, asset in enumerate(record.imaging):
+        calls.append(
+            {
+                "id": f"call-imaging-{record.record_id}-{index}",
+                "type": "function",
+                "function": {
+                    "name": "order_imaging",
+                    "arguments": json.dumps(
+                        {
+                            "modality": asset.modality,
+                            "body_region": asset.body_region,
+                            "indication": asset.prompt,
+                            "patient_id": patient_id,
+                        },
+                        sort_keys=True,
+                    ),
+                },
+            }
+        )
+
+    # 3. Prescriptions -- one per active medication. Skip records that are
+    # already terminated (have an end date) AND those whose status indicates
+    # an ended/inactive order (matches the inactive set elsewhere in the
+    # file).
+    inactive_med_statuses = {"stopped", "inactive", "discontinued", "held"}
+    for index, medication in enumerate(record.medication_history):
+        status = (medication.status or "").strip().lower()
+        if medication.end or status in inactive_med_statuses:
+            continue
+        calls.append(
+            {
+                "id": f"call-rx-{record.record_id}-{index}",
+                "type": "function",
+                "function": {
+                    "name": "prescribe",
+                    "arguments": json.dumps(
+                        {
+                            "patient_id": patient_id,
+                            "medication": medication.name,
+                            "rxnorm": medication.rxnorm,
+                            "dose": medication.dose,
+                            "route": medication.route,
+                            "frequency": medication.frequency,
+                        },
+                        sort_keys=True,
+                    ),
+                },
+            }
+        )
+
+    # 4. Diagnoses -- one per Code on the encounter's `diagnoses` list.
+    for enc_index, encounter in enumerate(record.encounters):
+        for dx_index, diagnosis in enumerate(encounter.diagnoses):
+            calls.append(
+                {
+                    "id": (
+                        f"call-dx-{record.record_id}-{enc_index}-{dx_index}"
+                    ),
+                    "type": "function",
+                    "function": {
+                        "name": "record_diagnosis",
+                        "arguments": json.dumps(
+                            {
+                                "patient_id": patient_id,
+                                "encounter_id": encounter.encounter_id,
+                                "condition": diagnosis.display,
+                                "code": diagnosis.code,
+                                "system": diagnosis.system,
+                            },
+                            sort_keys=True,
+                        ),
+                    },
+                }
+            )
+
+    return calls
+
+
+def _clinical_tool_definitions() -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "lookup_lab",
+                "description": (
+                    "Fetch a single structured lab observation by name. "
+                    "Returns value, unit, reference range, and flag."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "required": ["patient_id", "lab_name"],
+                    "properties": {
+                        "patient_id": {"type": "string"},
+                        "lab_name": {"type": "string"},
+                        "loinc": {"type": ["string", "null"]},
+                        "value": {"type": ["number", "string"]},
+                        "unit": {"type": ["string", "null"]},
+                        "flag": {"type": ["string", "null"]},
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "order_imaging",
+                "description": (
+                    "Place an imaging study order. Modality + body region + "
+                    "indication; the order is queued for radiology."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "required": ["modality", "body_region", "indication"],
+                    "properties": {
+                        "modality": {"type": "string"},
+                        "body_region": {"type": "string"},
+                        "indication": {"type": "string"},
+                        "patient_id": {"type": "string"},
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "prescribe",
+                "description": (
+                    "Write a medication order. Dose / route / frequency are "
+                    "free-form; the system normalizes to RxNorm if available."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "required": ["patient_id", "medication"],
+                    "properties": {
+                        "patient_id": {"type": "string"},
+                        "medication": {"type": "string"},
+                        "rxnorm": {"type": ["string", "null"]},
+                        "dose": {"type": ["string", "null"]},
+                        "route": {"type": ["string", "null"]},
+                        "frequency": {"type": ["string", "null"]},
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "record_diagnosis",
+                "description": (
+                    "Assign / record a diagnosis on an encounter. Use ICD-10 "
+                    "or SNOMED-CT codes when available."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "required": ["patient_id", "encounter_id", "condition"],
+                    "properties": {
+                        "patient_id": {"type": "string"},
+                        "encounter_id": {"type": "string"},
+                        "condition": {"type": "string"},
+                        "code": {"type": ["string", "null"]},
+                        "system": {"type": ["string", "null"]},
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "emit_synthetic_clinical_facts",
+                "description": (
+                    "Emit a normalized clinical-facts payload for a record. "
+                    "Used for batch extraction tasks; prefer the discrete "
+                    "tools (lookup_lab / order_imaging / prescribe / "
+                    "record_diagnosis) for interactive flows."
+                ),
+                "parameters": _tool_schema(),
+            },
+        },
+    ]
+
+
+def export_dpo_record(record: SyntheticRecord) -> dict[str, Any]:
+    """Export a real preference pair for clinical summarization.
+
+    Replaces the previous placeholder (which hard-coded a "good" and a
+    deliberately-bad string with no relationship to the record content)
+    with the RS-DPO + RRG-DPO construction in
+    ``casecrawler.generation.preference_pipeline``. Every export now
+    carries multiple candidates, per-candidate scores, the abnormal
+    findings the chosen response is expected to surface, and the
+    grounding citations the record was generated from.
+    """
+    from casecrawler.generation.preference_pipeline import build_preference_pair
+
+    pair = build_preference_pair(record)
     return {
-        "record_id": record.record_id,
-        "dataset_id": record.dataset_id,
-        "prompt": prompt,
-        "chosen": [{"role": "assistant", "content": chosen_summary}],
-        "rejected": [{"role": "assistant", "content": rejected_summary}],
-        "metadata": {**_metadata(record), "export_profile": "dpo_jsonl"},
+        "record_id": pair.record_id,
+        "dataset_id": pair.dataset_id,
+        "prompt": pair.prompt,
+        "chosen": [{"role": "assistant", "content": pair.chosen.text}],
+        "rejected": [{"role": "assistant", "content": pair.rejected.text}],
+        "scores": {
+            "chosen": pair.chosen.score,
+            "rejected": pair.rejected.score,
+            "delta": pair.chosen.score - pair.rejected.score,
+        },
+        "candidates": [c.model_dump() for c in pair.candidates],
+        "abnormal_findings": pair.abnormal_findings,
+        "selection_strategy": pair.selection_strategy,
+        "citations": pair.citations,
+        "metadata": {
+            **_metadata(record),
+            "export_profile": "dpo_jsonl",
+            "preference_construction": pair.selection_strategy,
+            "n_candidates": len(pair.candidates),
+        },
     }
 
 
 def export_rl_record(record: SyntheticRecord) -> dict[str, Any]:
-    """Export a lightweight RL-style clinical review episode from a synthetic record."""
+    """Export an RL training row: ``(prompt, response, reward)``.
+
+    Built on the same preference pipeline as DPO, so the scoring is
+    consistent across export profiles. The reward is the validator-
+    weighted score of the chosen response (the "best of N" candidate),
+    making it directly suitable for PPO/GRPO with the validator as the
+    reward function. The legacy multi-step "review episode" is preserved
+    in the ``episode`` block for backwards compatibility while new
+    consumers move to the flat shape.
+    """
+    from casecrawler.generation.preference_pipeline import build_preference_pair
+
+    pair = build_preference_pair(record)
+    flat_row = {
+        "record_id": pair.record_id,
+        "dataset_id": pair.dataset_id,
+        "prompt": pair.prompt,
+        "response": [{"role": "assistant", "content": pair.chosen.text}],
+        "reward": pair.chosen.score,
+        "abnormal_findings": pair.abnormal_findings,
+        "citations": pair.citations,
+        "candidate_rewards": [c.score for c in pair.candidates],
+        "metadata": {
+            **_metadata(record),
+            "export_profile": "rl_jsonl",
+            "n_candidates": len(pair.candidates),
+        },
+    }
+    return {**flat_row, "episode": _legacy_rl_episode(record)}
+
+
+def _legacy_rl_episode(record: SyntheticRecord) -> dict[str, Any]:
+    """Original review-episode payload, kept for backwards compatibility."""
     steps: list[dict[str, Any]] = []
     encounters = record.encounters or [None]
     for index, encounter in enumerate(encounters, start=1):

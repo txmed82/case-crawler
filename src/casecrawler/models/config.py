@@ -45,6 +45,23 @@ class LlmConfig(BaseModel):
     ollama_base_url: str = "http://localhost:11434"
 
 
+class JudgeConfig(BaseModel):
+    """LLM judge used during preference / DPO data construction.
+
+    Open-source guidance:
+    - Pick a *different* provider from the generator. Self-judging biases
+      the resulting preference pairs (the Anthropic-on-Anthropic case is
+      particularly bad). The pipeline emits a runtime warning when the
+      provider matches the generator.
+    - Cost: judges should be cheap models. The defaults below are the
+      lightest tier each provider currently offers.
+    """
+
+    provider: str | None = None
+    model: str | None = None
+    temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+
+
 class GroundingConfig(BaseModel):
     """RAG grounding configuration for synthetic generation.
 
@@ -107,6 +124,7 @@ class SyntheticConfig(BaseModel):
     max_api_generation_count: int = Field(default=100, ge=1)
     max_api_returned_records: int = Field(default=25, ge=0)
     grounding: GroundingConfig = GroundingConfig()
+    judge: JudgeConfig = JudgeConfig()
 
 
 class AppConfig(BaseModel):
