@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
 import re
+from collections.abc import Callable
 from math import isfinite, log10
 from datetime import datetime, timezone
 
 from casecrawler.generation.imaging_templates import get_imaging_template
 from casecrawler.models.synthetic import Modality, SyntheticRecord, ValidationIssue
+
+_LOGGER = logging.getLogger(__name__)
 
 _EXPECTED_LAB_UNITS = {
     "anion-gap": {"mmol/l", "meq/l"},
@@ -991,7 +995,27 @@ def validate_medication_safety(record: SyntheticRecord) -> list[ValidationIssue]
 
 def validate_text_structured_contradictions(
     record: SyntheticRecord,
+    *,
+    judge: Callable[[SyntheticRecord, str], list[dict]] | None = None,
 ) -> list[ValidationIssue]:
+    """Detect contradictions between clinical narrative and structured facts.
+
+    Two-tier strategy:
+
+    1. The narrow regex set below catches the contradictions we know are
+       worth blocking on (lactate, fever, hypoxia). It is intentionally
+       small -- it produces almost no false positives but also misses
+       most real contradictions in real LLM-generated narrative.
+    2. If a ``judge`` callable is supplied, it gets one pass at the
+       document text + the structured record. The judge returns a list
+       of contradiction dicts (``field``, ``message``); each becomes a
+       ``ValidationIssue``. Judge failures are logged and swallowed --
+       we never let a flaky judge block validation.
+
+    Callers wire the judge from ``synthetic.judge`` config; offline /
+    CI runs simply leave it ``None`` and rely on the regex set.
+    """
+
     issues: list[ValidationIssue] = []
     text = _document_text(record)
     if not text:
@@ -1043,6 +1067,43 @@ def validate_text_structured_contradictions(
                 message="Clinical text says oxygenation is normal but SpO2 is hypoxic.",
             )
         )
+
+    if judge is not None:
+        try:
+            judge_issues = judge(record, text)
+        except Exception:
+            _LOGGER.exception(
+                "Contradiction judge raised; falling back to regex-only output."
+            )
+            judge_issues = []
+        # The judge contract is "list[dict]". A misbehaving judge returning
+        # a truthy non-iterable (``True`` / ``1``) or a string would crash
+        # the iteration below, which would in turn block validation. Guard
+        # the type explicitly so flaky judges fall back to regex-only
+        # behaviour rather than escalating into a hard validator failure.
+        if not isinstance(judge_issues, list):
+            _LOGGER.warning(
+                "Contradiction judge returned %s; expected list[dict]. Ignoring.",
+                type(judge_issues).__name__,
+            )
+            judge_issues = []
+        for entry in judge_issues:
+            if not isinstance(entry, dict):
+                continue
+            field = str(entry.get("field") or "documents.contradiction")
+            message = str(
+                entry.get("message")
+                or "LLM judge flagged a contradiction between text and structured facts."
+            )
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    modality=Modality.CLINICAL_TEXT,
+                    field=field,
+                    message=message,
+                )
+            )
+
     return issues
 
 
