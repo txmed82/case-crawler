@@ -179,8 +179,11 @@ async def test_anthropic_generate_raises_on_empty_content():
         new_callable=AsyncMock,
         return_value=mock_response,
     ):
-        with pytest.raises(ValueError, match="no content blocks"):
+        with pytest.raises(ValueError) as exc_info:
             await provider.generate("hello")
+    message = str(exc_info.value)
+    assert "no content blocks" in message
+    assert "max_tokens" in message, "stop_reason should be surfaced in the error"
 
 
 @pytest.mark.asyncio
@@ -188,6 +191,7 @@ async def test_anthropic_generate_raises_on_non_text_first_block():
     provider = AnthropicProvider(api_key="test", model="claude-opus-4-7")
     mock_response = MagicMock()
     mock_response.content = [MagicMock(type="tool_use")]
+    mock_response.stop_reason = "tool_use"
     mock_response.usage.input_tokens = 10
     mock_response.usage.output_tokens = 0
     mock_response.model = "claude-opus-4-7"
@@ -198,8 +202,11 @@ async def test_anthropic_generate_raises_on_non_text_first_block():
         new_callable=AsyncMock,
         return_value=mock_response,
     ):
-        with pytest.raises(ValueError, match="non-text first block"):
+        with pytest.raises(ValueError) as exc_info:
             await provider.generate("hello")
+    message = str(exc_info.value)
+    assert "non-text first block" in message
+    assert "tool_use" in message, "block type should be surfaced in the error"
 
 
 # --- Fix 5: OpenAI / OpenRouter ValidationError handling ----------------------
@@ -261,45 +268,67 @@ async def test_openrouter_structured_schema_mismatch_raises_value_error():
 # --- Fix 6: export manifest only on successful completion ---------------------
 
 
-def test_export_manifest_not_written_on_partial_stream():
+def test_export_manifest_not_written_on_partial_stream(monkeypatch):
     """The streaming export endpoint must NOT record a completed manifest if
     the iteration was aborted mid-stream (client disconnect, generator error).
     Previously the `finally` block fired on every code path, recording false
     manifest entries with truncated record counts.
+
+    This test exercises the real `stream_jsonl_export` helper from
+    `casecrawler.api.routes.datasets` so a regression in the production code
+    path actually fails the test.
     """
+
+    from casecrawler.api.routes import datasets as datasets_routes
+    from casecrawler.models.dataset import ExportFormat
+
     saved_calls: list[dict] = []
 
     class _StubStore:
-        def save_export_manifest(self, **kwargs):  # pragma: no cover - sentinel
+        def save_export_manifest(self, **kwargs):
             saved_calls.append(kwargs)
 
-    store = _StubStore()
+    # `export_record_payloads` is patched to (a) yield one payload per record
+    # in the happy path, and (b) raise after the first record on the failure
+    # path — simulating a downstream serialization error or client disconnect.
+    def _ok_payloads(record, _fmt):
+        yield {"record_id": record}
 
-    # Re-create the generator pattern from datasets._iter_jsonl to verify the
-    # fix at the structural level. The generator must save the manifest only
-    # when the underlying loop ran to completion.
-    def _iter(records, raise_after: int | None = None):
-        record_count = 0
-        completed = False
-        try:
-            for rec in records:
-                record_count += 1
-                if raise_after is not None and record_count > raise_after:
-                    raise RuntimeError("client disconnect simulation")
-                yield f"line {rec}\n"
-            completed = True
-        finally:
-            if completed:
-                store.save_export_manifest(record_count=record_count)
+    def _explode_payloads(record, _fmt):
+        if record == "rec-1":
+            yield {"record_id": record}
+            return
+        raise RuntimeError("client disconnect simulation")
 
-    # Successful completion writes the manifest exactly once.
-    list(_iter([1, 2, 3]))
+    # --- happy path: full iteration writes exactly one manifest ---
+    monkeypatch.setattr(datasets_routes, "export_record_payloads", _ok_payloads)
+    list(
+        datasets_routes.stream_jsonl_export(
+            store=_StubStore(),
+            dataset_id="ds-x",
+            export_format=ExportFormat.SFT_JSONL,
+            records=["rec-1", "rec-2", "rec-3"],
+            benchmark_metadata={"k": "v"},
+        )
+    )
     assert len(saved_calls) == 1
     assert saved_calls[0]["record_count"] == 3
+    assert saved_calls[0]["dataset_id"] == "ds-x"
+    assert saved_calls[0]["metadata"]["transport"] == "api"
+    assert saved_calls[0]["metadata"]["k"] == "v"
 
-    # Aborted iteration writes no additional manifest entry.
+    # --- partial / aborted stream: no manifest written ---
     saved_calls.clear()
-    gen = _iter([1, 2, 3], raise_after=1)
+    monkeypatch.setattr(datasets_routes, "export_record_payloads", _explode_payloads)
+    gen = datasets_routes.stream_jsonl_export(
+        store=_StubStore(),
+        dataset_id="ds-y",
+        export_format=ExportFormat.SFT_JSONL,
+        records=["rec-1", "rec-2", "rec-3"],
+        benchmark_metadata={},
+    )
     with pytest.raises(RuntimeError):
         list(gen)
-    assert saved_calls == [], "no manifest may be saved on partial stream"
+    assert saved_calls == [], (
+        "no manifest may be saved when stream_jsonl_export aborts mid-stream"
+    )
