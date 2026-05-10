@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import xml.etree.ElementTree as ET
 
 import httpx
@@ -10,6 +11,8 @@ from casecrawler.models.document import (
     DocumentMetadata,
 )
 from casecrawler.sources.base import BaseSource
+
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://dailymed.nlm.nih.gov/dailymed/services/v2"
 
@@ -54,7 +57,10 @@ class DailyMedSource(BaseSource):
                     doc = await self._fetch_spl(client, setid, title)
                     documents.append(doc)
                 except Exception:
-                    continue  # Skip SPLs that fail to parse
+                    logger.exception(
+                        "DailyMed SPL fetch failed for setid=%s; skipping", setid
+                    )
+                    continue
 
             return documents
 

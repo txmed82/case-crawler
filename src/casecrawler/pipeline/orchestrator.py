@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import threading
+
 from casecrawler.config import get_config
 from casecrawler.models.document import Document
 from casecrawler.pipeline.chunker import Chunker
 from casecrawler.pipeline.embedder import Embedder
 from casecrawler.pipeline.store import Store
 from casecrawler.pipeline.tagger import Tagger
+
+
+_SHARED_ORCHESTRATOR: "PipelineOrchestrator | None" = None
+_SHARED_ORCHESTRATOR_LOCK = threading.Lock()
 
 
 class PipelineOrchestrator:
@@ -41,3 +47,27 @@ class PipelineOrchestrator:
         self.store.store(pairs)
 
         return {"documents": len(documents), "chunks": len(all_chunks)}
+
+
+def get_shared_orchestrator() -> PipelineOrchestrator:
+    """Return a process-wide PipelineOrchestrator.
+
+    ChromaDB's PersistentClient acquires a file lock on its data directory;
+    creating a new orchestrator (and therefore a new client) per request
+    causes contention or outright failures when concurrent ingest jobs run.
+    Long-lived consumers should share a single instance via this accessor.
+    """
+
+    global _SHARED_ORCHESTRATOR
+    with _SHARED_ORCHESTRATOR_LOCK:
+        if _SHARED_ORCHESTRATOR is None:
+            _SHARED_ORCHESTRATOR = PipelineOrchestrator()
+    return _SHARED_ORCHESTRATOR
+
+
+def reset_shared_orchestrator() -> None:
+    """Drop the shared orchestrator. Tests use this to start each case fresh."""
+
+    global _SHARED_ORCHESTRATOR
+    with _SHARED_ORCHESTRATOR_LOCK:
+        _SHARED_ORCHESTRATOR = None

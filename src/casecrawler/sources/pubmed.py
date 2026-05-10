@@ -29,7 +29,18 @@ class PubMedSource(BaseSource):
     requires_keys: list[str] = []
 
     def _base_params(self) -> dict:
-        params: dict = {"tool": "casecrawler", "email": "casecrawler@example.com"}
+        # NCBI's Entrez usage policy requires a valid contact email for
+        # automated requests. We refuse to silently fall back to a
+        # placeholder value -- the user must set ENTREZ_EMAIL (or its
+        # alias NCBI_EMAIL).
+        email = get_env("ENTREZ_EMAIL") or get_env("NCBI_EMAIL")
+        if not email:
+            raise RuntimeError(
+                "PubMed access requires a contact email per NCBI's Entrez "
+                "usage policy. Set the ENTREZ_EMAIL environment variable "
+                "(or NCBI_EMAIL) before using the pubmed source."
+            )
+        params: dict = {"tool": "casecrawler", "email": email}
         api_key = get_env("NCBI_API_KEY")
         if api_key:
             params["api_key"] = api_key

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -20,7 +21,26 @@ from casecrawler.models.dataset import (
 from casecrawler.models.synthetic import SyntheticRecord
 
 
+_SHARED_INSTANCES: dict[str, "DatasetStore"] = {}
+_SHARED_LOCK = threading.Lock()
+
+
 class DatasetStore:
+    """Sqlite-backed persistence for synthetic records and export manifests.
+
+    Concurrency
+    -----------
+    The connection is opened with ``check_same_thread=False`` so multiple
+    FastAPI worker threads can use the same instance, but SQLite still
+    serializes writes. All write methods acquire ``self._write_lock`` to make
+    that serialization explicit and to prevent two threads from interleaving
+    a SELECT/UPDATE pair.
+
+    Most call sites should obtain a process-wide instance via
+    :func:`get_shared_store` (or :meth:`DatasetStore.shared`) so they share
+    the connection and lock.
+    """
+
     def __init__(self, db_path: str = "./data/datasets.db") -> None:
         self._db_path = db_path
         parent = Path(db_path).parent
@@ -28,7 +48,12 @@ class DatasetStore:
             parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        self._write_lock = threading.Lock()
         self._create_tables()
+
+    @classmethod
+    def shared(cls, db_path: str = "./data/datasets.db") -> "DatasetStore":
+        return get_shared_store(db_path)
 
     def _create_tables(self) -> None:
         self._conn.execute(
@@ -39,15 +64,33 @@ class DatasetStore:
                 topic TEXT NOT NULL,
                 complexity TEXT NOT NULL,
                 approved INTEGER,
+                requires_human_review INTEGER NOT NULL DEFAULT 0,
                 record_json TEXT NOT NULL
             )
             """
         )
+        # Idempotent migration for older schemas that pre-date the
+        # ``requires_human_review`` column.
+        existing_cols = {
+            row["name"]
+            for row in self._conn.execute(
+                "PRAGMA table_info(synthetic_records)"
+            ).fetchall()
+        }
+        if "requires_human_review" not in existing_cols:
+            self._conn.execute(
+                "ALTER TABLE synthetic_records "
+                "ADD COLUMN requires_human_review INTEGER NOT NULL DEFAULT 0"
+            )
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_synth_dataset ON synthetic_records(dataset_id)"
         )
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_synth_topic ON synthetic_records(topic)"
+        )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_synth_review ON "
+            "synthetic_records(dataset_id, approved, requires_human_review)"
         )
         self._conn.execute(
             """
@@ -79,20 +122,24 @@ class DatasetStore:
     def save_record(self, record: SyntheticRecord) -> None:
         effective_approved = self.effective_approved(record)
         approved = None if effective_approved is None else int(effective_approved)
-        self._conn.execute(
-            """INSERT OR REPLACE INTO synthetic_records
-            (record_id, dataset_id, topic, complexity, approved, record_json)
-            VALUES (?, ?, ?, ?, ?, ?)""",
-            (
-                record.record_id,
-                record.dataset_id,
-                record.topic,
-                record.complexity.value,
-                approved,
-                record.model_dump_json(),
-            ),
-        )
-        self._conn.commit()
+        requires_review = int(bool(record.metadata.get("require_human_review")))
+        with self._write_lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO synthetic_records
+                (record_id, dataset_id, topic, complexity, approved,
+                 requires_human_review, record_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    record.record_id,
+                    record.dataset_id,
+                    record.topic,
+                    record.complexity.value,
+                    approved,
+                    requires_review,
+                    record.model_dump_json(),
+                ),
+            )
+            self._conn.commit()
 
     def save_human_review(
         self,
@@ -136,7 +183,17 @@ class DatasetStore:
         limit: int = 100,
     ) -> list[ReviewQueueItem]:
         items: list[ReviewQueueItem] = []
-        for record in self.iter_records(dataset_id=dataset_id):
+        # Push the bulk filter into SQL when possible: records that are not
+        # approved (either explicitly false or unscored) plus any record that
+        # was flagged as requiring human review even if it passed validation.
+        if include_reviewed:
+            row_iter = self._iter_record_rows(dataset_id=dataset_id)
+        else:
+            row_iter = self._iter_record_rows(
+                dataset_id=dataset_id,
+                review_queue_only=True,
+            )
+        for record in row_iter:
             human_review = self.get_human_review(record)
             effective_approved = self.effective_approved(record)
             requires_human_review = record.metadata.get("require_human_review") is True
@@ -211,6 +268,39 @@ class DatasetStore:
         rows = self._conn.execute(query, params).fetchall()
         return [SyntheticRecord.model_validate_json(row["record_json"]) for row in rows]
 
+    def _iter_record_rows(
+        self,
+        dataset_id: str | None = None,
+        review_queue_only: bool = False,
+        page_size: int = 1000,
+    ):
+        offset = 0
+        while True:
+            query = "SELECT record_json FROM synthetic_records WHERE 1=1"
+            params: list = []
+            if dataset_id:
+                query += " AND dataset_id = ?"
+                params.append(dataset_id)
+            if review_queue_only:
+                # Either not approved (NULL or 0) OR explicitly flagged for
+                # human review even if validator approved it.
+                query += (
+                    " AND ("
+                    "approved IS NULL OR approved = 0"
+                    " OR requires_human_review = 1"
+                    ")"
+                )
+            query += " ORDER BY record_id LIMIT ? OFFSET ?"
+            params.extend([page_size, offset])
+            rows = self._conn.execute(query, params).fetchall()
+            if not rows:
+                return
+            for row in rows:
+                yield SyntheticRecord.model_validate_json(row["record_json"])
+            if len(rows) < page_size:
+                return
+            offset += len(rows)
+
     def iter_records(
         self,
         dataset_id: str | None = None,
@@ -272,7 +362,99 @@ class DatasetStore:
         return self._manifest_from_records(dataset_id, records)
 
     def list_manifests(self, limit: int = 1000) -> list[DatasetManifest]:
-        return [self.get_manifest(dataset_id) for dataset_id in self.list_dataset_ids(limit)]
+        """Return one manifest per dataset.
+
+        The previous implementation called ``get_manifest`` for every dataset,
+        which itself did a paginated full scan of every record per dataset --
+        an O(N*M) deserialization on every list call. We now aggregate counts
+        in a single SQL query and only fall back to ``iter_records`` to grab
+        a single representative record per dataset for the manifest's
+        ``first.topic`` / ``first.provenance.created_at`` fields.
+        """
+
+        dataset_ids = self.list_dataset_ids(limit)
+        if not dataset_ids:
+            return []
+        placeholders = ",".join("?" for _ in dataset_ids)
+        agg_rows = self._conn.execute(
+            f"SELECT dataset_id, COUNT(*) AS total, "
+            f"SUM(CASE WHEN approved = 1 THEN 1 ELSE 0 END) AS approved_count "
+            f"FROM synthetic_records WHERE dataset_id IN ({placeholders}) "
+            f"GROUP BY dataset_id",
+            dataset_ids,
+        ).fetchall()
+        agg = {
+            row["dataset_id"]: (row["total"], row["approved_count"] or 0)
+            for row in agg_rows
+        }
+
+        manifests: list[DatasetManifest] = []
+        for dataset_id in dataset_ids:
+            row = self._conn.execute(
+                "SELECT record_json FROM synthetic_records WHERE dataset_id = ? "
+                "ORDER BY record_id LIMIT 1",
+                (dataset_id,),
+            ).fetchone()
+            if row is None:
+                continue
+            first = SyntheticRecord.model_validate_json(row["record_json"])
+            total, approved_count = agg.get(dataset_id, (0, 0))
+            manifests.append(
+                self._aggregated_manifest(
+                    dataset_id=dataset_id,
+                    first=first,
+                    total=total,
+                    approved_count=approved_count,
+                )
+            )
+        return manifests
+
+    def _aggregated_manifest(
+        self,
+        *,
+        dataset_id: str,
+        first: SyntheticRecord,
+        total: int,
+        approved_count: int,
+    ) -> DatasetManifest:
+        # We deliberately omit the per-record `record_ids` array from this
+        # summary metadata; the previous implementation embedded an N-element
+        # UUID list in every manifest, which was an O(N) serialization bomb
+        # on every list call. Callers that need the IDs should query
+        # ``list_records`` directly.
+        # Recipe / reference metadata is derived from a single representative
+        # record. This is correct for homogeneous datasets (the common case
+        # by far) and degrades gracefully for mixed-recipe datasets, where
+        # the trade-off is having a fast list endpoint vs. an exhaustive but
+        # impractical one.
+        sample = [first]
+        export_formats = _manifest_export_formats(sample)
+        recipe_metadata = _manifest_recipe_metadata(sample)
+        reference_metadata = _manifest_reference_metadata(sample)
+        latest_exports = [
+            export_manifest.model_dump()
+            for export_manifest in self.list_export_manifests(
+                dataset_id=dataset_id,
+                limit=5,
+            )
+        ]
+        return DatasetManifest(
+            dataset_id=dataset_id,
+            name=f"{first.topic}-synthetic",
+            topic=first.topic,
+            requested_count=total,
+            generated_count=total,
+            approved_count=approved_count,
+            modalities=first.modalities,
+            export_formats=export_formats,
+            created_at=first.provenance.created_at,
+            metadata={
+                "record_count": total,
+                **recipe_metadata,
+                **reference_metadata,
+                "latest_exports": latest_exports,
+            },
+        )
 
     def _manifest_from_records(
         self,
@@ -331,20 +513,21 @@ class DatasetStore:
             created_at=created_at,
             metadata=metadata or {},
         )
-        self._conn.execute(
-            """INSERT INTO export_manifests
-            (dataset_id, export_format, file_path, record_count, created_at, metadata_json)
-            VALUES (?, ?, ?, ?, ?, ?)""",
-            (
-                dataset_id,
-                resolved_format.value,
-                file_path,
-                record_count,
-                created_at,
-                export_manifest.model_dump_json(),
-            ),
-        )
-        self._conn.commit()
+        with self._write_lock:
+            self._conn.execute(
+                """INSERT INTO export_manifests
+                (dataset_id, export_format, file_path, record_count, created_at, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    dataset_id,
+                    resolved_format.value,
+                    file_path,
+                    record_count,
+                    created_at,
+                    export_manifest.model_dump_json(),
+                ),
+            )
+            self._conn.commit()
         return export_manifest
 
     def list_export_manifests(
@@ -364,6 +547,36 @@ class DatasetStore:
             ExportManifest.model_validate_json(row["metadata_json"])
             for row in rows
         ]
+
+
+def get_shared_store(db_path: str = "./data/datasets.db") -> DatasetStore:
+    """Return a process-wide DatasetStore for the given db_path.
+
+    FastAPI route handlers and other long-lived consumers should use this
+    rather than constructing a fresh ``DatasetStore`` per request -- creating
+    a new sqlite connection on every call is wasteful and fights the write
+    lock.
+
+    The cache key is the resolved absolute path of ``db_path``, so callers
+    that rely on a relative path (``./data/datasets.db``) and then change
+    the working directory pick up the correct on-disk store rather than a
+    stale cached instance.
+    """
+
+    key = str(Path(db_path).resolve())
+    with _SHARED_LOCK:
+        instance = _SHARED_INSTANCES.get(key)
+        if instance is None:
+            instance = DatasetStore(db_path=db_path)
+            _SHARED_INSTANCES[key] = instance
+    return instance
+
+
+def reset_shared_stores() -> None:
+    """Drop all shared instances. Tests use this to start each case fresh."""
+
+    with _SHARED_LOCK:
+        _SHARED_INSTANCES.clear()
 
 
 def _manifest_export_formats(records: list[SyntheticRecord]) -> list[ExportFormat]:

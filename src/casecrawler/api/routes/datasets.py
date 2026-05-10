@@ -160,7 +160,7 @@ class ReleasePackageRequest(BaseModel):
 
 @router.get("/datasets")
 def list_datasets(limit: int = Query(100, ge=1, le=1000)):
-    store = DatasetStore()
+    store = DatasetStore.shared()
     return {"datasets": [manifest.model_dump() for manifest in store.list_manifests(limit=limit)]}
 
 
@@ -179,7 +179,7 @@ async def generate_dataset(req: GenerationRequest):
         result = await SyntheticPipeline().generate(req)
     except ValueError as err:
         raise HTTPException(status_code=422, detail=str(err)) from err
-    store = DatasetStore()
+    store = DatasetStore.shared()
     for record in result["records"]:
         store.save_record(record)
     returned_records = result["records"][:max_returned]
@@ -248,7 +248,7 @@ async def generate_release_package(req: ReleasePackageRequest):
         run_recommended_benchmark_suite,
     )
 
-    store = DatasetStore()
+    store = DatasetStore.shared()
     records = result["records"]
     for record in records:
         store.save_record(record)
@@ -637,7 +637,7 @@ def import_reference_dataset(req: ReferenceImportRequest):
             )
         except KeyError as err:
             raise HTTPException(status_code=404, detail=str(err)) from err
-        store = DatasetStore()
+        store = DatasetStore.shared()
         for record in records:
             store.save_record(record)
         return {
@@ -728,7 +728,7 @@ def import_reference_dataset(req: ReferenceImportRequest):
             raise HTTPException(status_code=422, detail=str(err)) from err
         reference_key = req.reference_key
 
-    store = DatasetStore()
+    store = DatasetStore.shared()
     for record in records:
         store.save_record(record)
     return {
@@ -756,7 +756,7 @@ def import_synthea_fhir(req: SyntheaImportRequest):
             status_code=404,
             detail="no Synthea FHIR JSON, FHIR NDJSON, or CSV files found",
         )
-    store = DatasetStore()
+    store = DatasetStore.shared()
     for record in records:
         store.save_record(record)
     return {
@@ -768,7 +768,7 @@ def import_synthea_fhir(req: SyntheaImportRequest):
 
 @router.get("/datasets/{dataset_id}")
 def get_dataset(dataset_id: str, limit: int = Query(100, ge=1, le=1000)):
-    store = DatasetStore()
+    store = DatasetStore.shared()
     try:
         manifest = store.get_manifest(dataset_id)
     except KeyError as err:
@@ -786,7 +786,7 @@ def list_dataset_review_queue(
     limit: int = Query(100, ge=1, le=1000),
     include_reviewed: bool = False,
 ):
-    store = DatasetStore()
+    store = DatasetStore.shared()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     return {
@@ -806,7 +806,7 @@ def list_dataset_review_queue(
 def get_dataset_quality(dataset_id: str):
     from casecrawler.validation.benchmark_selection import build_benchmark_plan_summary
 
-    store = DatasetStore()
+    store = DatasetStore.shared()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     records = list(store.iter_records(dataset_id=dataset_id))
@@ -823,7 +823,7 @@ def list_dataset_exports(
     dataset_id: str,
     limit: int = Query(100, ge=1, le=1000),
 ):
-    store = DatasetStore()
+    store = DatasetStore.shared()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     return {
@@ -840,7 +840,7 @@ def list_dataset_exports(
 
 @router.post("/records/{record_id}/review")
 def save_record_review(record_id: str, decision: HumanReviewDecision):
-    store = DatasetStore()
+    store = DatasetStore.shared()
     try:
         record = store.save_human_review(record_id, decision)
     except KeyError as err:
@@ -855,7 +855,7 @@ def save_record_review(record_id: str, decision: HumanReviewDecision):
 
 @router.get("/datasets/{dataset_id}/card", response_class=PlainTextResponse)
 def get_dataset_card(dataset_id: str, kind: str = Query("dataset", pattern="^(dataset|model)$")):
-    store = DatasetStore()
+    store = DatasetStore.shared()
     try:
         manifest = store.get_manifest(dataset_id)
     except KeyError as err:
@@ -868,7 +868,7 @@ def get_dataset_card(dataset_id: str, kind: str = Query("dataset", pattern="^(da
 
 @router.get("/datasets/{dataset_id}/images/{image_id}")
 def get_dataset_image(dataset_id: str, image_id: str):
-    store = DatasetStore()
+    store = DatasetStore.shared()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     for record in store.iter_records(dataset_id=dataset_id):
@@ -895,7 +895,7 @@ def benchmark_dataset(
     min_overall_score: float = Query(0.75, ge=0.0, le=1.0),
     min_metric_score: float = Query(0.5, ge=0.0, le=1.0),
 ):
-    store = DatasetStore()
+    store = DatasetStore.shared()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     if not store.dataset_exists(reference_dataset_id):
@@ -914,7 +914,7 @@ def benchmark_dataset(
 
 @router.get("/datasets/{dataset_id}/benchmark-profile")
 def get_benchmark_profile(dataset_id: str):
-    store = DatasetStore()
+    store = DatasetStore.shared()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     records = list(store.iter_records(dataset_id=dataset_id))
@@ -942,7 +942,7 @@ def benchmark_profile(req: BenchmarkProfileCompareRequest):
 def benchmark_plan(dataset_id: str):
     from casecrawler.validation.benchmark_selection import build_benchmark_plan_summary
 
-    store = DatasetStore()
+    store = DatasetStore.shared()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     return build_benchmark_plan_summary(store, dataset_id)
@@ -958,7 +958,7 @@ def seed_reference_fixtures(
         seed_recommended_reference_fixtures,
     )
 
-    store = DatasetStore()
+    store = DatasetStore.shared()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     return seed_recommended_reference_fixtures(
@@ -973,7 +973,7 @@ def seed_reference_fixtures(
 def benchmark_suite(dataset_id: str):
     from casecrawler.validation.benchmark_selection import run_recommended_benchmark_suite
 
-    store = DatasetStore()
+    store = DatasetStore.shared()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     try:
@@ -994,7 +994,7 @@ def export_dataset(
     min_overall_score: float = Query(0.75, ge=0.0, le=1.0),
     min_metric_score: float = Query(0.5, ge=0.0, le=1.0),
 ):
-    store = DatasetStore()
+    store = DatasetStore.shared()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     records = list(store.iter_records(dataset_id=dataset_id))
@@ -1123,7 +1123,7 @@ def export_dataset_splits(
     min_overall_score: float = Query(0.75, ge=0.0, le=1.0),
     min_metric_score: float = Query(0.5, ge=0.0, le=1.0),
 ):
-    store = DatasetStore()
+    store = DatasetStore.shared()
     if not store.dataset_exists(dataset_id):
         raise HTTPException(status_code=404, detail="dataset not found")
     if export_format == ExportFormat.PARQUET:
