@@ -86,6 +86,9 @@ async def test_structured_falls_back_when_server_rejects_json_schema():
     assert result.data.age == 42
     # Two calls: first the json_schema attempt, then the json_object retry.
     assert create_mock.await_count == 2
+    first_call_kwargs = create_mock.await_args_list[0].kwargs
+    assert first_call_kwargs["response_format"]["type"] == "json_schema"
+    assert "json_schema" in first_call_kwargs["response_format"]
     second_call_kwargs = create_mock.await_args_list[1].kwargs
     assert second_call_kwargs["response_format"] == {"type": "json_object"}
 
