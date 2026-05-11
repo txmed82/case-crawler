@@ -108,6 +108,42 @@ async def test_structured_does_not_fall_back_on_unrelated_400():
     assert create_mock.await_count == 1
 
 
+@pytest.mark.asyncio
+async def test_structured_does_not_fall_back_on_generic_unsupported_message():
+    """A 400 that says ``unsupported`` but doesn't name ``response_format``
+    or ``json_schema`` (e.g. account-tier or quota errors) must NOT
+    trigger the legacy fallback. Only true schema-feature 400s should."""
+
+    provider = OpenAIProvider(api_key="test", model="gpt-4")
+    create_mock = AsyncMock(
+        side_effect=_bad_request("Feature unsupported for this account tier")
+    )
+    with patch.object(
+        provider._client.chat.completions, "create", new=create_mock
+    ):
+        with pytest.raises(openai.BadRequestError, match="unsupported"):
+            await provider.generate_structured("p", _Schema)
+    assert create_mock.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_structured_rejects_non_object_json_with_validation_error():
+    """If the server returns valid JSON that isn't an object (e.g. an
+    array or scalar), the wrapper must surface a clear ValueError, not
+    crash with TypeError when Pydantic tries to ``schema(**raw)``."""
+
+    provider = OpenAIProvider(api_key="test", model="gpt-4")
+    response = _mock_chat_response(json.dumps([1, 2, 3]))
+    with patch.object(
+        provider._client.chat.completions,
+        "create",
+        new_callable=AsyncMock,
+        return_value=response,
+    ):
+        with pytest.raises(ValueError, match="did not match schema"):
+            await provider.generate_structured("p", _Schema)
+
+
 # ---- Missing usage guard ----------------------------------------------------
 
 

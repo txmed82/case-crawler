@@ -17,21 +17,20 @@ from pydantic import BaseModel, ValidationError
 from casecrawler.llm.base import GenerationResult, StructuredGenerationResult
 
 
-# Substrings in a 400 error message that indicate the server does not
-# support the modern ``json_schema`` response_format. We only fall back
-# to the legacy ``json_object`` shape on these — other 400s (auth,
-# malformed payload, model-not-found) should bubble up unchanged.
-_JSON_SCHEMA_UNSUPPORTED_HINTS: tuple[str, ...] = (
-    "response_format",
-    "json_schema",
-    "unsupported",
-    "invalid type",
-)
-
-
+# A 400 only counts as "this endpoint can't do json_schema mode" if it
+# specifically names the feature. Generic tokens like "unsupported" on
+# their own are too noisy — a quota or model-tier 400 also says
+# "unsupported" and shouldn't silently downgrade to json_object.
 def _is_json_schema_unsupported(exc: openai.BadRequestError) -> bool:
     message = str(exc).lower()
-    return any(hint in message for hint in _JSON_SCHEMA_UNSUPPORTED_HINTS)
+    if "response_format" not in message and "json_schema" not in message:
+        return False
+    return (
+        "unsupported" in message
+        or "not supported" in message
+        or "invalid type" in message
+        or "unrecognized" in message
+    )
 
 
 def _usage_tokens(response: Any) -> tuple[int, int]:
@@ -177,7 +176,7 @@ async def chat_complete_structured(
             f"{provider_label} structured response was not valid JSON: {exc}"
         ) from exc
     try:
-        data = schema(**raw)
+        data = schema.model_validate(raw)
     except ValidationError as exc:
         raise ValueError(
             f"{provider_label} structured response did not match schema "
