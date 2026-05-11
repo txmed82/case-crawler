@@ -1,0 +1,46 @@
+# Configuration tuned for DPO / RL preference export runs.
+#
+# Use case: generate a dataset, then export `dpo_jsonl` or `rl_jsonl`
+# ready to feed a TRL/axolotl/etc. trainer.
+#
+# Notes:
+#   - The deterministic candidate factory works without any LLM key.
+#     If you want sampled candidates with real model variation, set
+#     `clinical_text_backend: llm` and provide an LLM key in .env.
+#   - The validator-only scorer is the default. Add an LLM judge
+#     programmatically (see docs/quickstart-dpo.md). recommend_judges()
+#     deliberately avoids judging with the same model that wrote the
+#     candidates.
+#
+# Run after generating a dataset:
+#
+#   casecrawler export-dataset \
+#     --dataset-id <id> --format dpo_jsonl --output preference.jsonl
+#   casecrawler export-dataset \
+#     --dataset-id <id> --format rl_jsonl --output episodes.jsonl
+
+storage:
+  chroma_persist_dir: ./data/chroma
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-6
+
+synthetic:
+  clinical_text_backend: deterministic
+  default_modalities:
+    - structured_ehr
+    - clinical_text
+    - labs
+    - vitals
+  validation_threshold: 0.8  # candidates below this are penalized
+  export_formats:
+    - raw_jsonl
+    - dpo_jsonl
+    - rl_jsonl
+
+api:
+  # Loopback default for the starter — flip to 0.0.0.0 only when you
+  # want the API reachable from other machines on your network.
+  host: 127.0.0.1
+  port: 8000
