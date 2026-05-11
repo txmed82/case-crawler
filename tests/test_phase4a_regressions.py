@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 
-from casecrawler.config import get_config
 from casecrawler.generation.retriever import Retriever
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.config import GroundingConfig
@@ -23,19 +22,6 @@ from casecrawler.models.synthetic import (
     VitalObservation,
 )
 from casecrawler.validation.synthetic_validator import SyntheticValidator
-
-
-@pytest.fixture(autouse=True)
-def _reset_grounding_config():
-    """The synthetic pipeline reads from the global ``get_config()``
-    singleton, so a test that flips ``grounding.enabled`` would leak
-    into every subsequent test. Snapshot and restore around each test."""
-    cfg = get_config()
-    saved = cfg.synthetic.grounding
-    try:
-        yield
-    finally:
-        cfg.synthetic.grounding = saved
 
 
 # ---------- Retriever.fetch_grounding ---------------------------------------
