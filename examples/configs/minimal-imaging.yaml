@@ -41,5 +41,7 @@ synthetic:
     - multimodal_jsonl
 
 api:
-  host: 0.0.0.0
+  # Loopback default for the starter — flip to 0.0.0.0 only when you
+  # want the API reachable from other machines on your network.
+  host: 127.0.0.1
   port: 8000

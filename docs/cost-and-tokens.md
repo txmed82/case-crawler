@@ -42,14 +42,19 @@ tokens. With a 4-candidate judged DPO export on the same dataset, add
 
 ## Rough dollar estimates (May 2026)
 
-These are list prices; volume discounts and free tiers vary.
+These are list prices; volume discounts and free tiers vary. **Verify
+current prices** at:
+[Anthropic](https://www.anthropic.com/pricing) ·
+[OpenAI](https://openai.com/api/pricing/) ·
+[OpenRouter](https://openrouter.ai/models) ·
+[Ollama](https://ollama.com/) (self-hosted, no per-token pricing).
 
 | Provider / model | 600k in + 210k out (text only) | + DPO judging |
 |------------------|-------------------------------:|--------------:|
-| Anthropic Claude Sonnet 4.6 (`$3 / $15` per Mtok) | **~$5.00** | ~$5.00 + ~$3.60 |
-| OpenAI GPT-4.1 (`$2 / $8` per Mtok) | **~$2.90** | ~$2.90 + ~$2.30 |
-| OpenRouter Claude Sonnet 4.6 | same as Anthropic | same |
-| Ollama (local) | **$0** (your hardware) | $0 |
+| [Anthropic Claude Sonnet 4.6](https://www.anthropic.com/pricing) (`$3 / $15` per Mtok) | **~$5.00** | ~$5.00 + ~$3.60 |
+| [OpenAI GPT-4.1](https://openai.com/api/pricing/) (`$2 / $8` per Mtok) | **~$2.90** | ~$2.90 + ~$2.30 |
+| [OpenRouter Claude Sonnet 4.6](https://openrouter.ai/models) | same as Anthropic | same |
+| [Ollama](https://ollama.com/) (local) | **$0** (your hardware) | $0 |
 
 For most exploration, **Ollama or a small OpenAI model is fine**.
 Reach for Claude Sonnet when you need clinical fidelity in the notes

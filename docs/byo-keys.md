@@ -9,6 +9,23 @@ generation, imaging, and judging.
 This page covers each key, what it unlocks, where to put it, and how to
 verify it works.
 
+## Don't commit your keys
+
+`.env` and any other file holding secrets must never be checked in.
+The repo's `.gitignore` excludes `.env` by default; verify with:
+
+```bash
+git check-ignore -v .env       # should print a .gitignore line
+git log --all --source -- .env # should return nothing
+```
+
+If a key has already been committed, **rotate it at the provider**
+(revoke the leaked key, issue a new one) before scrubbing history —
+git history rewrites are slow and don't help once the key has been
+seen. For CI and production, prefer platform secret managers (GitHub
+Actions Secrets, Vercel environment variables, AWS Secrets Manager,
+etc.) over checked-in files.
+
 ## At a glance
 
 | Key | What it unlocks | Where to put it |
