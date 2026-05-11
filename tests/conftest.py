@@ -17,6 +17,8 @@ Both fixtures are autouse, so test files don't need to opt in.
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 
 from casecrawler.config import get_config
@@ -50,7 +52,10 @@ def _snapshot_grounding_config():
     """
 
     cfg = get_config()
-    saved = cfg.synthetic.grounding
+    # Deep copy so an in-place mutation like
+    # ``cfg.synthetic.grounding.enabled = True`` is also rolled back —
+    # not just attribute re-assignments.
+    saved = copy.deepcopy(cfg.synthetic.grounding)
     try:
         yield
     finally:
