@@ -58,10 +58,9 @@ def test_cli_ingest(tmp_path):
     runner = CliRunner()
     fake_search = AsyncMock(return_value=[_fake_doc()])
 
-    with patch("casecrawler.cli.SourceRegistry") as MockRegistry, \
+    with patch("casecrawler.cli.get_registry") as mock_get_registry, \
          patch("casecrawler.cli.PipelineOrchestrator") as MockPipeline:
-        mock_reg = MockRegistry.return_value
-        mock_reg.discover.return_value = None
+        mock_reg = mock_get_registry.return_value
         mock_source = AsyncMock()
         mock_source.name = "pubmed"
         mock_source.search = fake_search

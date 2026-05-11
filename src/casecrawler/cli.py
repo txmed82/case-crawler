@@ -9,18 +9,7 @@ import click
 
 from casecrawler.config import get_config, load_config
 from casecrawler.pipeline.orchestrator import PipelineOrchestrator
-from casecrawler.sources.registry import SourceRegistry
-
-# Import all source modules so BaseSource.__subclasses__() discovers them
-import casecrawler.sources.pubmed  # noqa: F401
-import casecrawler.sources.openfda  # noqa: F401
-import casecrawler.sources.dailymed  # noqa: F401
-import casecrawler.sources.rxnorm  # noqa: F401
-import casecrawler.sources.medrxiv  # noqa: F401
-import casecrawler.sources.clinicaltrials  # noqa: F401
-import casecrawler.sources.glass  # noqa: F401
-import casecrawler.sources.annas_archive  # noqa: F401
-import casecrawler.sources.firecrawl  # noqa: F401
+from casecrawler.sources.registry import get_registry
 
 
 @click.group()
@@ -39,8 +28,7 @@ def ingest(query: str, sources: str | None, limit: int | None) -> None:
     config = get_config()
     limit = limit or config.ingestion.default_limit_per_source
 
-    registry = SourceRegistry()
-    registry.discover()
+    registry = get_registry()
 
     source_names = sources.split(",") if sources else None
     active_sources = registry.get_sources(source_names)
@@ -135,7 +123,7 @@ def search(query: str, source: str | None, limit: int) -> None:
 @cli.command()
 def sources() -> None:
     """List available and unavailable data sources."""
-    registry = SourceRegistry()
+    registry = get_registry()
     info = registry.all_sources_info()
 
     available = [s for s in info if s["available"]]

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from casecrawler.config import get_config
 from casecrawler.pipeline.orchestrator import get_shared_orchestrator
-from casecrawler.sources.registry import SourceRegistry
+from casecrawler.sources.registry import get_registry
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +60,7 @@ async def run_ingestion(
     start = time.time()
 
     try:
-        registry = SourceRegistry()
-        registry.discover()
+        registry = get_registry()
         active_sources = registry.get_sources(source_names)
 
         # Fan out searches. Per-source failures are logged and recorded in
