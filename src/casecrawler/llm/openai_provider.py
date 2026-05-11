@@ -18,6 +18,7 @@ class OpenAIProvider(BaseLLMProvider):
             model=self._model,
             prompt=prompt,
             system=system,
+            **kwargs,
         )
 
     async def generate_structured(
@@ -30,4 +31,5 @@ class OpenAIProvider(BaseLLMProvider):
             schema=schema,
             system=system,
             provider_label="OpenAI",
+            **kwargs,
         )

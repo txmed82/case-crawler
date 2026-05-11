@@ -17,6 +17,50 @@ from pydantic import BaseModel, ValidationError
 from casecrawler.llm.base import GenerationResult, StructuredGenerationResult
 
 
+# Substrings in a 400 error message that indicate the server does not
+# support the modern ``json_schema`` response_format. We only fall back
+# to the legacy ``json_object`` shape on these — other 400s (auth,
+# malformed payload, model-not-found) should bubble up unchanged.
+_JSON_SCHEMA_UNSUPPORTED_HINTS: tuple[str, ...] = (
+    "response_format",
+    "json_schema",
+    "unsupported",
+    "invalid type",
+)
+
+
+def _is_json_schema_unsupported(exc: openai.BadRequestError) -> bool:
+    message = str(exc).lower()
+    return any(hint in message for hint in _JSON_SCHEMA_UNSUPPORTED_HINTS)
+
+
+def _usage_tokens(response: Any) -> tuple[int, int]:
+    """Return (prompt_tokens, completion_tokens), defaulting to 0.
+
+    Some OpenAI-compatible endpoints (notably older proxy routers) omit
+    the ``usage`` block on streaming-tail responses. Treat missing usage
+    as zero rather than crashing the caller mid-pipeline.
+    """
+
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return 0, 0
+    return (
+        getattr(usage, "prompt_tokens", 0) or 0,
+        getattr(usage, "completion_tokens", 0) or 0,
+    )
+
+
+def _content_or_empty(response: Any) -> str:
+    """Return ``choices[0].message.content`` or "" if the server omitted it."""
+
+    try:
+        content = response.choices[0].message.content
+    except (AttributeError, IndexError):
+        return ""
+    return content or ""
+
+
 def build_messages(prompt: str, system: str) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
     if system:
@@ -32,16 +76,19 @@ async def chat_complete(
     prompt: str,
     system: str = "",
     max_tokens: int = 4096,
+    **kwargs: Any,
 ) -> GenerationResult:
     response = await client.chat.completions.create(
         model=model,
         messages=build_messages(prompt, system),
         max_tokens=max_tokens,
+        **kwargs,
     )
+    prompt_tokens, completion_tokens = _usage_tokens(response)
     return GenerationResult(
-        text=response.choices[0].message.content,
-        input_tokens=response.usage.prompt_tokens,
-        output_tokens=response.usage.completion_tokens,
+        text=_content_or_empty(response),
+        input_tokens=prompt_tokens,
+        output_tokens=completion_tokens,
         model=response.model,
     )
 
@@ -55,6 +102,7 @@ async def chat_complete_structured(
     system: str = "",
     max_tokens: int = 4096,
     provider_label: str = "OpenAI-compatible",
+    **kwargs: Any,
 ) -> StructuredGenerationResult:
     """Generate a structured response using native ``json_schema`` mode.
 
@@ -73,7 +121,10 @@ async def chat_complete_structured(
 
     Older / non-compliant servers can fall back to plain ``json_object``
     mode by raising ``openai.BadRequestError`` -- we catch that and
-    retry once with the legacy shape.
+    retry once with the legacy shape, but ONLY when the error message
+    looks like an unsupported-response_format complaint. Other 400s
+    (auth, malformed payload, model-not-found) re-raise unchanged so
+    callers see the real failure.
     """
 
     json_schema = schema.model_json_schema()
@@ -92,8 +143,11 @@ async def chat_complete_structured(
             messages=messages,
             max_tokens=max_tokens,
             response_format=response_format,
+            **kwargs,
         )
-    except openai.BadRequestError:
+    except openai.BadRequestError as exc:
+        if not _is_json_schema_unsupported(exc):
+            raise
         # Fallback for endpoints that don't yet support json_schema mode.
         # We append the schema to the prompt as a last-resort hint so the
         # model still has structural guidance.
@@ -107,9 +161,15 @@ async def chat_complete_structured(
             messages=messages,
             max_tokens=max_tokens,
             response_format={"type": "json_object"},
+            **kwargs,
         )
 
-    content = response.choices[0].message.content
+    content = _content_or_empty(response)
+    if not content:
+        raise ValueError(
+            f"{provider_label} structured response was empty (no content "
+            "in choices[0].message)."
+        )
     try:
         raw = json.loads(content)
     except json.JSONDecodeError as exc:
@@ -123,9 +183,10 @@ async def chat_complete_structured(
             f"{provider_label} structured response did not match schema "
             f"{schema.__name__}: {exc}"
         ) from exc
+    prompt_tokens, completion_tokens = _usage_tokens(response)
     return StructuredGenerationResult(
         data=data,
-        input_tokens=response.usage.prompt_tokens,
-        output_tokens=response.usage.completion_tokens,
+        input_tokens=prompt_tokens,
+        output_tokens=completion_tokens,
         model=response.model,
     )

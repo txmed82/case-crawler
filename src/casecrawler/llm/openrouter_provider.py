@@ -21,6 +21,7 @@ class OpenRouterProvider(BaseLLMProvider):
             model=self._model,
             prompt=prompt,
             system=system,
+            **kwargs,
         )
 
     async def generate_structured(
@@ -33,4 +34,5 @@ class OpenRouterProvider(BaseLLMProvider):
             schema=schema,
             system=system,
             provider_label="OpenRouter",
+            **kwargs,
         )

@@ -13,6 +13,20 @@ from __future__ import annotations
 
 import subprocess
 
+# Cap stdout/stderr embedded in the formatted RuntimeError so a backend
+# that prints megabytes of debug output doesn't produce a multi-MB
+# exception string (logged once per failure, ballooning logs and
+# leaking arbitrary backend output downstream).
+_MAX_OUTPUT_CHARS = 2000
+
+
+def _truncate(value: str | None) -> str:
+    if not value:
+        return ""
+    if len(value) <= _MAX_OUTPUT_CHARS:
+        return value
+    return value[:_MAX_OUTPUT_CHARS] + "...(truncated)"
+
 
 def run_external_command(
     command: list[str],
@@ -51,10 +65,12 @@ def run_external_command(
             f"{timeout_seconds:.0f}s: {command!r}."
         ) from exc
     except subprocess.CalledProcessError as exc:
+        stdout = _truncate(exc.stdout)
+        stderr = _truncate(exc.stderr)
         raise RuntimeError(
             f"External {backend_label} backend failed with exit code "
             f"{exc.returncode}: {command!r}. "
-            f"stdout={exc.stdout!r} stderr={exc.stderr!r}"
+            f"stdout={stdout!r} stderr={stderr!r}"
         ) from exc
     except OSError as exc:
         raise RuntimeError(
