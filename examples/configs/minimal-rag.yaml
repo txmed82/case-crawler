@@ -1,0 +1,44 @@
+# Minimal RAG-grounded configuration.
+#
+# Use case: text-only synthetic records grounded in retrieved medical
+# literature. No imaging, no time series, no LLM keys required for the
+# default path (deterministic clinical_text_backend).
+#
+# Switch `clinical_text_backend` to "llm" once you've set ANTHROPIC_API_KEY
+# (or your preferred provider) — the rest of the file stays the same.
+
+ingestion:
+  default_limit_per_source: 25
+  sources:
+    priority: [pubmed, openfda, dailymed, rxnorm, medrxiv, clinicaltrials]
+    disabled: []
+
+chunking:
+  default_chunk_size: 500
+  overlap: 50
+
+embedding:
+  model: all-MiniLM-L6-v2
+
+storage:
+  chroma_persist_dir: ./data/chroma
+
+llm:
+  provider: anthropic        # only consulted when clinical_text_backend=llm
+  model: claude-sonnet-4-6
+
+synthetic:
+  clinical_text_backend: deterministic
+  clinical_text_noise_profile: standard
+  grounding:
+    enabled: true
+    k: 8
+    fallback: template       # use a deterministic template if no citations
+  export_formats:
+    - raw_jsonl
+    - sft_jsonl
+    - note_fact_sft_jsonl
+
+api:
+  host: 0.0.0.0
+  port: 8000

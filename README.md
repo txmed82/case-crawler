@@ -24,6 +24,10 @@ Start with the docs hub:
 
 - [Documentation index](docs/README.md)
 - [Getting started](docs/getting-started.md)
+- [BYO-key onboarding](docs/byo-keys.md) — every API key, what it unlocks, where to put it
+- [Costs and tokens](docs/cost-and-tokens.md) — rough tokens-per-case so you can budget LLM runs
+- [DPO / RL export quickstart](docs/quickstart-dpo.md)
+- [Example configs](examples/README.md) — drop-in starter `config.yaml` files
 - [Architecture](docs/architecture.md)
 - [Release packages](docs/release-packages.md)
 - [Validation and benchmarking](docs/validation-and-benchmarking.md)
