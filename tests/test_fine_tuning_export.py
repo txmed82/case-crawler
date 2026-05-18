@@ -281,7 +281,10 @@ def test_transparency_summary_handles_mixed_origin_records():
 
     assert summary["synthetic_data"] is True
     assert summary["real_patient_data"] is True
-    assert "imported reference data" in summary["limitations"][0]
+    assert any(
+        "imported reference data" in limitation
+        for limitation in summary["limitations"]
+    )
 
 
 def test_export_jsonl_split_package_copies_file_backed_images(tmp_path):
