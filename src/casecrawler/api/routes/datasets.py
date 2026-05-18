@@ -26,6 +26,10 @@ from casecrawler.export.fine_tuning import (
     summarize_export_task_coverage,
 )
 from casecrawler.export.release_audit import build_objective_coverage_audit
+from casecrawler.export.transparency import (
+    build_export_transparency_summary,
+    infer_dataset_origin_flags,
+)
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.dataset import (
     ExportFormat,
@@ -358,10 +362,29 @@ async def generate_release_package(req: ReleasePackageRequest):
                             "model_card.md",
                             "quality_report.json",
                             "release_package_summary.json",
+                            "transparency_summary.json",
                         )
                     },
                 },
             )
+            benchmark_summary = {
+                "reference_dataset_id": reference_dataset_id,
+                "reference_key": benchmark_reference_key,
+                "passed": benchmark_report.passed,
+                "overall_score": benchmark_report.overall_score,
+                "failing_metrics": benchmark_report.failing_metrics,
+                "thresholds": benchmark_report.thresholds,
+            }
+            audit_artifact_names = [
+                "benchmark_profile.json",
+                "benchmark_report.json",
+                "benchmark_suite_report.json",
+                "dataset_card.md",
+                "model_card.md",
+                "quality_report.json",
+                "release_package_summary.json",
+                "transparency_summary.json",
+            ]
             manifest = export_jsonl_split_package(
                 records,
                 temp_dir,
@@ -436,12 +459,7 @@ async def generate_release_package(req: ReleasePackageRequest):
                             ),
                         },
                         "benchmark": {
-                            "reference_dataset_id": reference_dataset_id,
-                            "reference_key": benchmark_reference_key,
-                            "passed": benchmark_report.passed,
-                            "overall_score": benchmark_report.overall_score,
-                            "failing_metrics": benchmark_report.failing_metrics,
-                            "thresholds": benchmark_report.thresholds,
+                            **benchmark_summary,
                         },
                         "benchmark_suite": {
                             "passed": benchmark_suite["passed"],
@@ -458,6 +476,19 @@ async def generate_release_package(req: ReleasePackageRequest):
                             "results": benchmark_suite["results"],
                         },
                     },
+                    "transparency_summary.json": build_export_transparency_summary(
+                        dataset_id=dataset_id,
+                        export_format=req.export_format.value,
+                        quality_report=quality_report,
+                        synthetic_data=True,
+                        real_patient_data=False,
+                        task_coverage=task_coverage,
+                        benchmark=benchmark_summary,
+                        benchmark_suite=benchmark_suite,
+                        objective_coverage=objective_coverage,
+                        audit_artifacts=audit_artifact_names,
+                        seeded_references=seeded_references,
+                    ),
                 },
             )
             payload = BytesIO()
@@ -1176,6 +1207,7 @@ def export_dataset_splits(
     benchmark_audit = {}
     benchmark_plan = None
     benchmark_suite = None
+    benchmark_summary = {}
     if benchmark_gate:
         reference_records = list(
             store.iter_records(dataset_id=benchmark_gate.reference_dataset_id)
@@ -1195,6 +1227,15 @@ def export_dataset_splits(
             "benchmark_passed": benchmark_report.passed,
             "benchmark_failing_metrics": benchmark_report.failing_metrics,
             "benchmark_thresholds": benchmark_report.thresholds,
+        }
+        benchmark_summary = {
+            "reference_dataset_id": benchmark_gate.reference_dataset_id,
+            "reference_key": benchmark_gate.reference_key,
+            "auto_selected": benchmark_gate.auto_selected,
+            "passed": benchmark_report.passed,
+            "overall_score": benchmark_report.overall_score,
+            "failing_metrics": benchmark_report.failing_metrics,
+            "thresholds": benchmark_report.thresholds,
         }
         benchmark_audit["benchmark_report.json"] = benchmark_report.model_dump(mode="json")
         benchmark_suite = benchmark_suite_from_report(
@@ -1246,6 +1287,32 @@ def export_dataset_splits(
     manifest_snapshot = store.get_manifest(dataset_id)
     try:
         with TemporaryDirectory() as temp_dir:
+            task_coverage = summarize_export_task_coverage(records, export_format)
+            origin_flags = infer_dataset_origin_flags(records)
+            audit_artifacts = {
+                "quality_report.json": report.model_dump(mode="json"),
+                "benchmark_profile.json": benchmark_profile_artifact(
+                    profile_records(records)
+                ),
+                "dataset_card.md": build_dataset_card(manifest_snapshot, records),
+                "model_card.md": build_model_card(manifest_snapshot, records),
+                **benchmark_audit,
+            }
+            audit_artifacts["transparency_summary.json"] = (
+                build_export_transparency_summary(
+                    dataset_id=dataset_id,
+                    export_format=export_format.value,
+                    quality_report=report,
+                    synthetic_data=origin_flags["synthetic_data"],
+                    real_patient_data=origin_flags["real_patient_data"],
+                    task_coverage=task_coverage,
+                    benchmark=benchmark_summary,
+                    benchmark_suite=benchmark_suite,
+                    audit_artifacts=(
+                        sorted(audit_artifacts) + ["transparency_summary.json"]
+                    ),
+                )
+            )
             manifest = export_jsonl_split_package(
                 records,
                 temp_dir,
@@ -1255,15 +1322,7 @@ def export_dataset_splits(
                 validation_ratio=validation_ratio,
                 test_ratio=test_ratio,
                 seed=seed,
-                audit_artifacts={
-                    "quality_report.json": report.model_dump(mode="json"),
-                    "benchmark_profile.json": benchmark_profile_artifact(
-                        profile_records(records)
-                    ),
-                    "dataset_card.md": build_dataset_card(manifest_snapshot, records),
-                    "model_card.md": build_model_card(manifest_snapshot, records),
-                    **benchmark_audit,
-                },
+                audit_artifacts=audit_artifacts,
             )
             payload = BytesIO()
             with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED) as archive:

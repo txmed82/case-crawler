@@ -232,9 +232,16 @@ def test_dataset_cli_exports_split_fine_tuning_package(tmp_path, monkeypatch):
         "dataset_card.md",
         "model_card.md",
         "quality_report.json",
+        "transparency_summary.json",
     }
     assert (tmp_path / "split-package" / "train.jsonl").exists()
     assert (tmp_path / "split-package" / "dataset_card.md").exists()
+    transparency = json.loads(
+        (tmp_path / "split-package" / "transparency_summary.json").read_text()
+    )
+    assert transparency["synthetic_data"] is True
+    assert transparency["real_patient_data"] is False
+    assert transparency["artifact_coverage"]["task_coverage"] == {"summarize": 3}
     assert json.loads((tmp_path / "split-package" / "quality_report.json").read_text())[
         "export_ready"
     ] is True
@@ -444,9 +451,13 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
         "model_card.md",
         "quality_report.json",
         "release_package_summary.json",
+        "transparency_summary.json",
     }
     release_summary = json.loads(
         (tmp_path / "release-package" / "release_package_summary.json").read_text()
+    )
+    transparency_summary = json.loads(
+        (tmp_path / "release-package" / "transparency_summary.json").read_text()
     )
     payloads = [
         json.loads(line)
@@ -467,6 +478,13 @@ def test_dataset_cli_generates_release_package_with_fixture_references(
     assert benchmark_suite["passed"] is True
     assert release_summary["dataset_id"] == body["dataset_id"]
     assert release_summary["task_coverage"] == manifest["task_coverage"]
+    assert transparency_summary["dataset_id"] == body["dataset_id"]
+    assert transparency_summary["record_counts"]["total"] == manifest["record_count"]
+    assert transparency_summary["artifact_coverage"]["task_coverage"] == (
+        manifest["task_coverage"]
+    )
+    assert transparency_summary["quality_gates"]["multimodal_release_ready"] is True
+    assert "clinical diagnosis or treatment" in transparency_summary["not_intended_use"]
     assert release_summary["objective_coverage"]["complete"] is True
     assert release_summary["objective_coverage"]["missing"] == []
     assert (

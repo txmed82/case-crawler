@@ -2895,6 +2895,12 @@ def _verify_package_audit_artifacts(
                 manifest,
                 issues,
             )
+        elif file_name == "transparency_summary.json":
+            _verify_transparency_summary_artifact(
+                package_path / file_name,
+                manifest,
+                issues,
+            )
 
 
 def _verify_benchmark_profile_artifact(
@@ -3692,6 +3698,113 @@ def _verify_release_package_summary_artifact(
     else:
         _verify_release_summary_benchmark_suite(benchmark_suite, issues)
     _verify_release_summary_objective_coverage(payload, quality, issues)
+
+
+def _verify_transparency_summary_artifact(
+    path: Path,
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    field_prefix = "audit_artifacts.transparency_summary.json"
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        issues.append(
+            {
+                "field": field_prefix,
+                "message": f"Transparency summary is invalid JSON: {exc}.",
+            }
+        )
+        return
+    if not isinstance(payload, dict):
+        issues.append(
+            {
+                "field": field_prefix,
+                "message": "Transparency summary must be a JSON object.",
+            }
+        )
+        return
+    manifest_dataset_id = manifest.get("dataset_id")
+    if (
+        isinstance(manifest_dataset_id, str)
+        and payload.get("dataset_id") != manifest_dataset_id
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.dataset_id",
+                "message": (
+                    "Transparency summary dataset_id does not match package "
+                    "dataset_id."
+                ),
+            }
+        )
+    if payload.get("synthetic_data") is not True:
+        issues.append(
+            {
+                "field": f"{field_prefix}.synthetic_data",
+                "message": "Transparency summary must mark synthetic_data true.",
+            }
+        )
+    if payload.get("real_patient_data") is not False:
+        issues.append(
+            {
+                "field": f"{field_prefix}.real_patient_data",
+                "message": "Transparency summary must mark real_patient_data false.",
+            }
+        )
+    record_counts = payload.get("record_counts")
+    total_records = record_counts.get("total") if isinstance(record_counts, dict) else None
+    if (
+        not isinstance(record_counts, dict)
+        or not isinstance(total_records, int)
+        or isinstance(total_records, bool)
+    ):
+        issues.append(
+            {
+                "field": f"{field_prefix}.record_counts",
+                "message": "Transparency summary must include integer record counts.",
+            }
+        )
+    elif total_records != manifest.get("record_count"):
+        issues.append(
+            {
+                "field": f"{field_prefix}.record_counts.total",
+                "message": (
+                    "Transparency summary total records does not match manifest "
+                    "record_count."
+                ),
+            }
+        )
+    artifact_coverage = payload.get("artifact_coverage")
+    if not isinstance(artifact_coverage, dict):
+        issues.append(
+            {
+                "field": f"{field_prefix}.artifact_coverage",
+                "message": "Transparency summary artifact_coverage must be an object.",
+            }
+        )
+    else:
+        task_coverage = artifact_coverage.get("task_coverage")
+        manifest_task_coverage = manifest.get("task_coverage")
+        if isinstance(manifest_task_coverage, dict) and task_coverage != manifest_task_coverage:
+            issues.append(
+                {
+                    "field": f"{field_prefix}.artifact_coverage.task_coverage",
+                    "message": (
+                        "Transparency summary task_coverage does not match "
+                        "manifest task_coverage."
+                    ),
+                }
+            )
+    for key in ("intended_use", "not_intended_use", "limitations", "audit_artifacts"):
+        value = payload.get(key)
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            issues.append(
+                {
+                    "field": f"{field_prefix}.{key}",
+                    "message": f"Transparency summary {key} must be a string list.",
+                }
+            )
 
 
 def _verify_release_summary_quality(

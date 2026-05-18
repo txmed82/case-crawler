@@ -232,6 +232,7 @@ def test_dataset_api_exports_split_fine_tuning_package(tmp_path, monkeypatch):
             "quality_report.json",
             "test.jsonl",
             "train.jsonl",
+            "transparency_summary.json",
             "validation.jsonl",
         ]
         manifest = json.loads(archive.read("manifest.json"))
@@ -241,6 +242,9 @@ def test_dataset_api_exports_split_fine_tuning_package(tmp_path, monkeypatch):
         assert manifest["splits"]["validation"]["record_count"] == 1
         assert manifest["splits"]["test"]["record_count"] == 1
         assert json.loads(archive.read("quality_report.json"))["export_ready"] is True
+        transparency = json.loads(archive.read("transparency_summary.json"))
+        assert transparency["synthetic_data"] is True
+        assert transparency["artifact_coverage"]["task_coverage"] == {"summarize": 3}
         benchmark_profile = json.loads(archive.read("benchmark_profile.json"))
         assert benchmark_profile["artifact_type"] == "casecrawler_benchmark_profile"
         assert benchmark_profile["profile"]["dataset_id"] == dataset_id
@@ -381,6 +385,7 @@ def test_dataset_api_generates_release_package_with_fixture_references(
             "test.jsonl",
             *time_series_files,
             "train.jsonl",
+            "transparency_summary.json",
             "validation.jsonl",
         ]
         manifest = json.loads(archive.read("manifest.json"))
@@ -388,6 +393,7 @@ def test_dataset_api_generates_release_package_with_fixture_references(
         benchmark = json.loads(archive.read("benchmark_report.json"))
         benchmark_suite = json.loads(archive.read("benchmark_suite_report.json"))
         summary = json.loads(archive.read("release_package_summary.json"))
+        transparency = json.loads(archive.read("transparency_summary.json"))
         payloads = [
             json.loads(line)
             for name in ("train.jsonl", "validation.jsonl", "test.jsonl")
@@ -418,6 +424,10 @@ def test_dataset_api_generates_release_package_with_fixture_references(
     assert summary["task_coverage"] == manifest["task_coverage"]
     assert summary["objective_coverage"]["complete"] is True
     assert summary["objective_coverage"]["missing"] == []
+    assert transparency["synthetic_data"] is True
+    assert transparency["real_patient_data"] is False
+    assert transparency["artifact_coverage"]["task_coverage"] == manifest["task_coverage"]
+    assert transparency["quality_gates"]["multimodal_release_ready"] is True
     assert summary["objective_coverage"]["criteria"]["labs"]["satisfied"] is True
     assert summary["objective_coverage"]["criteria"]["vitals"]["satisfied"] is True
     assert (
