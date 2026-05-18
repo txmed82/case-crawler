@@ -24,12 +24,14 @@ def summarize_golden_case(record: SyntheticRecord) -> dict[str, object]:
         "issue_count": 0 if record.validation is None else len(record.validation.issues),
         "diagnoses": sorted(set(diagnoses)),
         "procedures": sorted(set(procedures)),
-        "lab_names": [lab.name for lab in record.labs],
-        "vital_names": [vital.name for vital in record.vitals],
-        "medication_names": [medication.name for medication in record.medication_history],
-        "order_types": [order.order_type for order in record.orders],
+        "lab_names": sorted(lab.name for lab in record.labs),
+        "vital_names": sorted(vital.name for vital in record.vitals),
+        "medication_names": sorted(
+            medication.name for medication in record.medication_history
+        ),
+        "order_types": sorted(order.order_type for order in record.orders),
         "note_types": sorted({document.note_type for document in record.documents}),
-        "time_series_channels": [channel.name for channel in record.time_series],
+        "time_series_channels": sorted(channel.name for channel in record.time_series),
         "artifact_counts": {
             "encounters": len(record.encounters),
             "labs": len(record.labs),

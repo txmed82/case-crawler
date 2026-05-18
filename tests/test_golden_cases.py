@@ -9,7 +9,7 @@ from casecrawler.validation.golden_cases import load_golden_summary, summarize_g
 from casecrawler.validation.synthetic_validator import SyntheticValidator
 
 
-FIXTURE_DIR = Path("tests/fixtures/golden_cases")
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "golden_cases"
 
 
 def test_sepsis_moderate_golden_case_summary_is_stable():

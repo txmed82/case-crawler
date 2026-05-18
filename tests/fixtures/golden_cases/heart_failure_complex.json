@@ -19,17 +19,17 @@
   ],
   "issue_count": 0,
   "lab_names": [
+    "Albumin",
     "BNP",
     "Creatinine",
-    "Sodium",
-    "Albumin",
-    "Magnesium"
+    "Magnesium",
+    "Sodium"
   ],
   "medication_names": [
     "Furosemide",
-    "Nitroglycerin",
+    "Heparin prophylaxis",
     "Insulin glargine",
-    "Heparin prophylaxis"
+    "Nitroglycerin"
   ],
   "note_types": [
     "discharge_summary",
@@ -49,31 +49,31 @@
     "medication",
     "medication",
     "medication",
-    "procedure",
-    "nursing"
+    "nursing",
+    "procedure"
   ],
   "procedures": [
     "specialty consultation"
   ],
   "time_series_channels": [
+    "ecg_lead_ii",
     "heart_rate",
-    "systolic_bp",
-    "spo2",
-    "lactate",
+    "lab_albumin",
     "lab_bnp",
     "lab_creatinine",
-    "lab_sodium",
-    "lab_albumin",
     "lab_magnesium",
-    "ecg_lead_ii",
-    "pleth"
+    "lab_sodium",
+    "lactate",
+    "pleth",
+    "spo2",
+    "systolic_bp"
   ],
   "topic": "heart failure exacerbation",
   "vital_names": [
     "HR",
-    "SBP",
-    "SpO2",
+    "Pain score",
     "Respiratory rate",
-    "Pain score"
+    "SBP",
+    "SpO2"
   ]
 }

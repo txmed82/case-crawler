@@ -17,9 +17,9 @@
   ],
   "issue_count": 0,
   "lab_names": [
-    "WBC",
+    "Creatinine",
     "Lactate",
-    "Creatinine"
+    "WBC"
   ],
   "medication_names": [
     "Acetaminophen",
@@ -44,15 +44,15 @@
   ],
   "procedures": [],
   "time_series_channels": [
-    "heart_rate",
-    "systolic_bp",
-    "spo2",
-    "lactate",
-    "lab_wbc",
-    "lab_lactate",
-    "lab_creatinine",
     "ecg_lead_ii",
-    "pleth"
+    "heart_rate",
+    "lab_creatinine",
+    "lab_lactate",
+    "lab_wbc",
+    "lactate",
+    "pleth",
+    "spo2",
+    "systolic_bp"
   ],
   "topic": "sepsis",
   "vital_names": [
