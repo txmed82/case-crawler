@@ -854,6 +854,10 @@ def test_dataset_cli_blocks_export_until_required_human_review(tmp_path, monkeyp
             "sft_jsonl",
         ],
     )
+    summary_before = runner.invoke(
+        cli,
+        ["reviews", "summary", "--dataset-id", dataset_id],
+    )
     marked = runner.invoke(
         cli,
         [
@@ -865,6 +869,10 @@ def test_dataset_cli_blocks_export_until_required_human_review(tmp_path, monkeyp
             "--reviewer",
             "clinical-reviewer",
         ],
+    )
+    summary_after = runner.invoke(
+        cli,
+        ["reviews", "summary", "--dataset-id", dataset_id],
     )
     exported = runner.invoke(
         cli,
@@ -881,7 +889,10 @@ def test_dataset_cli_blocks_export_until_required_human_review(tmp_path, monkeyp
 
     assert blocked.exit_code != 0
     assert "human_review.missing" in blocked.output
+    assert json.loads(summary_before.output)["missing_required_review"] == 1
     assert marked.exit_code == 0
+    assert json.loads(summary_after.output)["approved"] == 1
+    assert json.loads(summary_after.output)["missing_required_review"] == 0
     assert exported.exit_code == 0
     assert (tmp_path / "synthetic.jsonl").exists()
 

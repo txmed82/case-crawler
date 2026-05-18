@@ -263,8 +263,12 @@ def test_dataset_store_tracks_human_review_queue_and_effective_approval(tmp_path
     store.save_record(record)
 
     queue = store.list_review_queue(dataset_id="ds-1")
+    summary = store.human_review_summary(dataset_id="ds-1")
     assert queue[0].record_id == "rec-review"
     assert queue[0].blocking_issue_count == 1
+    assert summary.total_records == 1
+    assert summary.pending == 1
+    assert summary.blocking_issue_records == 1
 
     reviewed = store.save_human_review(
         "rec-review",
@@ -276,6 +280,9 @@ def test_dataset_store_tracks_human_review_queue_and_effective_approval(tmp_path
     )
 
     assert store.effective_approved(reviewed) is True
+    reviewed_summary = store.human_review_summary(dataset_id="ds-1")
+    assert reviewed_summary.pending == 0
+    assert reviewed_summary.approved == 1
     assert store.list_review_queue(dataset_id="ds-1") == []
     assert store.list_records(dataset_id="ds-1", approved=True)[0].record_id == "rec-review"
     assert store.get_manifest("ds-1").approved_count == 1

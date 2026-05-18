@@ -833,6 +833,14 @@ def list_dataset_review_queue(
     }
 
 
+@router.get("/datasets/{dataset_id}/reviews/summary")
+def get_dataset_review_summary(dataset_id: str):
+    store = DatasetStore.shared()
+    if not store.dataset_exists(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return store.human_review_summary(dataset_id=dataset_id).model_dump()
+
+
 @router.get("/datasets/{dataset_id}/quality")
 def get_dataset_quality(dataset_id: str):
     from casecrawler.validation.benchmark_selection import build_benchmark_plan_summary
