@@ -354,11 +354,17 @@ def _discharge_readiness_text(record: SyntheticRecord, clinical_signals: str) ->
 
 
 def _numeric_reference_flag(value: float | str, low: float | None, high: float | None) -> str | None:
-    if not isinstance(value, (int, float)):
+    numeric_value = value
+    if isinstance(value, str):
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(numeric_value, (int, float)):
         return None
-    if low is not None and value < low:
+    if low is not None and numeric_value < low:
         return "low"
-    if high is not None and value > high:
+    if high is not None and numeric_value > high:
         return "high"
     return None
 
