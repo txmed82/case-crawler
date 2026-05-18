@@ -10,6 +10,7 @@ from casecrawler.models.synthetic import (
     Code,
     ComplexityProfile,
     ImagingAsset,
+    LabObservation,
     Modality,
 )
 
@@ -97,6 +98,86 @@ def test_text_generator_adds_messy_variants_and_extracted_facts():
         "encounter_id"
     ] == record.encounters[0].encounter_id
     assert documents_by_type["ed_note"].extracted_facts["messy_text_profile"] == "standard"
+
+
+def test_text_generator_surfaces_clinical_signals_across_note_styles():
+    req = GenerationRequest(
+        topic="sepsis",
+        modalities=[
+            Modality.STRUCTURED_EHR,
+            Modality.CLINICAL_TEXT,
+            Modality.LABS,
+            Modality.VITALS,
+        ],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0)
+
+    updated = TextGenerator().add_documents(record)
+    documents_by_type = {document.note_type: document for document in updated.documents}
+
+    assert "Clinical signals:" in documents_by_type["ed_note"].clean_text
+    assert "Lactate" in documents_by_type["ed_note"].clean_text
+    assert "hypotension" in documents_by_type["ed_note"].clean_text
+    assert "Bedside focus:" in documents_by_type["nursing_note"].clean_text
+    assert "antibiotic timing" in documents_by_type["nursing_note"].clean_text
+    assert "Discharge readiness considerations:" in documents_by_type[
+        "discharge_summary"
+    ].clean_text
+
+
+def test_text_generator_keeps_signal_context_in_message_noise_profile():
+    req = GenerationRequest(
+        topic="heart failure exacerbation",
+        modalities=[
+            Modality.STRUCTURED_EHR,
+            Modality.CLINICAL_TEXT,
+            Modality.LABS,
+            Modality.VITALS,
+        ],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0)
+
+    updated = TextGenerator(noise_profile="message").add_documents(record)
+    ed_note = next(document for document in updated.documents if document.note_type == "ed_note")
+
+    assert "Clinical signals:" in ed_note.clean_text
+    assert "BNP" in ed_note.clean_text
+    assert "oxygenation" in ed_note.clean_text
+    assert "Clinical signals:" in ed_note.messy_text
+
+
+def test_text_generator_clinical_signals_include_numeric_string_labs():
+    req = GenerationRequest(
+        topic="custom syndrome",
+        modalities=[
+            Modality.STRUCTURED_EHR,
+            Modality.CLINICAL_TEXT,
+            Modality.LABS,
+            Modality.VITALS,
+        ],
+        cohort_constraints={"base_time": "2026-01-01T00:00:00"},
+    )
+    record = StructuredGenerator().generate("ds-1", req, 0).model_copy(
+        update={
+            "labs": [
+                LabObservation(
+                    name="Custom biomarker",
+                    value="2.4",
+                    unit="ng/mL",
+                    reference_low=0.0,
+                    reference_high=1.0,
+                    effective_time="2026-01-01T01:00:00",
+                )
+            ]
+        }
+    )
+
+    updated = TextGenerator().add_documents(record)
+    ed_note = next(document for document in updated.documents if document.note_type == "ed_note")
+
+    assert "Custom biomarker 2.4 ng/mL" in ed_note.clean_text
 
 
 def test_text_generator_includes_allergy_details_in_notes_and_facts():

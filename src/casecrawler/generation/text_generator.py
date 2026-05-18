@@ -135,9 +135,13 @@ class TextGenerator:
             for encounter in record.encounters
             for procedure in encounter.procedures
         )
+        clinical_signals = _clinical_signal_text(record)
+        bedside_focus = _bedside_focus_text(record, clinical_signals)
+        discharge_readiness = _discharge_readiness_text(record, clinical_signals)
         ed_note = (
             f"{record.patient.age}-year-old {record.patient.sex} patient presents "
             f"with {record.topic}. Initial vitals: {vitals}. Initial labs: {labs}. "
+            f"Clinical signals: {clinical_signals}. "
             f"Encounter diagnoses: {diagnoses or 'none documented'}. "
             f"Procedures performed or planned: {procedures or 'none documented'}. "
             "Assessment and plan document a synthetic but clinically plausible "
@@ -163,6 +167,7 @@ class TextGenerator:
                 (
                     f"Synthetic progress note for {record.topic}. Vitals trend is "
                     f"reviewed with current values: {vitals}. Abnormal labs include {labs}. "
+                    f"Clinical signals: {clinical_signals}. "
                     f"Active diagnoses include {diagnoses or 'none documented'}, with "
                     f"procedures tracked as {procedures or 'none documented'}. "
                     f"Allergies reviewed: {allergies or 'none documented'}. "
@@ -181,7 +186,8 @@ class TextGenerator:
                     f"diagnosis awareness ({diagnoses or 'none documented'}), "
                     f"allergy awareness ({allergies or 'none documented'}), "
                     f"active orders ({orders or 'none documented'}), "
-                    f"and response to active medications: {medications or 'none documented'}."
+                    f"and response to active medications: {medications or 'none documented'}. "
+                    f"Bedside focus: {bedside_focus}."
                 ),
                 noise_profile=self._noise_profile,
             ),
@@ -258,7 +264,8 @@ class TextGenerator:
                     f"procedures ({procedures or 'none documented'}), treatments, "
                     f"allergies ({allergies or 'none documented'}), "
                     f"orders ({orders or 'none documented'}), "
-                    "medication reconciliation, and follow-up needs."
+                    "medication reconciliation, and follow-up needs. "
+                    f"Discharge readiness considerations: {discharge_readiness}."
                 ),
                 noise_profile=self._noise_profile,
             ),
@@ -279,6 +286,87 @@ class TextGenerator:
             ),
         ]
         return record.model_copy(update={"documents": [*record.documents, *documents]})
+
+
+def _clinical_signal_text(record: SyntheticRecord) -> str:
+    signals: list[str] = []
+    abnormal_labs = [
+        f"{lab.name} {lab.value} {lab.unit}".strip()
+        for lab in record.labs
+        if lab.flag or _numeric_reference_flag(lab.value, lab.reference_low, lab.reference_high)
+    ]
+    abnormal_vitals = [
+        f"{vital.name} {vital.value}{vital.unit} ({direction})"
+        for vital in record.vitals
+        if (direction := _vital_abnormality(vital.name, vital.value)) is not None
+    ]
+    if abnormal_labs:
+        signals.append("abnormal labs include " + ", ".join(abnormal_labs[:4]))
+    if abnormal_vitals:
+        signals.append("abnormal vitals include " + ", ".join(abnormal_vitals[:4]))
+
+    topic = record.topic.lower()
+    vital_lookup = {vital.name.lower(): vital.value for vital in record.vitals}
+    lab_lookup = {lab.name.lower(): lab.value for lab in record.labs}
+    if "sepsis" in topic:
+        if lab_lookup.get("lactate", 0) >= 2:
+            signals.append("elevated lactate raises concern for impaired perfusion")
+        if vital_lookup.get("sbp", 999) <= 95:
+            signals.append("borderline hypotension requires close reassessment")
+        signals.append("antibiotic timing and source evaluation are tracked")
+    elif "heart failure" in topic:
+        if "bnp" in lab_lookup:
+            signals.append("BNP elevation supports volume overload physiology")
+        if vital_lookup.get("spo2", 100) < 94:
+            signals.append("oxygenation and diuretic response require trending")
+    elif "pneumonia" in topic:
+        if vital_lookup.get("spo2", 100) < 94:
+            signals.append("oxygenation and respiratory effort require reassessment")
+        signals.append("antimicrobial response and fever curve are tracked")
+    elif "diabetic ketoacidosis" in topic or "dka" in topic:
+        signals.append("anion gap closure and potassium safety require trending")
+    elif "stroke" in topic:
+        signals.append("neurologic trajectory and time-sensitive therapy eligibility are tracked")
+
+    return "; ".join(dict.fromkeys(signals)) or "no high-risk synthetic signals identified"
+
+
+def _bedside_focus_text(record: SyntheticRecord, clinical_signals: str) -> str:
+    topic = record.topic.lower()
+    if "sepsis" in topic:
+        return f"antibiotic timing, perfusion checks, intake/output, and {clinical_signals}"
+    if "heart failure" in topic:
+        return f"oxygenation, urine output, daily weight trend, and {clinical_signals}"
+    if "pneumonia" in topic:
+        return f"oxygenation, respiratory effort, fever trend, and {clinical_signals}"
+    return f"safety checks, symptom trajectory, medication response, and {clinical_signals}"
+
+
+def _discharge_readiness_text(record: SyntheticRecord, clinical_signals: str) -> str:
+    topic = record.topic.lower()
+    if "sepsis" in topic:
+        return f"hemodynamic stability, culture follow-up, antimicrobial plan, and {clinical_signals}"
+    if "heart failure" in topic:
+        return f"stable oxygenation, diuretic plan, weight monitoring, and {clinical_signals}"
+    if "pneumonia" in topic:
+        return f"oxygen stability, antibiotic completion plan, follow-up imaging needs, and {clinical_signals}"
+    return f"stable observations, medication reconciliation, follow-up plan, and {clinical_signals}"
+
+
+def _numeric_reference_flag(value: float | str, low: float | None, high: float | None) -> str | None:
+    numeric_value = value
+    if isinstance(value, str):
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(numeric_value, (int, float)):
+        return None
+    if low is not None and numeric_value < low:
+        return "low"
+    if high is not None and numeric_value > high:
+        return "high"
+    return None
 
 
 def _document(
@@ -445,6 +533,8 @@ def _heavy_messy_text(note_type: str, shorthand: str) -> str:
     text = text.replace(" and ", " + ").replace(" or ", " / ")
     text = text.replace("documented", "doc'd").replace("follow-up", "f/u")
     text = text.replace("synthetic", "synth").replace("Synthetic", "Synth")
+    if "synth" not in text.lower():
+        text = f"{text} synth"
     if note_type in {"radiology_report", "lab_report"}:
         text = _ocr_style_text(note_type, text)
     return text
