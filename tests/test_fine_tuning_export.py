@@ -25,6 +25,7 @@ from casecrawler.export.fine_tuning import (
     verify_fhir_ndjson_export,
     verify_jsonl_split_package,
 )
+from casecrawler.export.transparency import build_export_transparency_summary
 from casecrawler.models.synthetic import (
     AllergyIntolerance,
     ClinicalDocument,
@@ -48,6 +49,7 @@ from casecrawler.validation.benchmark import (
     benchmark_profile_artifact,
     profile_records,
 )
+from casecrawler.validation.quality import build_dataset_quality_report
 
 
 def test_export_sft_record_contains_messages():
@@ -191,6 +193,60 @@ def test_export_jsonl_split_package_writes_manifest_and_stable_splits(tmp_path):
         "clinical_lab_observation_interpretation",
         "clinical_vital_observation_interpretation",
     }
+
+
+def test_export_jsonl_split_package_verifies_transparency_summary(tmp_path):
+    records = [
+        _multimodal_record().model_copy(
+            update={"record_id": f"rec-{index}", "dataset_id": "ds-transparent"}
+        )
+        for index in range(2)
+    ]
+    quality_report = build_dataset_quality_report("ds-transparent", records)
+    task_coverage = {
+        "clinical_lab_observation_interpretation": 2,
+        "clinical_vital_observation_interpretation": 2,
+    }
+    transparency_summary = build_export_transparency_summary(
+        dataset_id="ds-transparent",
+        export_format="clinical_observation_jsonl",
+        quality_report=quality_report,
+        task_coverage=task_coverage,
+        audit_artifacts=["quality_report.json", "transparency_summary.json"],
+    )
+
+    export_jsonl_split_package(
+        records,
+        tmp_path,
+        "clinical_observation_jsonl",
+        dataset_id="ds-transparent",
+        audit_artifacts={"transparency_summary.json": transparency_summary},
+    )
+    valid = verify_jsonl_split_package(tmp_path)
+
+    assert valid["valid"] is True
+    payload = json.loads((tmp_path / "transparency_summary.json").read_text())
+    assert payload["schema_version"] == "casecrawler.transparency.v1"
+    assert payload["synthetic_data"] is True
+    assert payload["real_patient_data"] is False
+
+    payload["artifact_coverage"]["task_coverage"] = {"wrong": 1}
+    (tmp_path / "transparency_summary.json").write_text(json.dumps(payload))
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    manifest["files"]["transparency_summary.json"]["byte_size"] = (
+        tmp_path / "transparency_summary.json"
+    ).stat().st_size
+    manifest["files"]["transparency_summary.json"]["sha256"] = hashlib.sha256(
+        (tmp_path / "transparency_summary.json").read_bytes()
+    ).hexdigest()
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+
+    invalid = verify_jsonl_split_package(tmp_path)
+    issue_fields = {issue["field"] for issue in invalid["issues"]}
+    assert (
+        "audit_artifacts.transparency_summary.json."
+        "artifact_coverage.task_coverage"
+    ) in issue_fields
 
 
 def test_export_jsonl_split_package_copies_file_backed_images(tmp_path):

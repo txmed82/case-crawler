@@ -344,5 +344,6 @@ def _has_required_audit_artifacts(manifest: dict[str, Any]) -> bool:
         "model_card.md",
         "quality_report.json",
         "release_package_summary.json",
+        "transparency_summary.json",
     }
     return required.issubset(audit_artifacts)
