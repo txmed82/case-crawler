@@ -2324,6 +2324,60 @@ def benchmark_dataset(
         click.echo(f"Warning: {warning}")
 
 
+@cli.command("benchmark-open-source")
+@click.option("--count", default=2, type=click.IntRange(min=1, max=20), show_default=True)
+@click.option(
+    "--topic",
+    "topics",
+    multiple=True,
+    help=(
+        "Topic to benchmark. May be passed multiple times. Defaults to the "
+        "built-in open-source smoke scenarios."
+    ),
+)
+@click.option("--output", default=None, help="Optional JSON report path")
+def benchmark_open_source(
+    count: int,
+    topics: tuple[str, ...],
+    output: str | None,
+) -> None:
+    """Run offline open-source generation smoke benchmarks."""
+    from casecrawler.evaluation.open_source_suite import (
+        OpenSourceBenchmarkSuite,
+        default_open_source_requests,
+    )
+    from casecrawler.models.dataset import GenerationRequest
+    from casecrawler.models.synthetic import Modality
+
+    if topics:
+        modalities = [
+            Modality.STRUCTURED_EHR,
+            Modality.CLINICAL_TEXT,
+            Modality.LABS,
+            Modality.VITALS,
+            Modality.TIME_SERIES,
+        ]
+        requests = [
+            GenerationRequest(topic=topic, count=count, modalities=modalities)
+            for topic in topics
+        ]
+    else:
+        requests = default_open_source_requests(count=count)
+    report = OpenSourceBenchmarkSuite().run_generation_smoke(requests=requests)
+    payload = report.to_report()
+    if output:
+        try:
+            with open(output, "w") as f:
+                f.write(json.dumps(payload, indent=2) + "\n")
+        except OSError as exc:
+            raise click.ClickException(
+                f"Failed to write open-source benchmark report to {output}: {exc}"
+            ) from exc
+    click.echo(json.dumps(payload, indent=2))
+    if not report.passed:
+        raise click.ClickException("Open-source benchmark suite failed.")
+
+
 @cli.command("export-benchmark-profile")
 @click.option("--dataset-id", required=True, help="Dataset id to profile")
 @click.option("--output", required=True, help="Benchmark profile JSON output path")
