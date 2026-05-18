@@ -50,6 +50,16 @@ def test_default_open_source_requests_cover_core_scenarios():
     assert all(Modality.TIME_SERIES in request.modalities for request in requests)
 
 
+def test_open_source_benchmark_suite_preserves_empty_request_list():
+    result = OpenSourceBenchmarkSuite().run_generation_smoke(requests=[])
+
+    report = result.to_report()
+    assert report["passed"] is True
+    assert report["generated"] == 0
+    assert report["approved"] == 0
+    assert report["scenarios"] == []
+
+
 def test_cli_benchmark_open_source_outputs_json_report(tmp_path):
     output = tmp_path / "open-source-benchmark.json"
     runner = CliRunner()

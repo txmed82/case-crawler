@@ -84,7 +84,10 @@ class OpenSourceBenchmarkSuite:
         requests: list[GenerationRequest] | None = None,
     ) -> OpenSourceBenchmarkResult:
         scenarios = []
-        for req in requests or default_open_source_requests():
+        resolved_requests = (
+            requests if requests is not None else default_open_source_requests()
+        )
+        for req in resolved_requests:
             result = await self._pipeline_factory().generate(req)
             scenarios.append(
                 _scenario_result(
