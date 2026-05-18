@@ -211,6 +211,8 @@ def test_export_jsonl_split_package_verifies_transparency_summary(tmp_path):
         dataset_id="ds-transparent",
         export_format="clinical_observation_jsonl",
         quality_report=quality_report,
+        synthetic_data=True,
+        real_patient_data=False,
         task_coverage=task_coverage,
         audit_artifacts=["quality_report.json", "transparency_summary.json"],
     )
@@ -243,6 +245,7 @@ def test_export_jsonl_split_package_verifies_transparency_summary(tmp_path):
 
     invalid = verify_jsonl_split_package(tmp_path)
     issue_fields = {issue["field"] for issue in invalid["issues"]}
+    assert invalid["valid"] is False
     assert (
         "audit_artifacts.transparency_summary.json."
         "artifact_coverage.task_coverage"

@@ -3753,9 +3753,11 @@ def _verify_transparency_summary_artifact(
             }
         )
     record_counts = payload.get("record_counts")
-    if not isinstance(record_counts, dict) or not isinstance(
-        record_counts.get("total"),
-        int,
+    total_records = record_counts.get("total") if isinstance(record_counts, dict) else None
+    if (
+        not isinstance(record_counts, dict)
+        or not isinstance(total_records, int)
+        or isinstance(total_records, bool)
     ):
         issues.append(
             {
@@ -3763,7 +3765,7 @@ def _verify_transparency_summary_artifact(
                 "message": "Transparency summary must include integer record counts.",
             }
         )
-    elif record_counts["total"] != manifest.get("record_count"):
+    elif total_records != manifest.get("record_count"):
         issues.append(
             {
                 "field": f"{field_prefix}.record_counts.total",

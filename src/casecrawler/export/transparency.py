@@ -1,8 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from casecrawler.models.evaluation import DatasetQualityReport
+from casecrawler.models.synthetic import SyntheticRecord
+
+
+SYNTHETIC_REFERENCE_GENERATORS = frozenset(
+    {
+        "casecrawler-bundled-reference-fixture",
+        "synthea",
+        "synthea-import",
+        "synthea-run",
+    }
+)
 
 
 def build_export_transparency_summary(
@@ -10,6 +22,8 @@ def build_export_transparency_summary(
     dataset_id: str,
     export_format: str,
     quality_report: DatasetQualityReport,
+    synthetic_data: bool,
+    real_patient_data: bool,
     task_coverage: dict[str, int] | None = None,
     benchmark: dict[str, Any] | None = None,
     benchmark_suite: dict[str, Any] | None = None,
@@ -22,8 +36,8 @@ def build_export_transparency_summary(
         "schema_version": "casecrawler.transparency.v1",
         "dataset_id": dataset_id,
         "export_format": export_format,
-        "synthetic_data": True,
-        "real_patient_data": False,
+        "synthetic_data": synthetic_data,
+        "real_patient_data": real_patient_data,
         "intended_use": [
             "synthetic healthcare AI training",
             "fine-tuning experiments",
@@ -86,6 +100,38 @@ def build_export_transparency_summary(
             "Human review status and validation reports should be checked before production use.",
         ],
     }
+
+
+def infer_dataset_origin_flags(records: Iterable[SyntheticRecord]) -> dict[str, bool]:
+    """Infer high-level dataset origin flags from record provenance."""
+    record_list = list(records)
+    if not record_list:
+        return {"synthetic_data": True, "real_patient_data": False}
+    real_patient_data = any(_record_may_contain_real_patient_data(record) for record in record_list)
+    synthetic_data = not real_patient_data
+    return {
+        "synthetic_data": synthetic_data,
+        "real_patient_data": real_patient_data,
+    }
+
+
+def _record_may_contain_real_patient_data(record: SyntheticRecord) -> bool:
+    generator = record.provenance.generator
+    if generator == "huggingface-reference-import":
+        return True
+    if generator in SYNTHETIC_REFERENCE_GENERATORS:
+        return False
+    return bool(record.metadata.get("reference_dataset")) and not _metadata_marks_synthetic(
+        record.metadata,
+    )
+
+
+def _metadata_marks_synthetic(metadata: dict[str, Any]) -> bool:
+    value = metadata.get("synthetic")
+    if isinstance(value, bool):
+        return value
+    source = metadata.get("reference_dataset")
+    return isinstance(source, str) and "synthetic" in source.lower()
 
 
 def _benchmark_suite_summary(benchmark_suite: dict[str, Any] | None) -> dict[str, Any]:

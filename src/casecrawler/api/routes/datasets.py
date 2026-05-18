@@ -26,7 +26,10 @@ from casecrawler.export.fine_tuning import (
     summarize_export_task_coverage,
 )
 from casecrawler.export.release_audit import build_objective_coverage_audit
-from casecrawler.export.transparency import build_export_transparency_summary
+from casecrawler.export.transparency import (
+    build_export_transparency_summary,
+    infer_dataset_origin_flags,
+)
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
 from casecrawler.models.dataset import (
     ExportFormat,
@@ -477,6 +480,8 @@ async def generate_release_package(req: ReleasePackageRequest):
                         dataset_id=dataset_id,
                         export_format=req.export_format.value,
                         quality_report=quality_report,
+                        synthetic_data=True,
+                        real_patient_data=False,
                         task_coverage=task_coverage,
                         benchmark=benchmark_summary,
                         benchmark_suite=benchmark_suite,
@@ -1283,6 +1288,7 @@ def export_dataset_splits(
     try:
         with TemporaryDirectory() as temp_dir:
             task_coverage = summarize_export_task_coverage(records, export_format)
+            origin_flags = infer_dataset_origin_flags(records)
             audit_artifacts = {
                 "quality_report.json": report.model_dump(mode="json"),
                 "benchmark_profile.json": benchmark_profile_artifact(
@@ -1297,6 +1303,8 @@ def export_dataset_splits(
                     dataset_id=dataset_id,
                     export_format=export_format.value,
                     quality_report=report,
+                    synthetic_data=origin_flags["synthetic_data"],
+                    real_patient_data=origin_flags["real_patient_data"],
                     task_coverage=task_coverage,
                     benchmark=benchmark_summary,
                     benchmark_suite=benchmark_suite,
