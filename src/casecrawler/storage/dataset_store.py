@@ -239,7 +239,7 @@ class DatasetStore:
         for record in self._iter_record_rows(dataset_id=dataset_id):
             summary.total_records += 1
             review = self.get_human_review(record)
-            if review is None:
+            if review is None or review.status == HumanReviewStatus.PENDING:
                 summary.pending += 1
             elif review.status == HumanReviewStatus.APPROVED:
                 summary.approved += 1
