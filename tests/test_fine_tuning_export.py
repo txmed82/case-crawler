@@ -25,7 +25,10 @@ from casecrawler.export.fine_tuning import (
     verify_fhir_ndjson_export,
     verify_jsonl_split_package,
 )
-from casecrawler.export.transparency import build_export_transparency_summary
+from casecrawler.export.transparency import (
+    build_export_transparency_summary,
+    infer_dataset_origin_flags,
+)
 from casecrawler.models.synthetic import (
     AllergyIntolerance,
     ClinicalDocument,
@@ -250,6 +253,35 @@ def test_export_jsonl_split_package_verifies_transparency_summary(tmp_path):
         "audit_artifacts.transparency_summary.json."
         "artifact_coverage.task_coverage"
     ) in issue_fields
+
+
+def test_transparency_summary_handles_mixed_origin_records():
+    synthetic = _multimodal_record().model_copy(update={"dataset_id": "ds-mixed"})
+    imported = _multimodal_record().model_copy(
+        update={
+            "record_id": "rec-imported",
+            "dataset_id": "ds-mixed",
+            "provenance": Provenance(
+                generator="huggingface-reference-import",
+                created_at="2026-05-06T10:00:00",
+            ),
+            "metadata": {"reference_dataset": "org/real-reference"},
+        }
+    )
+    quality_report = build_dataset_quality_report("ds-mixed", [synthetic, imported])
+    origin_flags = infer_dataset_origin_flags([synthetic, imported])
+
+    summary = build_export_transparency_summary(
+        dataset_id="ds-mixed",
+        export_format="sft_jsonl",
+        quality_report=quality_report,
+        synthetic_data=origin_flags["synthetic_data"],
+        real_patient_data=origin_flags["real_patient_data"],
+    )
+
+    assert summary["synthetic_data"] is True
+    assert summary["real_patient_data"] is True
+    assert "imported reference data" in summary["limitations"][0]
 
 
 def test_export_jsonl_split_package_copies_file_backed_images(tmp_path):

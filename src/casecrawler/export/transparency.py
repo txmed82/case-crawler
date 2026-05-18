@@ -32,6 +32,21 @@ def build_export_transparency_summary(
     seeded_references: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a consumer-facing transparency summary for an exported dataset."""
+    limitations = [
+        "Clinical realism depends on configured generators and validation references.",
+        "Downstream model training should be benchmarked against external references before release.",
+        "Human review status and validation reports should be checked before production use.",
+    ]
+    if synthetic_data and not real_patient_data:
+        limitations.insert(
+            0,
+            "Records are generated synthetic examples, not real patient records.",
+        )
+    elif real_patient_data:
+        limitations.insert(
+            0,
+            "Package may include imported reference data; review provenance before downstream use.",
+        )
     return {
         "schema_version": "casecrawler.transparency.v1",
         "dataset_id": dataset_id,
@@ -93,12 +108,7 @@ def build_export_transparency_summary(
         "objective_coverage": objective_coverage or {},
         "seeded_references": seeded_references or {},
         "audit_artifacts": sorted(audit_artifacts or []),
-        "limitations": [
-            "Records are generated synthetic examples, not real patient records.",
-            "Clinical realism depends on configured generators and validation references.",
-            "Downstream model training should be benchmarked against external references before release.",
-            "Human review status and validation reports should be checked before production use.",
-        ],
+        "limitations": limitations,
     }
 
 
@@ -107,8 +117,12 @@ def infer_dataset_origin_flags(records: Iterable[SyntheticRecord]) -> dict[str, 
     record_list = list(records)
     if not record_list:
         return {"synthetic_data": True, "real_patient_data": False}
-    real_patient_data = any(_record_may_contain_real_patient_data(record) for record in record_list)
-    synthetic_data = not real_patient_data
+    real_patient_data = any(
+        _record_may_contain_real_patient_data(record) for record in record_list
+    )
+    synthetic_data = any(
+        not _record_may_contain_real_patient_data(record) for record in record_list
+    )
     return {
         "synthetic_data": synthetic_data,
         "real_patient_data": real_patient_data,
