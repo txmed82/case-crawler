@@ -1,0 +1,79 @@
+{
+  "approved": true,
+  "artifact_counts": {
+    "allergies": 1,
+    "documents": 7,
+    "encounters": 1,
+    "imaging_assets": 0,
+    "labs": 5,
+    "medications": 4,
+    "orders": 10,
+    "time_series_channels": 11,
+    "vitals": 5
+  },
+  "complexity": "complex",
+  "diagnoses": [
+    "chronic kidney disease",
+    "heart failure exacerbation",
+    "type 2 diabetes mellitus"
+  ],
+  "issue_count": 0,
+  "lab_names": [
+    "BNP",
+    "Creatinine",
+    "Sodium",
+    "Albumin",
+    "Magnesium"
+  ],
+  "medication_names": [
+    "Furosemide",
+    "Nitroglycerin",
+    "Insulin glargine",
+    "Heparin prophylaxis"
+  ],
+  "note_types": [
+    "discharge_summary",
+    "ed_note",
+    "lab_report",
+    "medication_administration_record",
+    "nursing_note",
+    "progress_note",
+    "vital_signs_flowsheet"
+  ],
+  "order_types": [
+    "laboratory",
+    "laboratory",
+    "laboratory",
+    "laboratory",
+    "medication",
+    "medication",
+    "medication",
+    "medication",
+    "procedure",
+    "nursing"
+  ],
+  "procedures": [
+    "specialty consultation"
+  ],
+  "time_series_channels": [
+    "heart_rate",
+    "systolic_bp",
+    "spo2",
+    "lactate",
+    "lab_bnp",
+    "lab_creatinine",
+    "lab_sodium",
+    "lab_albumin",
+    "lab_magnesium",
+    "ecg_lead_ii",
+    "pleth"
+  ],
+  "topic": "heart failure exacerbation",
+  "vital_names": [
+    "HR",
+    "SBP",
+    "SpO2",
+    "Respiratory rate",
+    "Pain score"
+  ]
+}

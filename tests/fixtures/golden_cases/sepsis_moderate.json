@@ -1,0 +1,64 @@
+{
+  "approved": true,
+  "artifact_counts": {
+    "allergies": 1,
+    "documents": 7,
+    "encounters": 1,
+    "imaging_assets": 0,
+    "labs": 3,
+    "medications": 2,
+    "orders": 6,
+    "time_series_channels": 9,
+    "vitals": 4
+  },
+  "complexity": "moderate",
+  "diagnoses": [
+    "sepsis"
+  ],
+  "issue_count": 0,
+  "lab_names": [
+    "WBC",
+    "Lactate",
+    "Creatinine"
+  ],
+  "medication_names": [
+    "Acetaminophen",
+    "Ceftriaxone"
+  ],
+  "note_types": [
+    "discharge_summary",
+    "ed_note",
+    "lab_report",
+    "medication_administration_record",
+    "nursing_note",
+    "progress_note",
+    "vital_signs_flowsheet"
+  ],
+  "order_types": [
+    "laboratory",
+    "laboratory",
+    "laboratory",
+    "medication",
+    "medication",
+    "nursing"
+  ],
+  "procedures": [],
+  "time_series_channels": [
+    "heart_rate",
+    "systolic_bp",
+    "spo2",
+    "lactate",
+    "lab_wbc",
+    "lab_lactate",
+    "lab_creatinine",
+    "ecg_lead_ii",
+    "pleth"
+  ],
+  "topic": "sepsis",
+  "vital_names": [
+    "HR",
+    "SBP",
+    "SpO2",
+    "Temperature"
+  ]
+}
