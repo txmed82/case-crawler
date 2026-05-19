@@ -9,7 +9,7 @@ Install the package with development extras and run the default backend tier:
 
 ```bash
 python -m pip install -e ".[dev,anthropic,openai,hf]"
-python -m pytest -q -m "not optional_backend and not network"
+python -m pytest -q -m "not optional_backend and not network and not slow"
 ```
 
 Run the full local suite, including optional-backend marker tests:

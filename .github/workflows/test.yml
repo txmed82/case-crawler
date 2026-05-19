@@ -46,7 +46,7 @@ jobs:
           pip install -e ".[dev,anthropic,openai,hf]"
 
       - name: Run backend pytest tier
-        run: pytest -q -m "not optional_backend and not network"
+        run: pytest -q -m "not optional_backend and not network and not slow"
 
   ui:
     runs-on: ubuntu-latest

@@ -4,9 +4,6 @@ import pytest
 
 from casecrawler.generation.imaging_generator import ImagingGenerator
 
-pytestmark = pytest.mark.optional_backend
-
-
 def test_imaging_placeholder_does_not_require_diffusers(tmp_path):
     asset = ImagingGenerator().generate_placeholder(
         str(tmp_path),
@@ -48,6 +45,7 @@ class FakeDiffusersPipeline:
         return FakeDiffusersResult()
 
 
+@pytest.mark.optional_backend
 def test_diffusers_backend_uses_injected_pipeline(tmp_path):
     pipeline = FakeDiffusersPipeline()
     generator = ImagingGenerator(diffusers_pipeline=pipeline, diffusers_model_id="test/xray")
@@ -69,6 +67,7 @@ def test_diffusers_backend_uses_injected_pipeline(tmp_path):
     assert len(asset.metadata["file"]["sha256"]) == 64
 
 
+@pytest.mark.optional_backend
 def test_diffusers_backend_generates_unique_files(tmp_path):
     pipeline = FakeDiffusersPipeline()
     generator = ImagingGenerator(diffusers_pipeline=pipeline, diffusers_model_id="test/xray")
@@ -80,6 +79,7 @@ def test_diffusers_backend_generates_unique_files(tmp_path):
     assert first.file_path != second.file_path
 
 
+@pytest.mark.optional_backend
 def test_diffusers_backend_caches_loaded_pipeline(tmp_path):
     class LoadingGenerator(ImagingGenerator):
         def __init__(self):
@@ -98,6 +98,7 @@ def test_diffusers_backend_caches_loaded_pipeline(tmp_path):
     assert generator.load_count == 1
 
 
+@pytest.mark.optional_backend
 def test_diffusers_backend_requires_imaging_extra_when_not_injected(monkeypatch, tmp_path):
     def fake_require_package(import_name: str, extra: str):
         raise RuntimeError(f"Install casecrawler[{extra}] to use this backend.")
@@ -113,6 +114,7 @@ def test_diffusers_backend_requires_imaging_extra_when_not_injected(monkeypatch,
         raise AssertionError("Expected RuntimeError for missing imaging extra.")
 
 
+@pytest.mark.optional_backend
 def test_diffusers_backend_uses_imaging_model_profile(tmp_path):
     pipeline = FakeDiffusersPipeline()
     generator = ImagingGenerator(
@@ -147,6 +149,7 @@ def test_diffusers_backend_uses_imaging_model_profile(tmp_path):
     }
 
 
+@pytest.mark.optional_backend
 def test_diffusers_backend_rejects_incompatible_imaging_model_profile(tmp_path):
     generator = ImagingGenerator(
         diffusers_pipeline=FakeDiffusersPipeline(),
@@ -162,6 +165,7 @@ def test_diffusers_backend_rejects_incompatible_imaging_model_profile(tmp_path):
         )
 
 
+@pytest.mark.optional_backend
 def test_external_imaging_backend_accepts_asset_envelope(tmp_path):
     calls = []
 
@@ -197,6 +201,7 @@ def test_external_imaging_backend_accepts_asset_envelope(tmp_path):
     )
 
 
+@pytest.mark.optional_backend
 def test_external_imaging_backend_rejects_empty_command():
     with pytest.raises(ValueError, match="external_command must not be empty"):
         ImagingGenerator(external_command=[])
