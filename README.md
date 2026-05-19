@@ -33,6 +33,8 @@ Start with the docs hub:
 - [Validation and benchmarking](docs/validation-and-benchmarking.md)
 - [Reference data and model adapters](docs/reference-data-and-models.md)
 - [CLI and API guide](docs/api-and-cli.md)
+- [Testing](docs/testing.md)
+- [Contributing clinical content](docs/contributing-clinical-packs.md)
 - [Synthetic healthcare data landscape research](docs/research/2026-05-08-synthetic-healthcare-data-landscape.md)
 - [Implementation plan](docs/superpowers/plans/2026-05-06-healthcare-synthetic-data-platform.md)
 
