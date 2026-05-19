@@ -4,6 +4,8 @@ import pytest
 
 from casecrawler.generation.imaging_generator import ImagingGenerator
 
+pytestmark = pytest.mark.optional_backend
+
 
 def test_imaging_placeholder_does_not_require_diffusers(tmp_path):
     asset = ImagingGenerator().generate_placeholder(
