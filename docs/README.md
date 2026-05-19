@@ -5,6 +5,7 @@ CaseCrawler is an open-source synthetic healthcare data engine for clinical AI t
 ## Core Guides
 
 - [Getting started](getting-started.md): install, run the no-key workflow, generate a release package, and verify it.
+- [Open source roadmap](open-source-roadmap.md): maturity levels, current strengths, near-term priorities, and out-of-scope claims.
 - [BYO-key onboarding](byo-keys.md): every API key, what it unlocks, where to put it, and how to verify.
 - [Costs and tokens](cost-and-tokens.md): rough tokens-per-case to budget LLM-backed runs.
 - [DPO / RL export quickstart](quickstart-dpo.md): the short path from dataset to preference data.

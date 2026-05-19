@@ -23,6 +23,7 @@ Healthcare AI teams need training and evaluation data that is clinically rich, a
 Start with the docs hub:
 
 - [Documentation index](docs/README.md)
+- [Open source roadmap](docs/open-source-roadmap.md)
 - [Getting started](docs/getting-started.md)
 - [BYO-key onboarding](docs/byo-keys.md) — every API key, what it unlocks, where to put it
 - [Costs and tokens](docs/cost-and-tokens.md) — rough tokens-per-case so you can budget LLM runs
@@ -37,6 +38,16 @@ Start with the docs hub:
 - [Contributing clinical content](docs/contributing-clinical-packs.md)
 - [Synthetic healthcare data landscape research](docs/research/2026-05-08-synthetic-healthcare-data-landscape.md)
 - [Implementation plan](docs/superpowers/plans/2026-05-06-healthcare-synthetic-data-platform.md)
+
+## Project Maturity
+
+CaseCrawler is suitable for synthetic-data research, training-pipeline
+prototyping, benchmark construction, and release-package experimentation. It is
+not a medical device, and synthetic outputs require validation before downstream
+clinical or operational use.
+
+See the [open source roadmap](docs/open-source-roadmap.md) for maturity levels,
+current strengths, and near-term priorities.
 
 ## Quick Start
 
