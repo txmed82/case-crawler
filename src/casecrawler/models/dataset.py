@@ -59,6 +59,18 @@ class ReviewQueueItem(BaseModel):
     blocking_issue_count: int = 0
 
 
+class HumanReviewSummary(BaseModel):
+    dataset_id: str | None = None
+    total_records: int = 0
+    pending: int = 0
+    approved: int = 0
+    rejected: int = 0
+    needs_revision: int = 0
+    required_human_review: int = 0
+    missing_required_review: int = 0
+    blocking_issue_records: int = 0
+
+
 class GenerationRequest(BaseModel):
     topic: str
     count: int = Field(default=1, ge=1)

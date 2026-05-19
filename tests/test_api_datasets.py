@@ -1103,6 +1103,17 @@ def test_dataset_api_lists_and_saves_human_reviews(tmp_path, monkeypatch):
     client = TestClient(app)
 
     queue = client.get("/api/datasets/ds-review/reviews")
+    summary = client.get("/api/datasets/ds-review/reviews/summary")
+    pending_reviewed = client.post(
+        "/api/records/rec-review/review",
+        json={
+            "status": "pending",
+            "reviewer": "clinical-reviewer",
+            "notes": ["Pending review."],
+        },
+    )
+    queue_pending = client.get("/api/datasets/ds-review/reviews")
+    summary_pending = client.get("/api/datasets/ds-review/reviews/summary")
     reviewed = client.post(
         "/api/records/rec-review/review",
         json={
@@ -1112,13 +1123,22 @@ def test_dataset_api_lists_and_saves_human_reviews(tmp_path, monkeypatch):
         },
     )
     queue_after = client.get("/api/datasets/ds-review/reviews")
+    summary_after = client.get("/api/datasets/ds-review/reviews/summary")
 
     assert queue.status_code == 200
     assert queue.json()["records"][0]["record_id"] == "rec-review"
+    assert summary.status_code == 200
+    assert summary.json()["pending"] == 1
+    assert pending_reviewed.status_code == 200
+    assert pending_reviewed.json()["human_review"]["status"] == "pending"
+    assert queue_pending.json()["records"][0]["record_id"] == "rec-review"
+    assert summary_pending.json()["pending"] == 1
+    assert summary_pending.json()["approved"] == 0
     assert reviewed.status_code == 200
     assert reviewed.json()["effective_approved"] is True
     assert reviewed.json()["human_review"]["reviewer"] == "clinical-reviewer"
     assert queue_after.json()["records"] == []
+    assert summary_after.json()["approved"] == 1
 
 
 def test_dataset_api_serves_quality_report(tmp_path, monkeypatch):

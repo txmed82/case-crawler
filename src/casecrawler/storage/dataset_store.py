@@ -15,6 +15,7 @@ from casecrawler.models.dataset import (
     ExportFormat,
     ExportManifest,
     HumanReviewDecision,
+    HumanReviewSummary,
     HumanReviewStatus,
     ReviewQueueItem,
 )
@@ -232,6 +233,29 @@ class DatasetStore:
             if len(items) >= limit:
                 break
         return items
+
+    def human_review_summary(self, dataset_id: str | None = None) -> HumanReviewSummary:
+        summary = HumanReviewSummary(dataset_id=dataset_id)
+        for record in self._iter_record_rows(dataset_id=dataset_id):
+            summary.total_records += 1
+            review = self.get_human_review(record)
+            if review is None or review.status == HumanReviewStatus.PENDING:
+                summary.pending += 1
+            elif review.status == HumanReviewStatus.APPROVED:
+                summary.approved += 1
+            elif review.status == HumanReviewStatus.REJECTED:
+                summary.rejected += 1
+            elif review.status == HumanReviewStatus.NEEDS_REVISION:
+                summary.needs_revision += 1
+            if record.metadata.get("require_human_review") is True:
+                summary.required_human_review += 1
+                if review is None or review.status != HumanReviewStatus.APPROVED:
+                    summary.missing_required_review += 1
+            if record.validation and any(
+                issue.severity == "error" for issue in record.validation.issues
+            ):
+                summary.blocking_issue_records += 1
+        return summary
 
     def get_record(self, record_id: str) -> SyntheticRecord | None:
         row = self._conn.execute(

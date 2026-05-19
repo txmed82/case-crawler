@@ -1798,6 +1798,16 @@ def reviews_mark(
     )
 
 
+@reviews_group.command("summary")
+@click.option("--dataset-id", default=None, help="Dataset id filter")
+def reviews_summary(dataset_id: str | None) -> None:
+    """Summarize human review status counts."""
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    summary = DatasetStore().human_review_summary(dataset_id=dataset_id)
+    click.echo(json.dumps(summary.model_dump(), sort_keys=True))
+
+
 @cli.command("export-dataset")
 @click.option("--output", required=True, help="Output file path")
 @click.option(
