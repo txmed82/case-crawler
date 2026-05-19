@@ -434,6 +434,9 @@ pytest tests/ -v
 ruff check src tests
 ```
 
+See [docs/testing.md](docs/testing.md) for pull-request, optional-backend, UI,
+network, and release-package smoke test tiers.
+
 ## Project Structure
 
 ```text
