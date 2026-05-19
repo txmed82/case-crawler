@@ -13,6 +13,8 @@ CaseCrawler is an open-source synthetic healthcare data engine for clinical AI t
 - [Validation and benchmarking](validation-and-benchmarking.md): quality reports, benchmark references, objective coverage, privacy checks, and human review.
 - [Reference data and model adapters](reference-data-and-models.md): Hugging Face datasets, Synthea, imaging profiles, clinical text adapters, time-series adapters, and validators.
 - [CLI and API guide](api-and-cli.md): commands and REST endpoints for generation, import, benchmark, review, export, and verification.
+- [Testing](testing.md): pull-request, optional-backend, network, UI, and release-package smoke test tiers.
+- [Contributing clinical content](contributing-clinical-packs.md): rules and test expectations for condition-specific generation, validation, and fixtures.
 
 ## Planning And Research
 
