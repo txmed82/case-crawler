@@ -10,6 +10,14 @@ from casecrawler.generation.recipes import (
     recommended_reference_keys_for_exports,
     task_export_reference_keys,
 )
+from casecrawler.models.blueprint import (
+    BlueprintValidationReport,
+    ClinicalBlueprint,
+    CohortPlan,
+    GenerationAttempt,
+    GenerationRole,
+    JudgeReport,
+)
 from casecrawler.models.dataset import (
     DatasetManifest,
     ExportFormat,
@@ -118,6 +126,95 @@ class DatasetStore:
             ON export_manifests(created_at DESC, id DESC)
             """
         )
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cohort_plans (
+                plan_id TEXT PRIMARY KEY,
+                plan_json TEXT NOT NULL
+            )
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS clinical_blueprints (
+                blueprint_id TEXT PRIMARY KEY,
+                dataset_id TEXT NOT NULL,
+                cohort_plan_id TEXT NOT NULL,
+                archetype_name TEXT NOT NULL,
+                blueprint_json TEXT NOT NULL
+            )
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_blueprints_dataset
+            ON clinical_blueprints(dataset_id)
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_blueprints_plan
+            ON clinical_blueprints(cohort_plan_id)
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS generation_attempts (
+                attempt_id TEXT PRIMARY KEY,
+                dataset_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                status TEXT NOT NULL,
+                artifact_id TEXT,
+                attempt_json TEXT NOT NULL
+            )
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_generation_attempts_dataset
+            ON generation_attempts(dataset_id)
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_generation_attempts_artifact
+            ON generation_attempts(artifact_id)
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS judge_reports (
+                report_id TEXT PRIMARY KEY,
+                dataset_id TEXT NOT NULL,
+                artifact_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                passed INTEGER NOT NULL,
+                score REAL NOT NULL,
+                report_json TEXT NOT NULL
+            )
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_judge_reports_dataset
+            ON judge_reports(dataset_id)
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_judge_reports_artifact
+            ON judge_reports(artifact_id)
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS blueprint_validation_reports (
+                blueprint_id TEXT PRIMARY KEY,
+                tier TEXT NOT NULL,
+                report_json TEXT NOT NULL
+            )
+            """
+        )
         self._conn.commit()
 
     def save_record(self, record: SyntheticRecord) -> None:
@@ -155,6 +252,201 @@ class DatasetStore:
         updated = record.model_copy(update={"metadata": metadata})
         self.save_record(updated)
         return updated
+
+    def save_cohort_plan(self, plan: CohortPlan) -> None:
+        with self._write_lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO cohort_plans
+                (plan_id, plan_json) VALUES (?, ?)""",
+                (plan.plan_id, plan.model_dump_json()),
+            )
+            self._conn.commit()
+
+    def get_cohort_plan(self, plan_id: str) -> CohortPlan | None:
+        row = self._conn.execute(
+            "SELECT plan_json FROM cohort_plans WHERE plan_id = ?",
+            (plan_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return CohortPlan.model_validate_json(row["plan_json"])
+
+    def list_cohort_plans(self, limit: int = 1000) -> list[CohortPlan]:
+        rows = self._conn.execute(
+            "SELECT plan_json FROM cohort_plans ORDER BY plan_id LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [CohortPlan.model_validate_json(row["plan_json"]) for row in rows]
+
+    def save_blueprint(self, blueprint: ClinicalBlueprint) -> None:
+        with self._write_lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO clinical_blueprints
+                (blueprint_id, dataset_id, cohort_plan_id, archetype_name, blueprint_json)
+                VALUES (?, ?, ?, ?, ?)""",
+                (
+                    blueprint.blueprint_id,
+                    blueprint.dataset_id,
+                    blueprint.cohort_plan_id,
+                    blueprint.archetype_name,
+                    blueprint.model_dump_json(),
+                ),
+            )
+            self._conn.commit()
+
+    def get_blueprint(self, blueprint_id: str) -> ClinicalBlueprint | None:
+        row = self._conn.execute(
+            "SELECT blueprint_json FROM clinical_blueprints WHERE blueprint_id = ?",
+            (blueprint_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return ClinicalBlueprint.model_validate_json(row["blueprint_json"])
+
+    def list_blueprints(
+        self,
+        dataset_id: str | None = None,
+        cohort_plan_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[ClinicalBlueprint]:
+        query = "SELECT blueprint_json FROM clinical_blueprints WHERE 1=1"
+        params: list = []
+        if dataset_id:
+            query += " AND dataset_id = ?"
+            params.append(dataset_id)
+        if cohort_plan_id:
+            query += " AND cohort_plan_id = ?"
+            params.append(cohort_plan_id)
+        query += " ORDER BY blueprint_id LIMIT ?"
+        params.append(limit)
+        rows = self._conn.execute(query, params).fetchall()
+        return [
+            ClinicalBlueprint.model_validate_json(row["blueprint_json"])
+            for row in rows
+        ]
+
+    def save_generation_attempt(self, attempt: GenerationAttempt) -> None:
+        with self._write_lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO generation_attempts
+                (attempt_id, dataset_id, role, status, artifact_id, attempt_json)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    attempt.attempt_id,
+                    attempt.dataset_id,
+                    attempt.role.value,
+                    attempt.status.value,
+                    attempt.artifact_id,
+                    attempt.model_dump_json(),
+                ),
+            )
+            self._conn.commit()
+
+    def get_generation_attempt(self, attempt_id: str) -> GenerationAttempt | None:
+        row = self._conn.execute(
+            "SELECT attempt_json FROM generation_attempts WHERE attempt_id = ?",
+            (attempt_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return GenerationAttempt.model_validate_json(row["attempt_json"])
+
+    def list_generation_attempts(
+        self,
+        dataset_id: str | None = None,
+        artifact_id: str | None = None,
+        role: GenerationRole | str | None = None,
+        limit: int = 1000,
+    ) -> list[GenerationAttempt]:
+        query = "SELECT attempt_json FROM generation_attempts WHERE 1=1"
+        params: list = []
+        if dataset_id:
+            query += " AND dataset_id = ?"
+            params.append(dataset_id)
+        if artifact_id:
+            query += " AND artifact_id = ?"
+            params.append(artifact_id)
+        if role:
+            role_value = role.value if isinstance(role, GenerationRole) else role
+            query += " AND role = ?"
+            params.append(role_value)
+        query += " ORDER BY attempt_id LIMIT ?"
+        params.append(limit)
+        rows = self._conn.execute(query, params).fetchall()
+        return [
+            GenerationAttempt.model_validate_json(row["attempt_json"])
+            for row in rows
+        ]
+
+    def save_judge_report(self, report: JudgeReport) -> None:
+        with self._write_lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO judge_reports
+                (report_id, dataset_id, artifact_id, role, passed, score, report_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    report.report_id,
+                    report.dataset_id,
+                    report.artifact_id,
+                    report.role.value,
+                    int(report.passed),
+                    report.score,
+                    report.model_dump_json(),
+                ),
+            )
+            self._conn.commit()
+
+    def get_judge_report(self, report_id: str) -> JudgeReport | None:
+        row = self._conn.execute(
+            "SELECT report_json FROM judge_reports WHERE report_id = ?",
+            (report_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return JudgeReport.model_validate_json(row["report_json"])
+
+    def list_judge_reports(
+        self,
+        dataset_id: str | None = None,
+        artifact_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[JudgeReport]:
+        query = "SELECT report_json FROM judge_reports WHERE 1=1"
+        params: list = []
+        if dataset_id:
+            query += " AND dataset_id = ?"
+            params.append(dataset_id)
+        if artifact_id:
+            query += " AND artifact_id = ?"
+            params.append(artifact_id)
+        query += " ORDER BY report_id LIMIT ?"
+        params.append(limit)
+        rows = self._conn.execute(query, params).fetchall()
+        return [JudgeReport.model_validate_json(row["report_json"]) for row in rows]
+
+    def save_blueprint_validation_report(
+        self,
+        report: BlueprintValidationReport,
+    ) -> None:
+        with self._write_lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO blueprint_validation_reports
+                (blueprint_id, tier, report_json) VALUES (?, ?, ?)""",
+                (report.blueprint_id, report.tier.value, report.model_dump_json()),
+            )
+            self._conn.commit()
+
+    def get_blueprint_validation_report(
+        self,
+        blueprint_id: str,
+    ) -> BlueprintValidationReport | None:
+        row = self._conn.execute(
+            "SELECT report_json FROM blueprint_validation_reports WHERE blueprint_id = ?",
+            (blueprint_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return BlueprintValidationReport.model_validate_json(row["report_json"])
 
     def get_human_review(
         self, record: SyntheticRecord
@@ -476,6 +768,7 @@ class DatasetStore:
                 "record_count": total,
                 **recipe_metadata,
                 **reference_metadata,
+                **self._blueprint_manifest_metadata(dataset_id),
                 "latest_exports": latest_exports,
             },
         )
@@ -509,6 +802,7 @@ class DatasetStore:
                 "record_ids": [record.record_id for record in records],
                 **recipe_metadata,
                 **reference_metadata,
+                **self._blueprint_manifest_metadata(dataset_id),
                 "latest_exports": [
                     export_manifest.model_dump()
                     for export_manifest in self.list_export_manifests(
@@ -518,6 +812,55 @@ class DatasetStore:
                 ],
             },
         )
+
+    def _blueprint_manifest_metadata(self, dataset_id: str) -> dict:
+        blueprint_rows = self._conn.execute(
+            """
+            SELECT COUNT(*) AS blueprint_count
+            FROM clinical_blueprints
+            WHERE dataset_id = ?
+            """,
+            (dataset_id,),
+        ).fetchone()
+        plan_rows = self._conn.execute(
+            """
+            SELECT DISTINCT cohort_plan_id
+            FROM clinical_blueprints
+            WHERE dataset_id = ?
+            ORDER BY cohort_plan_id
+            """,
+            (dataset_id,),
+        ).fetchall()
+        attempt_row = self._conn.execute(
+            """
+            SELECT COUNT(*) AS generation_attempt_count
+            FROM generation_attempts
+            WHERE dataset_id = ?
+            """,
+            (dataset_id,),
+        ).fetchone()
+        judge_row = self._conn.execute(
+            """
+            SELECT COUNT(*) AS judge_report_count
+            FROM judge_reports
+            WHERE dataset_id = ?
+            """,
+            (dataset_id,),
+        ).fetchone()
+
+        blueprint_count = blueprint_rows["blueprint_count"] if blueprint_rows else 0
+        attempt_count = (
+            attempt_row["generation_attempt_count"] if attempt_row else 0
+        )
+        judge_count = judge_row["judge_report_count"] if judge_row else 0
+        if blueprint_count == 0 and attempt_count == 0 and judge_count == 0:
+            return {}
+        return {
+            "cohort_plan_ids": [row["cohort_plan_id"] for row in plan_rows],
+            "blueprint_count": blueprint_count,
+            "generation_attempt_count": attempt_count,
+            "judge_report_count": judge_count,
+        }
 
     def save_export_manifest(
         self,
