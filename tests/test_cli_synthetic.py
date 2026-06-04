@@ -11,6 +11,7 @@ from casecrawler.models.blueprint import (
     CohortArchetype,
     CohortPlan,
     GenerationRole,
+    JudgeReport,
 )
 from casecrawler.models.synthetic import Modality
 from casecrawler.storage.dataset_store import DatasetStore
@@ -46,6 +47,7 @@ def _blueprint_cli_result(dataset_id: str) -> BlueprintPipelineResult:
                 "supporting_findings": ["ECG confirms AF"],
             }
         ],
+        clinical_reasoning_targets=["Review renal dosing and bleeding risk."],
         evidence=BlueprintEvidence(
             supported_claims=["AF anticoagulation requires renal-dose review."],
             citations=[{"source": "dailymed", "claim": "renal-dose review"}],
@@ -177,3 +179,65 @@ def test_validate_blueprints_command_persists_validation_reports(tmp_path, monke
     assert report is not None
     assert report.blueprint_id == "bp-1"
     assert report.clinically_plausible is True
+
+
+def test_blueprint_cli_materializes_and_exports_release_summary(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = DatasetStore()
+    result = _blueprint_cli_result("ds-blueprint")
+    store.save_cohort_plan(result.plan)
+    for blueprint in result.blueprints:
+        store.save_blueprint(blueprint)
+        store.save_judge_report(
+            JudgeReport(
+                report_id="judge-1",
+                dataset_id="ds-blueprint",
+                artifact_id=blueprint.blueprint_id,
+                role=GenerationRole.JUDGE,
+                score=0.93,
+                passed=True,
+                rubric="blueprint_plausibility",
+            )
+        )
+    runner = CliRunner()
+
+    validated = runner.invoke(
+        cli,
+        [
+            "validate-blueprints",
+            "--dataset-id",
+            "ds-blueprint",
+        ],
+    )
+    materialized = runner.invoke(
+        cli,
+        [
+            "materialize-blueprints",
+            "--dataset-id",
+            "ds-blueprint",
+            "--require-release-ready",
+        ],
+    )
+    exported = runner.invoke(
+        cli,
+        [
+            "export-blueprint-release-summary",
+            "--dataset-id",
+            "ds-blueprint",
+            "--output",
+            "blueprint-release-summary.json",
+        ],
+    )
+
+    summary = json.loads((tmp_path / "blueprint-release-summary.json").read_text())
+    records = DatasetStore().list_records(dataset_id="ds-blueprint")
+    assert validated.exit_code == 0
+    assert materialized.exit_code == 0
+    assert "Materialized 1 blueprint record(s)" in materialized.output
+    assert exported.exit_code == 0
+    assert "Wrote blueprint release summary" in exported.output
+    assert len(records) == 1
+    assert records[0].metadata["blueprint_id"] == "bp-1"
+    assert summary["blueprint_count"] == 1
+    assert summary["research_release_ready_count"] == 1
+    assert summary["materialized_record_count"] == 1

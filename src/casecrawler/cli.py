@@ -2076,7 +2076,7 @@ def export_blueprints(
     blueprints = store.list_blueprints(
         dataset_id=dataset_id,
         cohort_plan_id=cohort_plan_id,
-        limit=1_000_000,
+        limit=None,
     )
     if dataset_id and not blueprints:
         raise click.ClickException(f"No blueprints found for dataset {dataset_id}.")
@@ -2113,7 +2113,7 @@ def validate_blueprints(
     blueprints = store.list_blueprints(
         dataset_id=dataset_id,
         cohort_plan_id=cohort_plan_id,
-        limit=1_000_000,
+        limit=None,
     )
     if dataset_id and not blueprints:
         raise click.ClickException(f"No blueprints found for dataset {dataset_id}.")
@@ -2131,6 +2131,68 @@ def validate_blueprints(
             clinically_plausible += 1
     click.echo(f"Validated {len(blueprints)} blueprint artifact(s)")
     click.echo(f"Clinically plausible: {clinically_plausible}")
+
+
+@cli.command("materialize-blueprints")
+@click.option("--dataset-id", required=True, help="Dataset id filter")
+@click.option("--cohort-plan-id", default=None, help="Cohort plan id filter")
+@click.option(
+    "--require-release-ready",
+    is_flag=True,
+    help="Only materialize blueprints with research-release-ready validation reports.",
+)
+def materialize_blueprints(
+    dataset_id: str,
+    cohort_plan_id: str | None,
+    require_release_ready: bool,
+) -> None:
+    """Materialize persisted clinical blueprints into synthetic record scaffolds."""
+    from casecrawler.generation.blueprint_materializer import BlueprintMaterializer
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    store = DatasetStore()
+    blueprints = store.list_blueprints(
+        dataset_id=dataset_id,
+        cohort_plan_id=cohort_plan_id,
+        limit=None,
+    )
+    if not blueprints:
+        raise click.ClickException(f"No blueprints found for dataset {dataset_id}.")
+
+    materializer = BlueprintMaterializer()
+    materialized_count = 0
+    for blueprint in blueprints:
+        validation_report = store.get_blueprint_validation_report(
+            blueprint.blueprint_id
+        )
+        try:
+            materializer.materialize(
+                blueprint,
+                validation_report=validation_report,
+                store=store,
+                require_release_ready=require_release_ready,
+            )
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
+        materialized_count += 1
+
+    click.echo(f"Materialized {materialized_count} blueprint record(s)")
+
+
+@cli.command("export-blueprint-release-summary")
+@click.option("--dataset-id", required=True, help="Dataset id to summarize")
+@click.option("--output", required=True, help="Output JSON path")
+def export_blueprint_release_summary(dataset_id: str, output: str) -> None:
+    """Export blueprint dataset release readiness and audit summary JSON."""
+    from casecrawler.export.blueprint_release import write_blueprint_release_summary
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    store = DatasetStore()
+    summary = write_blueprint_release_summary(store, dataset_id, output)
+    click.echo(
+        "Wrote blueprint release summary "
+        f"for {summary['blueprint_count']} blueprint artifact(s) to {output}"
+    )
 
 
 @cli.command("verify-fhir-export")
