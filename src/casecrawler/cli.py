@@ -2059,6 +2059,39 @@ def export_dataset(
     click.echo(f"Exported {record_count} record(s) to {output}")
 
 
+@cli.command("export-blueprints")
+@click.option("--output", required=True, help="Output JSONL path")
+@click.option("--dataset-id", default=None, help="Dataset id filter")
+@click.option("--cohort-plan-id", default=None, help="Cohort plan id filter")
+def export_blueprints(
+    output: str,
+    dataset_id: str | None,
+    cohort_plan_id: str | None,
+) -> None:
+    """Export persisted clinical blueprint artifacts as JSONL."""
+    from casecrawler.export.blueprints import export_blueprints_jsonl
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    store = DatasetStore()
+    blueprints = store.list_blueprints(
+        dataset_id=dataset_id,
+        cohort_plan_id=cohort_plan_id,
+        limit=1_000_000,
+    )
+    if dataset_id and not blueprints:
+        raise click.ClickException(f"No blueprints found for dataset {dataset_id}.")
+    if cohort_plan_id and not blueprints:
+        raise click.ClickException(
+            f"No blueprints found for cohort plan {cohort_plan_id}."
+        )
+    count = export_blueprints_jsonl(
+        blueprints,
+        output,
+        plan_lookup=store.get_cohort_plan,
+    )
+    click.echo(f"Exported {count} blueprint artifact(s) to {output}")
+
+
 @cli.command("verify-fhir-export")
 @click.argument("path", type=click.Path(exists=True, dir_okay=False))
 def verify_fhir_export(path: str) -> None:

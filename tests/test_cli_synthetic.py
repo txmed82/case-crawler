@@ -1,3 +1,5 @@
+import json
+
 from click.testing import CliRunner
 
 from casecrawler.cli import cli
@@ -120,3 +122,31 @@ def test_generate_blueprints_command_uses_model_driven_request(tmp_path, monkeyp
         == "blueprint-model"
     )
     assert isinstance(captured[0][2], DatasetStore)
+
+
+def test_export_blueprints_command_writes_jsonl(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = DatasetStore()
+    result = _blueprint_cli_result("ds-blueprint")
+    store.save_cohort_plan(result.plan)
+    for blueprint in result.blueprints:
+        store.save_blueprint(blueprint)
+    runner = CliRunner()
+
+    exported = runner.invoke(
+        cli,
+        [
+            "export-blueprints",
+            "--dataset-id",
+            "ds-blueprint",
+            "--output",
+            "blueprints.jsonl",
+        ],
+    )
+
+    payload = json.loads((tmp_path / "blueprints.jsonl").read_text().splitlines()[0])
+    assert exported.exit_code == 0
+    assert "Exported 1 blueprint artifact(s)" in exported.output
+    assert payload["artifact_type"] == "casecrawler_clinical_blueprint"
+    assert payload["blueprint"]["blueprint_id"] == "bp-1"
+    assert payload["cohort_plan"]["plan_id"] == "plan-1"
