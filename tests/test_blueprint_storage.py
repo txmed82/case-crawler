@@ -177,6 +177,28 @@ def test_dataset_store_saves_judge_report_with_attempt(tmp_path):
     assert store.get_generation_attempt("attempt-1") == attempt
 
 
+def test_dataset_store_saves_blueprint_with_attempt(tmp_path):
+    store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
+    blueprint = _blueprint()
+    attempt = GenerationAttempt(
+        attempt_id="attempt-1",
+        dataset_id="ds-1",
+        role=GenerationRole.REPAIR,
+        status=GenerationAttemptStatus.SUCCEEDED,
+        provider="openai",
+        model="gpt-4.1-mini",
+        prompt_hash="abc123",
+        input_tokens=100,
+        output_tokens=75,
+        artifact_id="bp-1",
+    )
+
+    store.save_blueprint_with_attempt(blueprint, attempt)
+
+    assert store.get_blueprint("bp-1") == blueprint
+    assert store.get_generation_attempt("attempt-1") == attempt
+
+
 def test_dataset_manifest_includes_blueprint_persistence_counts(tmp_path):
     store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
     store.save_record(_record())

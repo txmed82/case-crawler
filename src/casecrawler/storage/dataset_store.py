@@ -294,6 +294,44 @@ class DatasetStore:
             )
             self._conn.commit()
 
+    def save_blueprint_with_attempt(
+        self,
+        blueprint: ClinicalBlueprint,
+        attempt: GenerationAttempt,
+    ) -> None:
+        with self._write_lock:
+            try:
+                self._conn.execute(
+                    """INSERT OR REPLACE INTO clinical_blueprints
+                    (blueprint_id, dataset_id, cohort_plan_id, archetype_name,
+                     blueprint_json)
+                    VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        blueprint.blueprint_id,
+                        blueprint.dataset_id,
+                        blueprint.cohort_plan_id,
+                        blueprint.archetype_name,
+                        blueprint.model_dump_json(),
+                    ),
+                )
+                self._conn.execute(
+                    """INSERT OR REPLACE INTO generation_attempts
+                    (attempt_id, dataset_id, role, status, artifact_id, attempt_json)
+                    VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        attempt.attempt_id,
+                        attempt.dataset_id,
+                        attempt.role.value,
+                        attempt.status.value,
+                        attempt.artifact_id,
+                        attempt.model_dump_json(),
+                    ),
+                )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+
     def get_blueprint(self, blueprint_id: str) -> ClinicalBlueprint | None:
         row = self._conn.execute(
             "SELECT blueprint_json FROM clinical_blueprints WHERE blueprint_id = ?",
