@@ -345,7 +345,7 @@ class DatasetStore:
         self,
         dataset_id: str | None = None,
         cohort_plan_id: str | None = None,
-        limit: int = 1000,
+        limit: int | None = 1000,
     ) -> list[ClinicalBlueprint]:
         query = "SELECT blueprint_json FROM clinical_blueprints WHERE 1=1"
         params: list = []
@@ -355,8 +355,10 @@ class DatasetStore:
         if cohort_plan_id:
             query += " AND cohort_plan_id = ?"
             params.append(cohort_plan_id)
-        query += " ORDER BY blueprint_id LIMIT ?"
-        params.append(limit)
+        query += " ORDER BY blueprint_id"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
         rows = self._conn.execute(query, params).fetchall()
         return [
             ClinicalBlueprint.model_validate_json(row["blueprint_json"])
@@ -394,7 +396,7 @@ class DatasetStore:
         dataset_id: str | None = None,
         artifact_id: str | None = None,
         role: GenerationRole | str | None = None,
-        limit: int = 1000,
+        limit: int | None = 1000,
     ) -> list[GenerationAttempt]:
         query = "SELECT attempt_json FROM generation_attempts WHERE 1=1"
         params: list = []
@@ -408,8 +410,10 @@ class DatasetStore:
             role_value = role.value if isinstance(role, GenerationRole) else role
             query += " AND role = ?"
             params.append(role_value)
-        query += " ORDER BY attempt_id LIMIT ?"
-        params.append(limit)
+        query += " ORDER BY attempt_id"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
         rows = self._conn.execute(query, params).fetchall()
         return [
             GenerationAttempt.model_validate_json(row["attempt_json"])
@@ -486,7 +490,7 @@ class DatasetStore:
         self,
         dataset_id: str | None = None,
         artifact_id: str | None = None,
-        limit: int = 1000,
+        limit: int | None = 1000,
     ) -> list[JudgeReport]:
         query = "SELECT report_json FROM judge_reports WHERE 1=1"
         params: list = []
@@ -496,8 +500,10 @@ class DatasetStore:
         if artifact_id:
             query += " AND artifact_id = ?"
             params.append(artifact_id)
-        query += " ORDER BY report_id LIMIT ?"
-        params.append(limit)
+        query += " ORDER BY report_id"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
         rows = self._conn.execute(query, params).fetchall()
         return [JudgeReport.model_validate_json(row["report_json"]) for row in rows]
 
