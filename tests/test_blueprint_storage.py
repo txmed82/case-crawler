@@ -146,6 +146,37 @@ def test_dataset_store_tracks_attempts_and_judge_reports_by_artifact(tmp_path):
     assert store.get_blueprint_validation_report("bp-1") == validation
 
 
+def test_dataset_store_saves_judge_report_with_attempt(tmp_path):
+    store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
+    attempt = GenerationAttempt(
+        attempt_id="attempt-1",
+        dataset_id="ds-1",
+        role=GenerationRole.JUDGE,
+        status=GenerationAttemptStatus.SUCCEEDED,
+        provider="openai",
+        model="gpt-4.1-mini",
+        prompt_hash="abc123",
+        input_tokens=100,
+        output_tokens=75,
+        artifact_id="bp-1",
+    )
+    judge_report = JudgeReport(
+        report_id="judge-1",
+        dataset_id="ds-1",
+        artifact_id="bp-1",
+        role=GenerationRole.JUDGE,
+        score=0.92,
+        passed=True,
+        rubric="blueprint_plausibility",
+        findings=[{"criterion": "diagnostic_support", "passed": True}],
+    )
+
+    store.save_judge_report_with_attempt(judge_report, attempt)
+
+    assert store.get_judge_report("judge-1") == judge_report
+    assert store.get_generation_attempt("attempt-1") == attempt
+
+
 def test_dataset_manifest_includes_blueprint_persistence_counts(tmp_path):
     store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
     store.save_record(_record())
