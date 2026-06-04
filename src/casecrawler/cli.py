@@ -4,6 +4,7 @@ import asyncio
 import json
 import subprocess
 import time
+from uuid import uuid4
 
 import click
 
@@ -912,6 +913,92 @@ def generate_dataset(
     click.echo(f"Dataset: {result['dataset_id']}")
     click.echo(f"Generated: {result['generated']}")
     click.echo(f"Approved: {result['approved']}")
+
+
+@cli.command("generate-blueprints")
+@click.argument("request_text")
+@click.option("--count", default=1, type=click.IntRange(1), help="Number of blueprints to generate")
+@click.option("--dataset-id", default=None, help="Optional dataset id for persisted blueprints")
+@click.option("--domain", "domains", multiple=True, help="Broad clinical domain or organ system")
+@click.option("--setting", "settings", multiple=True, help="Care setting such as outpatient or ICU")
+@click.option("--planner-provider", required=True, help="BYOK provider for cohort planning")
+@click.option("--planner-model", required=True, help="Model id for cohort planning")
+@click.option(
+    "--planner-temperature",
+    default=0.2,
+    type=float,
+    show_default=True,
+    help="Planner model temperature",
+)
+@click.option("--blueprint-provider", required=True, help="BYOK provider for blueprint generation")
+@click.option("--blueprint-model", required=True, help="Model id for blueprint generation")
+@click.option(
+    "--blueprint-temperature",
+    default=0.3,
+    type=float,
+    show_default=True,
+    help="Blueprint model temperature",
+)
+@click.option("--no-grounding", is_flag=True, help="Do not require grounding in the generated plan")
+def generate_blueprints(
+    request_text: str,
+    count: int,
+    dataset_id: str | None,
+    domains: tuple[str, ...],
+    settings: tuple[str, ...],
+    planner_provider: str,
+    planner_model: str,
+    planner_temperature: float,
+    blueprint_provider: str,
+    blueprint_model: str,
+    blueprint_temperature: float,
+    no_grounding: bool,
+) -> None:
+    """Generate model-planned clinical blueprints without topic recipes."""
+    from casecrawler.generation import blueprint_pipeline as blueprint_pipeline_module
+    from casecrawler.models.blueprint import (
+        BlueprintGenerationRequest,
+        GenerationRole,
+        GenerationRolePolicy,
+    )
+    from casecrawler.storage.dataset_store import DatasetStore
+
+    resolved_dataset_id = dataset_id or f"blueprint-ds-{uuid4()}"
+    req = BlueprintGenerationRequest(
+        request=request_text,
+        target_count=count,
+        domains=list(domains),
+        settings=list(settings),
+        required_grounding=not no_grounding,
+        role_policies=[
+            GenerationRolePolicy(
+                role=GenerationRole.PLANNER,
+                provider=planner_provider,
+                model=planner_model,
+                temperature=planner_temperature,
+            ),
+            GenerationRolePolicy(
+                role=GenerationRole.BLUEPRINT_GENERATOR,
+                provider=blueprint_provider,
+                model=blueprint_model,
+                temperature=blueprint_temperature,
+            ),
+        ],
+    )
+    try:
+        store = DatasetStore()
+        result = asyncio.run(
+            blueprint_pipeline_module.BlueprintPipeline().generate(
+                req,
+                dataset_id=resolved_dataset_id,
+                store=store,
+            )
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Dataset: {result.dataset_id}")
+    click.echo(f"Plan: {result.plan.plan_id}")
+    click.echo(f"Blueprints: {result.generated_count}")
 
 
 @cli.command("generate-release-package")
