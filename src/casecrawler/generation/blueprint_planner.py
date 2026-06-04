@@ -46,7 +46,10 @@ class CohortPlanner:
                 system=_PLANNER_SYSTEM_PROMPT,
                 temperature=policy.temperature,
             )
-            plan = CohortPlan.model_validate(result.data)
+            plan = self._canonicalize_plan(
+                CohortPlan.model_validate(result.data),
+                request,
+            )
         except Exception as err:
             if store is not None:
                 store.save_generation_attempt(
@@ -74,6 +77,24 @@ class CohortPlanner:
                 )
             )
         return plan
+
+    def _canonicalize_plan(
+        self,
+        raw_plan: CohortPlan,
+        request: BlueprintGenerationRequest,
+    ) -> CohortPlan:
+        return CohortPlan.model_validate(
+            {
+                **raw_plan.model_dump(),
+                "plan_id": f"plan-{uuid4()}",
+                "request": request.request,
+                "target_count": request.target_count,
+                "domains": request.domains or raw_plan.domains,
+                "settings": request.settings or raw_plan.settings,
+                "required_grounding": request.required_grounding,
+                "created_by": GenerationRole.PLANNER,
+            }
+        )
 
     def _build_prompt(self, request: BlueprintGenerationRequest) -> str:
         return "\n".join(
