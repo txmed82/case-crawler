@@ -6,6 +6,7 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
@@ -30,7 +31,9 @@ from casecrawler.export.transparency import (
     build_export_transparency_summary,
     infer_dataset_origin_flags,
 )
+from casecrawler.generation.blueprint_pipeline import BlueprintPipeline
 from casecrawler.generation.synthetic_pipeline import SyntheticPipeline
+from casecrawler.models.blueprint import BlueprintGenerationRequest
 from casecrawler.models.dataset import (
     ExportFormat,
     GenerationRequest,
@@ -193,6 +196,37 @@ async def generate_dataset(req: GenerationRequest):
         "approved": result["approved"],
         "total_records": len(result["records"]),
         "records": [record.model_dump() for record in returned_records],
+    }
+
+
+@router.post("/datasets/blueprints/generate")
+async def generate_blueprint_dataset(req: BlueprintGenerationRequest):
+    config = get_config()
+    max_count = config.synthetic.max_api_generation_count
+    max_returned = config.synthetic.max_api_returned_records
+    if req.target_count > max_count:
+        raise HTTPException(
+            status_code=422,
+            detail=f"target_count must be less than or equal to {max_count}",
+        )
+
+    dataset_id = f"blueprint-ds-{uuid4()}"
+    store = DatasetStore.shared()
+    try:
+        result = await BlueprintPipeline().generate(
+            req,
+            dataset_id=dataset_id,
+            store=store,
+        )
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+    returned_blueprints = result.blueprints[:max_returned]
+    return {
+        "dataset_id": result.dataset_id,
+        "generated": result.generated_count,
+        "total_blueprints": len(result.blueprints),
+        "plan": result.plan.model_dump(),
+        "blueprints": [blueprint.model_dump() for blueprint in returned_blueprints],
     }
 
 
