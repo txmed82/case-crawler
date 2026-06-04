@@ -40,6 +40,11 @@ class FailingJudgeProvider:
         raise RuntimeError("judge boom")
 
 
+class BrokenAttemptStore:
+    def save_generation_attempt(self, attempt):
+        raise RuntimeError("storage boom")
+
+
 def _request() -> BlueprintGenerationRequest:
     return BlueprintGenerationRequest(
         request="Judge generated cardiology blueprints before release.",
@@ -143,6 +148,33 @@ async def test_blueprint_judge_requires_judge_policy():
 
 
 @pytest.mark.asyncio
+async def test_blueprint_judge_audits_missing_judge_policy(tmp_path):
+    from casecrawler.generation.blueprint_judge import BlueprintJudge
+
+    store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
+    request = BlueprintGenerationRequest(
+        request="Judge generated cardiology blueprints before release.",
+        target_count=1,
+    )
+
+    with pytest.raises(ValueError, match="judge role policy"):
+        await BlueprintJudge(
+            provider_factory=lambda provider_name, model: None
+        ).evaluate(request, _blueprint(), store=store)
+
+    attempts = store.list_generation_attempts(dataset_id="ds-1")
+    assert len(attempts) == 1
+    assert attempts[0].role == GenerationRole.JUDGE
+    assert attempts[0].status == GenerationAttemptStatus.FAILED
+    assert attempts[0].artifact_id == "bp-1"
+    assert attempts[0].provider == "unconfigured"
+    assert attempts[0].model == "unconfigured"
+    assert attempts[0].errors == ["missing judge role policy"]
+    assert attempts[0].metadata["reason"] == "missing_policy"
+    assert attempts[0].prompt_hash
+
+
+@pytest.mark.asyncio
 async def test_blueprint_judge_persists_failed_attempt(tmp_path):
     from casecrawler.generation.blueprint_judge import BlueprintJudge
 
@@ -162,3 +194,15 @@ async def test_blueprint_judge_persists_failed_attempt(tmp_path):
     assert attempts[0].errors == ["judge boom"]
     assert attempts[0].total_tokens == 0
     assert attempts[0].prompt_hash
+
+
+@pytest.mark.asyncio
+async def test_blueprint_judge_preserves_provider_error_when_failed_audit_fails():
+    from casecrawler.generation.blueprint_judge import BlueprintJudge
+
+    judge = BlueprintJudge(
+        provider_factory=lambda provider_name, model: FailingJudgeProvider()
+    )
+
+    with pytest.raises(RuntimeError, match="judge boom"):
+        await judge.evaluate(_request(), _blueprint(), store=BrokenAttemptStore())

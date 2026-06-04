@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from collections.abc import Callable
 from uuid import uuid4
 
@@ -20,6 +21,7 @@ from casecrawler.storage.dataset_store import DatasetStore
 
 
 ProviderFactory = Callable[[str, str], BaseLLMProvider]
+logger = logging.getLogger(__name__)
 
 
 class BlueprintJudge:
@@ -35,11 +37,16 @@ class BlueprintJudge:
     ) -> JudgeReport:
         policy = request.policy_for(GenerationRole.JUDGE)
         if policy is None:
+            if store is not None:
+                self._save_failed_attempt_best_effort(
+                    store,
+                    self._missing_policy_attempt(request=request, blueprint=blueprint),
+                )
             raise ValueError("A judge role policy is required for blueprint judging.")
 
         provider = self._provider_factory(policy.provider, policy.model)
         prompt = self._build_prompt(request, blueprint)
-        prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        prompt_hash = self._prompt_hash(prompt, policy)
 
         try:
             result = await provider.generate_structured(
@@ -54,20 +61,21 @@ class BlueprintJudge:
             )
         except Exception as err:
             if store is not None:
-                store.save_generation_attempt(
+                self._save_failed_attempt_best_effort(
+                    store,
                     self._attempt(
                         blueprint=blueprint,
                         policy=policy,
                         status=GenerationAttemptStatus.FAILED,
                         prompt_hash=prompt_hash,
                         errors=[str(err)],
-                    )
+                    ),
                 )
             raise
 
         if store is not None:
-            store.save_judge_report(report)
-            store.save_generation_attempt(
+            store.save_judge_report_with_attempt(
+                report,
                 self._attempt(
                     blueprint=blueprint,
                     policy=policy,
@@ -121,6 +129,22 @@ class BlueprintJudge:
             ]
         )
 
+    def _prompt_hash(
+        self,
+        prompt: str,
+        policy: GenerationRolePolicy,
+    ) -> str:
+        payload = {
+            "model": policy.model,
+            "provider": policy.provider,
+            "schema": JudgeReport.__name__,
+            "system": _JUDGE_SYSTEM_PROMPT,
+            "temperature": policy.temperature,
+            "user": prompt,
+        }
+        serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
     def _attempt(
         self,
         *,
@@ -145,6 +169,48 @@ class BlueprintJudge:
             errors=errors or [],
             artifact_id=blueprint.blueprint_id,
         )
+
+    def _missing_policy_attempt(
+        self,
+        *,
+        request: BlueprintGenerationRequest,
+        blueprint: ClinicalBlueprint,
+    ) -> GenerationAttempt:
+        prompt_hash_payload = {
+            "artifact_id": blueprint.blueprint_id,
+            "reason": "missing_policy",
+            "request": request.request,
+            "role": GenerationRole.JUDGE.value,
+        }
+        prompt_hash = hashlib.sha256(
+            json.dumps(
+                prompt_hash_payload,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return GenerationAttempt(
+            attempt_id=f"attempt-{uuid4()}",
+            dataset_id=blueprint.dataset_id,
+            role=GenerationRole.JUDGE,
+            status=GenerationAttemptStatus.FAILED,
+            provider="unconfigured",
+            model="unconfigured",
+            prompt_hash=prompt_hash,
+            errors=["missing judge role policy"],
+            artifact_id=blueprint.blueprint_id,
+            metadata={"reason": "missing_policy"},
+        )
+
+    def _save_failed_attempt_best_effort(
+        self,
+        store: DatasetStore,
+        attempt: GenerationAttempt,
+    ) -> None:
+        try:
+            store.save_generation_attempt(attempt)
+        except Exception:
+            logger.exception("Failed to persist judge failure audit.")
 
 
 _JUDGE_SYSTEM_PROMPT = (

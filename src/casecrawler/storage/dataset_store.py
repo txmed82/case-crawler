@@ -396,6 +396,45 @@ class DatasetStore:
             )
             self._conn.commit()
 
+    def save_judge_report_with_attempt(
+        self,
+        report: JudgeReport,
+        attempt: GenerationAttempt,
+    ) -> None:
+        with self._write_lock:
+            try:
+                self._conn.execute(
+                    """INSERT OR REPLACE INTO judge_reports
+                    (report_id, dataset_id, artifact_id, role, passed, score, report_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        report.report_id,
+                        report.dataset_id,
+                        report.artifact_id,
+                        report.role.value,
+                        int(report.passed),
+                        report.score,
+                        report.model_dump_json(),
+                    ),
+                )
+                self._conn.execute(
+                    """INSERT OR REPLACE INTO generation_attempts
+                    (attempt_id, dataset_id, role, status, artifact_id, attempt_json)
+                    VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        attempt.attempt_id,
+                        attempt.dataset_id,
+                        attempt.role.value,
+                        attempt.status.value,
+                        attempt.artifact_id,
+                        attempt.model_dump_json(),
+                    ),
+                )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+
     def get_judge_report(self, report_id: str) -> JudgeReport | None:
         row = self._conn.execute(
             "SELECT report_json FROM judge_reports WHERE report_id = ?",
