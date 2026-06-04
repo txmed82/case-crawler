@@ -145,6 +145,33 @@ class GenerationRolePolicy(StrictModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class BlueprintGenerationRequest(StrictModel):
+    request: str = Field(min_length=1)
+    target_count: int = Field(default=1, ge=1)
+    domains: list[str] = Field(default_factory=list)
+    settings: list[str] = Field(default_factory=list)
+    role_policies: list[GenerationRolePolicy] = Field(default_factory=list)
+    required_grounding: bool = True
+    diversity_targets: dict[str, Any] = Field(default_factory=dict)
+    max_repair_rounds: int = Field(default=1, ge=0, le=10)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _require_unique_role_policies(self) -> "BlueprintGenerationRequest":
+        seen: set[GenerationRole] = set()
+        for policy in self.role_policies:
+            if policy.role in seen:
+                raise ValueError(f"duplicate role policy for {policy.role.value}")
+            seen.add(policy.role)
+        return self
+
+    def policy_for(self, role: GenerationRole) -> GenerationRolePolicy | None:
+        for policy in self.role_policies:
+            if policy.role == role:
+                return policy
+        return None
+
+
 class GenerationAttempt(StrictModel):
     attempt_id: str
     dataset_id: str
