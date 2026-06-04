@@ -3,6 +3,7 @@ from pydantic import ValidationError
 
 from casecrawler.models.blueprint import (
     BlueprintEvidence,
+    BlueprintGenerationRequest,
     BlueprintValidationReport,
     ClinicalBlueprint,
     CohortArchetype,
@@ -193,6 +194,50 @@ def test_generation_role_policy_separates_byok_model_roles():
     assert policy.role == GenerationRole.JUDGE
     assert policy.provider == "openai"
     assert policy.model == "gpt-4.1-mini"
+
+
+def test_blueprint_generation_request_is_model_driven_not_recipe_driven():
+    req = BlueprintGenerationRequest(
+        request="Generate outpatient anticoagulation decision cases with uncertainty.",
+        target_count=25,
+        domains=["cardiology"],
+        settings=["outpatient"],
+        role_policies=[
+            GenerationRolePolicy(
+                role=GenerationRole.PLANNER,
+                provider="openrouter",
+                model="anthropic/claude-sonnet-4-6",
+                temperature=0.2,
+            ),
+            GenerationRolePolicy(
+                role=GenerationRole.JUDGE,
+                provider="openai",
+                model="gpt-4.1-mini",
+                temperature=0.0,
+            ),
+        ],
+        required_grounding=True,
+        diversity_targets={"min_archetype_count": 5},
+        max_repair_rounds=2,
+    )
+
+    assert req.target_count == 25
+    assert req.policy_for(GenerationRole.PLANNER).model == (
+        "anthropic/claude-sonnet-4-6"
+    )
+    assert req.policy_for(GenerationRole.BLUEPRINT_GENERATOR) is None
+    assert req.required_grounding is True
+    assert req.diversity_targets["min_archetype_count"] == 5
+
+
+def test_blueprint_generation_request_rejects_topic_pack_recipe_fields():
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        BlueprintGenerationRequest(
+            request="Generate kidney transplant medication cases.",
+            target_count=5,
+            topic="renal",
+            recipe="transplant_pack",
+        )
 
 
 def test_generation_attempt_tracks_failed_and_repaired_model_outputs():
