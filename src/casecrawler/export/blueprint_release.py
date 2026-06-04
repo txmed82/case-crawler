@@ -16,10 +16,10 @@ def build_blueprint_release_summary(
     *,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
-    blueprints = store.list_blueprints(dataset_id=dataset_id, limit=100_000)
+    blueprints = store.list_blueprints(dataset_id=dataset_id, limit=None)
     records = store.list_records(dataset_id=dataset_id, limit=None)
-    judge_reports = store.list_judge_reports(dataset_id=dataset_id, limit=100_000)
-    attempts = store.list_generation_attempts(dataset_id=dataset_id, limit=100_000)
+    judge_reports = store.list_judge_reports(dataset_id=dataset_id, limit=None)
+    attempts = store.list_generation_attempts(dataset_id=dataset_id, limit=None)
 
     validation_reports = {
         blueprint.blueprint_id: store.get_blueprint_validation_report(
@@ -89,6 +89,7 @@ def write_blueprint_release_summary(
 
 def _tier_counts(validation_reports: dict) -> dict[str, int]:
     counts = Counter()
+    counts["missing"] = 0
     for report in validation_reports.values():
         if report is None:
             counts["missing"] += 1

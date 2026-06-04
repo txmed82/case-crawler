@@ -199,6 +199,41 @@ def test_dataset_store_saves_blueprint_with_attempt(tmp_path):
     assert store.get_generation_attempt("attempt-1") == attempt
 
 
+def test_dataset_store_blueprint_audit_lists_support_unbounded_limit(tmp_path):
+    store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
+    bp_1 = _blueprint("bp-1")
+    bp_2 = _blueprint("bp-2")
+    report = JudgeReport(
+        report_id="judge-1",
+        dataset_id="ds-1",
+        artifact_id="bp-1",
+        role=GenerationRole.JUDGE,
+        score=0.92,
+        passed=True,
+        rubric="blueprint_plausibility",
+    )
+    attempt = GenerationAttempt(
+        attempt_id="attempt-1",
+        dataset_id="ds-1",
+        role=GenerationRole.JUDGE,
+        status=GenerationAttemptStatus.SUCCEEDED,
+        provider="openai",
+        model="gpt-4.1-mini",
+        artifact_id="bp-1",
+    )
+
+    store.save_blueprint(bp_1)
+    store.save_blueprint(bp_2)
+    store.save_judge_report(report)
+    store.save_generation_attempt(attempt)
+
+    assert store.list_blueprints(dataset_id="ds-1", limit=None) == [bp_1, bp_2]
+    assert store.list_judge_reports(dataset_id="ds-1", limit=None) == [report]
+    assert store.list_generation_attempts(dataset_id="ds-1", limit=None) == [
+        attempt
+    ]
+
+
 def test_dataset_manifest_includes_blueprint_persistence_counts(tmp_path):
     store = DatasetStore(db_path=str(tmp_path / "datasets.db"))
     store.save_record(_record())

@@ -140,6 +140,7 @@ def test_build_blueprint_release_summary_aggregates_readiness_and_materializatio
     assert summary["attempt_counts"]["repair_requested"] == 1
     assert summary["tier_counts"]["research_release_ready"] == 1
     assert summary["tier_counts"]["schema_valid"] == 1
+    assert summary["tier_counts"]["missing"] == 0
     assert summary["organ_system_counts"] == {
         "cardiovascular": 1,
         "endocrine": 1,
