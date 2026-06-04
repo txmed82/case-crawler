@@ -2092,6 +2092,47 @@ def export_blueprints(
     click.echo(f"Exported {count} blueprint artifact(s) to {output}")
 
 
+@cli.command("validate-blueprints")
+@click.option("--dataset-id", default=None, help="Dataset id filter")
+@click.option("--cohort-plan-id", default=None, help="Cohort plan id filter")
+@click.option(
+    "--no-grounding",
+    is_flag=True,
+    help="Do not require grounding citations for validation.",
+)
+def validate_blueprints(
+    dataset_id: str | None,
+    cohort_plan_id: str | None,
+    no_grounding: bool,
+) -> None:
+    """Validate persisted clinical blueprints and store reports."""
+    from casecrawler.storage.dataset_store import DatasetStore
+    from casecrawler.validation.blueprints import BlueprintValidator
+
+    store = DatasetStore()
+    blueprints = store.list_blueprints(
+        dataset_id=dataset_id,
+        cohort_plan_id=cohort_plan_id,
+        limit=1_000_000,
+    )
+    if dataset_id and not blueprints:
+        raise click.ClickException(f"No blueprints found for dataset {dataset_id}.")
+    if cohort_plan_id and not blueprints:
+        raise click.ClickException(
+            f"No blueprints found for cohort plan {cohort_plan_id}."
+        )
+    validator = BlueprintValidator(require_grounding=not no_grounding)
+    clinically_plausible = 0
+    for blueprint in blueprints:
+        judge_reports = store.list_judge_reports(artifact_id=blueprint.blueprint_id)
+        report = validator.validate(blueprint, judge_reports=judge_reports)
+        store.save_blueprint_validation_report(report)
+        if report.clinically_plausible:
+            clinically_plausible += 1
+    click.echo(f"Validated {len(blueprints)} blueprint artifact(s)")
+    click.echo(f"Clinically plausible: {clinically_plausible}")
+
+
 @cli.command("verify-fhir-export")
 @click.argument("path", type=click.Path(exists=True, dir_okay=False))
 def verify_fhir_export(path: str) -> None:

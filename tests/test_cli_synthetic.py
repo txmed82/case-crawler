@@ -48,6 +48,7 @@ def _blueprint_cli_result(dataset_id: str) -> BlueprintPipelineResult:
         ],
         evidence=BlueprintEvidence(
             supported_claims=["AF anticoagulation requires renal-dose review."],
+            citations=[{"source": "dailymed", "claim": "renal-dose review"}],
         ),
     )
     return BlueprintPipelineResult(dataset_id=dataset_id, plan=plan, blueprints=[blueprint])
@@ -150,3 +151,29 @@ def test_export_blueprints_command_writes_jsonl(tmp_path, monkeypatch):
     assert payload["artifact_type"] == "casecrawler_clinical_blueprint"
     assert payload["blueprint"]["blueprint_id"] == "bp-1"
     assert payload["cohort_plan"]["plan_id"] == "plan-1"
+
+
+def test_validate_blueprints_command_persists_validation_reports(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = DatasetStore()
+    result = _blueprint_cli_result("ds-blueprint")
+    store.save_cohort_plan(result.plan)
+    for blueprint in result.blueprints:
+        store.save_blueprint(blueprint)
+    runner = CliRunner()
+
+    validated = runner.invoke(
+        cli,
+        [
+            "validate-blueprints",
+            "--dataset-id",
+            "ds-blueprint",
+        ],
+    )
+
+    report = DatasetStore().get_blueprint_validation_report("bp-1")
+    assert validated.exit_code == 0
+    assert "Validated 1 blueprint artifact(s)" in validated.output
+    assert report is not None
+    assert report.blueprint_id == "bp-1"
+    assert report.clinically_plausible is True
