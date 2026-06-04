@@ -6,6 +6,14 @@ from fastapi.testclient import TestClient
 
 from casecrawler.api.routes import datasets as datasets_routes
 from casecrawler.api.app import app
+from casecrawler.generation.blueprint_pipeline import BlueprintPipelineResult
+from casecrawler.models.blueprint import (
+    BlueprintEvidence,
+    ClinicalBlueprint,
+    CohortArchetype,
+    CohortPlan,
+    GenerationRole,
+)
 from casecrawler.models.config import AppConfig, SyntheticConfig
 from casecrawler.models.synthetic import (
     ComplexityProfile,
@@ -17,6 +25,49 @@ from casecrawler.models.synthetic import (
     ValidationReport,
 )
 from casecrawler.storage.dataset_store import DatasetStore
+
+
+def _blueprint_api_result() -> BlueprintPipelineResult:
+    archetype = CohortArchetype(
+        name="anticoagulation decision",
+        organ_system="cardiovascular",
+        setting="outpatient",
+        target_count=1,
+        acuity_mix={"routine": 1.0},
+        difficulty_mix={"moderate": 1.0},
+        required_modalities=[Modality.STRUCTURED_EHR, Modality.CLINICAL_TEXT],
+    )
+    plan = CohortPlan(
+        plan_id="plan-1",
+        request="Generate anticoagulation decision cases.",
+        target_count=1,
+        archetypes=[archetype],
+        created_by=GenerationRole.PLANNER,
+    )
+    blueprint = ClinicalBlueprint(
+        blueprint_id="bp-1",
+        dataset_id="ds-blueprint",
+        cohort_plan_id="plan-1",
+        archetype_name="anticoagulation decision",
+        organ_system="cardiovascular",
+        setting="outpatient",
+        patient={"age": 72, "sex": "female"},
+        chief_concern="Atrial fibrillation anticoagulation follow-up.",
+        diagnoses=[
+            {
+                "name": "atrial fibrillation",
+                "supporting_findings": ["ECG confirms AF"],
+            }
+        ],
+        evidence=BlueprintEvidence(
+            supported_claims=["AF anticoagulation requires renal-dose review."],
+        ),
+    )
+    return BlueprintPipelineResult(
+        dataset_id="ds-blueprint",
+        plan=plan,
+        blueprints=[blueprint],
+    )
 
 
 def test_generate_dataset_api_smoke(tmp_path, monkeypatch):
@@ -150,6 +201,72 @@ def test_generate_dataset_api_rejects_unbounded_counts(tmp_path, monkeypatch):
 
     assert response.status_code == 422
     assert "less than or equal to 1" in response.json()["detail"]
+
+
+def test_generate_blueprint_dataset_api_uses_model_driven_request(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    captured = []
+
+    class FakeBlueprintPipeline:
+        async def generate(self, req, *, dataset_id, store):
+            captured.append((req, dataset_id, store))
+            return _blueprint_api_result()
+
+    monkeypatch.setattr(datasets_routes, "BlueprintPipeline", FakeBlueprintPipeline)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/blueprints/generate",
+        json={
+            "request": "Generate anticoagulation decision cases.",
+            "target_count": 1,
+            "role_policies": [
+                {
+                    "role": "planner",
+                    "provider": "openrouter",
+                    "model": "anthropic/claude-sonnet-4-6",
+                },
+                {
+                    "role": "blueprint_generator",
+                    "provider": "openrouter",
+                    "model": "anthropic/claude-sonnet-4-6",
+                },
+            ],
+        },
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["dataset_id"] == "ds-blueprint"
+    assert body["generated"] == 1
+    assert body["plan"]["plan_id"] == "plan-1"
+    assert body["blueprints"][0]["blueprint_id"] == "bp-1"
+    assert captured[0][0].request == "Generate anticoagulation decision cases."
+    assert captured[0][0].target_count == 1
+    assert captured[0][1].startswith("blueprint-ds-")
+    assert isinstance(captured[0][2], DatasetStore)
+
+
+def test_generate_blueprint_dataset_api_rejects_unbounded_counts(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    config = AppConfig(synthetic=SyntheticConfig(max_api_generation_count=1))
+    monkeypatch.setattr(datasets_routes, "get_config", lambda: config)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/datasets/blueprints/generate",
+        json={
+            "request": "Generate anticoagulation decision cases.",
+            "target_count": 2,
+            "role_policies": [],
+        },
+    )
+
+    assert response.status_code == 422
+    assert "target_count must be less than or equal to 1" in response.json()["detail"]
 
 
 def test_generate_dataset_api_reports_unknown_recipe(tmp_path, monkeypatch):
